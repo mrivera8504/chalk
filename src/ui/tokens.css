@@ -357,3 +357,14 @@ button:focus-visible {
   user-select: text;
   -webkit-user-select: text;
 }
+
+/* Layer 4: the live stroke. Inert, like the board; .stage owns every pointer. */
+.stage canvas.ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 1;
+}

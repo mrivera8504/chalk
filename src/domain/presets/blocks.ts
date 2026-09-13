@@ -163,13 +163,27 @@ export function refreshBlocks(
   });
 }
 
-/** 'LG blocks T', for the inspector. */
-export function describeBlock(a: Assignment, players: PlayerSlot[]): string {
+/** 'LG blocks T', for the inspector. Covers every kind, not just blocks. */
+export function describeAssignment(a: Assignment, players: PlayerSlot[]): string {
   const name = (id?: string) => players.find((p) => p.id === id)?.label ?? '?';
-  const blocker = name(a.playerId);
+  const who = name(a.playerId);
 
-  if (a.kind === 'pull') return `${blocker} pulls to ${name(a.targetPlayerId)}`;
-  if (a.kind === 'combo')
-    return `${blocker} combos ${name(a.targetPlayerId)} to ${name(a.climbToPlayerId)}`;
-  return `${blocker} blocks ${name(a.targetPlayerId)}`;
+  switch (a.kind) {
+    case 'pull':
+      return `${who} pulls to ${name(a.targetPlayerId)}`;
+    case 'combo':
+      return `${who} combos ${name(a.targetPlayerId)} to ${name(a.climbToPlayerId)}`;
+    case 'block':
+      return `${who} blocks ${name(a.targetPlayerId)}`;
+    case 'route':
+      return `${who} runs a drawn route`;
+    case 'carry':
+      return `${who} carries`;
+    case 'motion':
+      return `${who} goes in motion`;
+    case 'option':
+      return `${who} options`;
+    default:
+      return `${who} stays`;
+  }
 }

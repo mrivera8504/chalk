@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { computeHoles } from '../domain/holes';
 import { applyOnLine, checkFormation, countOnLine } from '../domain/legality';
-import { describeBlock, makeBlock, refreshBlocks } from '../domain/presets/blocks';
+import { describeAssignment, makeBlock, refreshBlocks } from '../domain/presets/blocks';
 import { defaultDefense, defaultOffense } from '../domain/presets/formations';
 import {
   DEFAULT_SETTINGS,
   isBlockKind,
   type Assignment,
+  type PathPoint,
   type PlayerSlot,
 } from '../domain/types';
 import { AssignmentPath } from '../render/AssignmentPath';
+import { LiveInkCanvas, type InkHandle, type InkPoint } from '../render/LiveInkCanvas';
+import { simplify, toSmoothPath } from '../render/smooth';
 import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
 import {
@@ -23,6 +26,7 @@ import {
   pxToYards,
   snap,
   toYards,
+  toPathD,
   type Yards,
 } from '../render/geometry';
 import { BlockTool, tapBlock, type Pending, type Tool } from './BlockTool';
@@ -46,6 +50,12 @@ const CHATTER_YARDS = 2.5;
  * grass. Nothing moves until the pen has travelled this far, in screen pixels.
  */
 const DRAG_SLOP_PX = 12;
+
+/** Freehand tolerance, in yards. Roughly a tenth of a player's width. */
+const INK_TOLERANCE = 0.15;
+
+let inkCounter = 0;
+const inkId = () => `k${Date.now().toString(36)}${(inkCounter++).toString(36)}`;
 
 /** Offense only. The defense goes on the board when it is asked for. */
 function initialPlayers(): PlayerSlot[] {
@@ -75,6 +85,7 @@ export function PlayEditor() {
   const [showHoles, setShowHoles] = useState(true);
   const [showDefense, setShowDefense] = useState(false);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [annotations, setAnnotations] = useState<PathPoint[][]>([]);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -84,6 +95,12 @@ export function PlayEditor() {
   const ringRef = useRef<SVGCircleElement>(null);
   const hoverRef = useRef<string | null>(null);
   const aimQueued = useRef(false);
+  const ink = useRef<InkHandle>(null);
+  const stroke = useRef<InkPoint[] | null>(null);
+  const strokeOwner = useRef<string | null>(null);
+  const commitTimer = useRef<number | null>(null);
+  const lastPenAt = useRef(0);
+  const rawBound = useRef(false);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
@@ -128,6 +145,23 @@ export function PlayEditor() {
     }
     return `Tap who ${blocker.label} blocks`;
   }, [tool, pending, players]);
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || tool !== 'draw' || !('onpointerrawupdate' in window)) {
+      rawBound.current = false;
+      return;
+    }
+    const onRaw = (ev: Event) => {
+      if (stroke.current) extendStroke(ev as PointerEvent);
+    };
+    el.addEventListener('pointerrawupdate', onRaw);
+    rawBound.current = true;
+    return () => {
+      el.removeEventListener('pointerrawupdate', onRaw);
+      rawBound.current = false;
+    };
+  }, [tool]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -180,8 +214,9 @@ export function PlayEditor() {
 
   /** Tap-tap assignment. The tool stays armed so the next man is two taps away. */
   function handleBlockTap(player: PlayerSlot) {
-    if (tool === 'select') return;
-    const step = tapBlock(tool, pending, player);
+    if (tool === 'select' || tool === 'draw') return;
+    const kind = tool;
+    const step = tapBlock(kind, pending, player);
     if (step.type === 'none') return;
     if (step.type === 'pending') {
       setPending(step.pending);
@@ -195,7 +230,7 @@ export function PlayEditor() {
     setSel(null);
     if (!blocker || !target) return;
 
-    const next = makeBlock(tool, blocker, target, climbTo ?? undefined);
+    const next = makeBlock(kind, blocker, target, climbTo ?? undefined);
     setAssignments((prev) => [
       // One block per man. Re-tapping a blocker corrects him instead of stacking.
       ...prev.filter((a) => !(a.playerId === blocker.id && isBlockKind(a.kind))),
@@ -276,6 +311,13 @@ export function PlayEditor() {
     const d = drag.current;
     const svg = svgRef.current;
     if (!svg) return;
+    if (tool === 'draw') {
+      // Raw updates, where supported, carry one sample per event and are bound
+      // natively below. Handling both would double every point.
+      if (stroke.current && !rawBound.current) extendStroke(e);
+      return;
+    }
+
     if (!d) {
       // Touch has no hover, so there is nothing to preview for a finger.
       if (e.pointerType !== 'touch') showAim(svg, e);
@@ -293,6 +335,12 @@ export function PlayEditor() {
 
   function handleUp(e: React.PointerEvent) {
     if (TRACING) trace(`${describeEvent(e)}  drag=${drag.current ? 'yes' : 'NONE'}`);
+
+    if (tool === 'draw' && stroke.current) {
+      if (commitTimer.current) window.clearTimeout(commitTimer.current);
+      commitTimer.current = window.setTimeout(commitStroke, CHATTER_MS);
+      return;
+    }
     if (!drag.current) return;
 
     // Provisional, not final: the pen may simply have bounced. handleStageDown
@@ -317,6 +365,66 @@ export function PlayEditor() {
    * used to land on the background and clear the selection, which is why a drag
    * appeared to deselect itself halfway.
    */
+  /** Palm rejection: ignore touch that lands while the pen is in play. */
+  function accepts(e: React.PointerEvent | PointerEvent): boolean {
+    if (e.pointerType === 'pen') {
+      lastPenAt.current = performance.now();
+      return true;
+    }
+    if (e.pointerType === 'touch') return performance.now() - lastPenAt.current > 800;
+    return true;
+  }
+
+  function extendStroke(e: React.PointerEvent | PointerEvent) {
+    const pts = stroke.current;
+    if (!pts || !accepts(e)) return;
+
+    // One event per sample with raw updates; with plain moves the samples are
+    // batched, so unpack them or the stroke corners off at speed.
+    const native = 'getCoalescedEvents' in e ? (e as PointerEvent) : null;
+    const batch = native?.getCoalescedEvents?.() ?? null;
+    if (batch && batch.length > 1) for (const c of batch) pts.push({ x: c.clientX, y: c.clientY });
+    else pts.push({ x: e.clientX, y: e.clientY });
+
+    const ahead = (e as PointerEvent).getPredictedEvents?.() ?? [];
+    ink.current?.draw(
+      pts,
+      ahead.map((p) => ({ x: p.clientX, y: p.clientY })),
+    );
+  }
+
+  /**
+   * Turn the raw samples into an assignment. Simplified first, because a pen
+   * lays down hundreds of points that describe a straight line, then smoothed
+   * so the retained corners read as the curve the hand actually drew.
+   */
+  function commitStroke() {
+    const pts = stroke.current;
+    const owner = strokeOwner.current;
+    stroke.current = null;
+    strokeOwner.current = null;
+    commitTimer.current = null;
+    ink.current?.clear();
+
+    const svg = svgRef.current;
+    if (!pts || pts.length < 2 || !svg) return;
+
+    const path = toSmoothPath(simplify(pts.map((q) => toYards(svg, q.x, q.y)), INK_TOLERANCE));
+    if (path.length < 2) return;
+
+    if (TRACING) trace(`stroke committed: ${pts.length} samples -> ${path.length} points`);
+
+    if (owner) {
+      // One drawn route per player; drawing again replaces it.
+      setAssignments((prev) => [
+        ...prev.filter((a) => !(a.playerId === owner && a.kind === 'route')),
+        { id: inkId(), playerId: owner, kind: 'route', path },
+      ]);
+    } else {
+      setAnnotations((prev) => [...prev, path]);
+    }
+  }
+
   function handleStageDown(e: React.PointerEvent) {
     const svg = svgRef.current;
     if (!svg) return;
@@ -326,6 +434,40 @@ export function PlayEditor() {
 
     const at = toYards(svg, e.clientX, e.clientY);
     clearAim();
+
+    if (tool === 'draw') {
+      if (!accepts(e)) return;
+
+      /*
+       * A stroke does not end at pointerup, it ends when the pen stays off.
+       * This device breaks contact constantly mid-gesture, so a lift is held
+       * provisionally: land again soon enough and near enough and the same
+       * stroke carries on, rather than being chopped into fragments.
+       */
+      const resuming = commitTimer.current !== null && stroke.current !== null;
+      if (resuming) {
+        window.clearTimeout(commitTimer.current!);
+        commitTimer.current = null;
+        if (TRACING) trace(`${describeEvent(e, at)}\n            -> stroke continues after a break`);
+      } else {
+        stroke.current = [];
+        strokeOwner.current = nearestPlayer(visible, at, pickRadius(svg))?.id ?? null;
+        if (TRACING) {
+          trace(
+            `${describeEvent(e, at)}\n            -> stroke started` +
+              `${strokeOwner.current ? ` for ${byId(strokeOwner.current)?.label}` : ' (annotation)'}`,
+          );
+        }
+      }
+
+      stroke.current!.push({ x: e.clientX, y: e.clientY });
+      try {
+        stageRef.current?.setPointerCapture(e.pointerId);
+      } catch {
+        /* not fatal */
+      }
+      return;
+    }
 
     /*
      * The S Pen breaks contact constantly. Traced on a Galaxy Ultra, one
@@ -473,6 +615,7 @@ export function PlayEditor() {
   function reset() {
     setPlayers(initialPlayers());
     setAssignments([]);
+    setAnnotations([]);
     setSel(null);
     setPending(null);
     setTool('select');
@@ -503,6 +646,19 @@ export function PlayEditor() {
       >
         <svg ref={svgRef} viewBox={VIEW_BOX} preserveAspectRatio="xMidYMid meet">
           <Field holes={holes} showHoles={showHoles} occupied={occupied} />
+
+          {annotations.map((path, i) => (
+            <path
+              key={`ann${i}`}
+              d={toPathD(path)}
+              fill="none"
+              stroke="var(--chalk)"
+              strokeWidth={0.14}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={0.75}
+            />
+          ))}
 
           {drawn.map((a) => (
             <AssignmentPath
@@ -542,13 +698,15 @@ export function PlayEditor() {
           </g>
         </svg>
 
+        <LiveInkCanvas ref={ink} />
+
       {selectedBlock && (
         <div className="inspector">
           <div className="row">
-            <strong>{describeBlock(selectedBlock, players)}</strong>
+            <strong>{describeAssignment(selectedBlock, players)}</strong>
           </div>
           <div className="row">
-            {selectedBlock.kind !== 'combo' && (
+            {(selectedBlock.kind === 'block' || selectedBlock.kind === 'pull') && (
               <>
                 <button
                   aria-pressed={selectedBlock.kind === 'block'}
@@ -611,9 +769,10 @@ export function PlayEditor() {
         tool={tool}
         onTool={handleTool}
         hint={hint}
-        blockCount={drawn.length}
+        blockCount={drawn.length + annotations.length}
         onClear={() => {
           setAssignments([]);
+          setAnnotations([]);
           setSel(null);
           setPending(null);
         }}
