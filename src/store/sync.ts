@@ -41,7 +41,26 @@ export function writeLocal(book: Playbook): void {
   }
 }
 
-export type SyncState = 'local' | 'syncing' | 'synced' | 'offline';
+export type SyncState = 'local' | 'syncing' | 'synced' | 'offline' | 'denied';
+
+/** Reported once per session; repeating it every 800ms helps nobody. */
+let warned = false;
+
+function explain(err: unknown): SyncState {
+  const code = (err as { code?: string })?.code ?? '';
+  const denied = code === 'permission-denied' || String(err).includes('permission');
+  if (!warned) {
+    warned = true;
+    console.warn(
+      denied
+        ? 'Playbook is saving locally only: Firestore refused the write. ' +
+            'The rules in firestore.rules have to be published to the project.'
+        : 'Playbook is saving locally only, cloud unreachable:',
+      err,
+    );
+  }
+  return denied ? 'denied' : 'offline';
+}
 
 /**
  * Push to Firestore if it is reachable. Failure is expected and survivable:
@@ -61,8 +80,8 @@ export async function pushToCloud(book: Playbook): Promise<SyncState> {
       updatedAt: Date.now(),
     });
     return 'synced';
-  } catch {
-    return 'offline';
+  } catch (err) {
+    return explain(err);
   }
 }
 
@@ -81,7 +100,9 @@ export async function pullFromCloud(): Promise<Playbook | null> {
       plays: Array.isArray(data.plays) ? data.plays : [],
       sections: Array.isArray(data.sections) ? data.sections : [],
     };
-  } catch {
+  } catch (err) {
+    // A failed pull is not worth a second warning; the push will report it.
+    void err;
     return null;
   }
 }

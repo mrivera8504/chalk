@@ -16,11 +16,18 @@ interface Props {
   onExport: () => void;
 }
 
+/*
+ * These used to collapse to one string, so a refused write looked exactly like
+ * a cloud that had not been tried yet, and the console said nothing either.
+ * Silent degradation is worse than no sync at all: everything looks fine right
+ * up until the device is lost.
+ */
 const SYNC_LABEL: Record<SyncState, string> = {
   local: 'on this device',
   syncing: 'saving',
   synced: 'saved',
-  offline: 'on this device',
+  offline: 'this device only, offline',
+  denied: 'this device only, cloud refused',
 };
 
 export function PlaybookList({
