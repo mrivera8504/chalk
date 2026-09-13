@@ -78,8 +78,17 @@ export function headingInto(points: PathPoint[], i: number): Yards {
   return { x: dx / len, y: dy / len };
 }
 
-/** Minimum slop around a player mark, in screen pixels, at any board scale. */
-const PICK_PX = 26;
+/*
+ * Slop around a player mark, in screen pixels, at any board scale.
+ *
+ * Sized from a device trace rather than guessed. Every failed tap in that
+ * capture fell within 0.19 yards of the old 26px threshold, three of them
+ * reaching for the same quarterback, so the marks were very slightly out of
+ * reach rather than badly mis-aimed. 36px clears the worst of them with margin.
+ * Over-reaching costs little, because the pick is nearest-wins: a wider radius
+ * covers more players but still returns the closest one.
+ */
+const PICK_PX = 36;
 
 /** Screen pixels to yards at whatever scale the board is currently drawn. */
 export function pxToYards(svg: SVGSVGElement, px: number): number {
