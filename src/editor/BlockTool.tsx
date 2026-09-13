@@ -1,10 +1,11 @@
 import type { BlockKind, PlayerSlot } from '../domain/types';
 
-export type Tool = 'select' | 'draw' | BlockKind;
+export type Tool = 'select' | 'draw' | 'erase' | BlockKind;
 
 export const TOOLS: { id: Tool; label: string }[] = [
   { id: 'select', label: 'Select' },
   { id: 'draw', label: 'Draw' },
+  { id: 'erase', label: 'Erase' },
   { id: 'block', label: 'Block' },
   { id: 'pull', label: 'Pull' },
   { id: 'combo', label: 'Combo' },

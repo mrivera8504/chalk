@@ -18,7 +18,6 @@ export interface PlayerSlot {
   onLineLocked: boolean;
   /** 1 = QB, 2 = RB. Used for play name suggestions. */
   backNumber?: number;
-  jersey?: number;
   shape: ShapeKind;
 }
 
@@ -108,8 +107,6 @@ export interface Section {
   order: number;
 }
 
-export type ColorRule = 'byGroup' | 'byKind' | 'manual';
-
 export interface Play {
   id: string;
   name: string;
@@ -126,7 +123,6 @@ export interface Play {
   notes: string;
   coachingPoint: string;
   tags: string[];
-  colorRule: ColorRule;
   createdAt: number;
   updatedAt: number;
 }

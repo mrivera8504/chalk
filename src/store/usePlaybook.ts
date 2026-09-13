@@ -23,7 +23,6 @@ export function blankPlay(sectionId = UNFILED_SECTION): Play {
     notes: '',
     coachingPoint: '',
     tags: [],
-    colorRule: 'byKind',
     createdAt: now,
     updatedAt: now,
   };

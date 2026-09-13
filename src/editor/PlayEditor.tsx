@@ -47,6 +47,8 @@ import { newId } from '../store/usePlaybook';
 import { BlockTool, tapBlock, type Pending, type Tool } from './BlockTool';
 import { Drawer } from './Drawer';
 import { SettingsPanel } from './SettingsPanel';
+import { NotesPanel } from './NotesPanel';
+import { eraseAt } from '../domain/erase';
 import { useSettings, getSettings } from '../store/settings';
 import { FormationPicker } from './FormationPicker';
 import { RoutePicker } from './RoutePicker';
@@ -178,7 +180,13 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<PathPoint[][]>(play.annotations);
   const [name, setName] = useState(play.name);
-  const [picker, setPicker] = useState<'route' | 'formation' | 'settings' | null>(null);
+  const [notes, setNotes] = useState(play.notes);
+  const [coachingPoint, setCoachingPoint] = useState(play.coachingPoint);
+  const [tags, setTags] = useState<string[]>(play.tags);
+  const [erasing, setErasing] = useState(false);
+  const [picker, setPicker] = useState<'route' | 'formation' | 'settings' | 'notes' | null>(
+    null,
+  );
   const [formations, setFormations] = useState<Formation[]>(readFormations);
   const [foundationId, setFoundationId] = useState<string | null>(readFoundationId);
   const [drawing, setDrawing] = useState(false);
@@ -266,6 +274,11 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         ? 'Drawing. Move the pen, then tap to finish'
         : 'Tap to start a route, move the pen, tap to finish';
     }
+    if (tool === 'erase') {
+      return erasing
+        ? 'Rubbing out. Move the pen over the ink, tap to stop'
+        : 'Tap to start rubbing out, move the pen, tap to stop';
+    }
     if (tool === 'select') {
       return carrying ? `Carrying ${byId(carrying)?.label}. Tap to place` : '';
     }
@@ -278,7 +291,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         : `Tap the lineman ${blocker.label} doubles`;
     }
     return `Tap who ${blocker.label} blocks`;
-  }, [tool, pending, players, drawing, carrying]);
+  }, [tool, pending, players, drawing, carrying, erasing]);
 
   function toggleDrawer() {
     const next = !drawerOpen;
@@ -289,10 +302,10 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   }
 
   useEffect(() => {
-    onChange({ ...play, name, players, assignments, annotations });
+    onChange({ ...play, name, players, assignments, annotations, notes, coachingPoint, tags });
     // play and onChange are stable for the life of one editing session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, players, assignments, annotations]);
+  }, [name, players, assignments, annotations, notes, coachingPoint, tags]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -325,6 +338,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         dropCarried('escape');
+        setErasing(false);
         setPending(null);
         setSel(null);
         return;
@@ -342,14 +356,20 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
   function handleTool(next: Tool) {
     dropCarried('tool changed');
+    setErasing(false);
     setPending(null);
     setSel(null);
     setTool(next);
-    // There is nobody to block without a front on the board.
-    if (next !== 'select' && !defenseExists) {
+    /*
+     * Only the block tools need a front on the board. This used to fire for
+     * anything that was not Select, so picking up the pen to draw a route
+     * dropped a whole defense onto the field uninvited.
+     */
+    const needsFront = next !== 'select' && next !== 'draw' && next !== 'erase';
+    if (needsFront && !defenseExists) {
       setPlayers((prev) => applyOnLine([...prev, ...defaultDefense()], settings));
     }
-    if (next !== 'select') setShowDefense(true);
+    if (needsFront) setShowDefense(true);
   }
 
   function handleDefense() {
@@ -365,7 +385,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
   /** Tap-tap assignment. The tool stays armed so the next man is two taps away. */
   function handleBlockTap(player: PlayerSlot) {
-    if (tool === 'select' || tool === 'draw') return;
+    if (tool === 'select' || tool === 'draw' || tool === 'erase') return;
     const kind = tool;
     const step = tapBlock(kind, pending, player);
     if (step.type === 'none') return;
@@ -603,6 +623,15 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     const d = drag.current;
     const svg = svgRef.current;
     if (!svg) return;
+    if (tool === 'erase') {
+      const at = toYards(svg, e.clientX, e.clientY);
+      // Hovering counts. This pen is off the glass most of the time, and an
+      // eraser that needed contact would be an eraser that never moved.
+      if (erasing) eraseUnder(at, svg);
+      else if (e.pointerType !== 'touch') showAim(svg, e);
+      return;
+    }
+
     if (tool === 'draw') {
       /*
        * Raw updates carry one sample per event and are bound natively below, so
@@ -641,7 +670,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
     // A lift means nothing while drawing: this pen lifts constantly. The idle
     // timer, or a second tap, is what ends a stroke.
-    if (tool === 'draw') return;
+    if (tool === 'draw' || tool === 'erase') return;
     if (!drag.current) return;
 
     // Provisional, not final: the pen may simply have bounced. handleStageDown
@@ -775,6 +804,26 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     // Nothing that just finished gets to be restarted by its own bounce.
     if (performance.now() < tapGuard.current && !carry.current) {
       if (TRACING) trace(`${describeEvent(e, at)}\n            -> bounce after a finished gesture, ignored`);
+      return;
+    }
+
+    if (tool === 'erase') {
+      if (!accepts(e)) return;
+
+      // A bounce is not a second tap. Same guard the stroke start needs.
+      if (erasing) {
+        if (performance.now() - strokeAt.current < CHATTER_MS) return;
+        setErasing(false);
+        tapGuard.current = performance.now() + CHATTER_MS;
+        return;
+      }
+
+      // One snapshot for the whole sweep, so stepping back restores every line
+      // the pen went over rather than the last few samples of it.
+      remember();
+      strokeAt.current = performance.now();
+      setErasing(true);
+      eraseUnder(at, svg);
       return;
     }
 
@@ -929,6 +978,28 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       stageRef.current?.setPointerCapture(e.pointerId);
     } catch {
       /* not fatal */
+    }
+  }
+
+  /**
+   * Rub out ink under the pen.
+   *
+   * Annotations erase partially, which is what the freehand layer is for. A
+   * route or a block is a single assignment and goes whole, matching what the
+   * Delete button in the inspector does, because half a block line means
+   * nothing to anyone reading the sheet.
+   */
+  function eraseUnder(at: Yards, svg: SVGSVGElement) {
+    const radius = Math.max(0.7, pxToYards(svg, 26));
+    const left = eraseAt(annotations, at, radius);
+    if (left) {
+      setAnnotations(left);
+      return;
+    }
+    const line = nearestAssignment(drawn, at, radius);
+    if (line) {
+      setAssignments((prev) => prev.filter((a) => a.id !== line.id));
+      setSel(null);
     }
   }
 
@@ -1222,7 +1293,9 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
       <Drawer open={drawerOpen} onToggle={toggleDrawer} side={settings.drawerSide}>
         <div className="drawer-head">
-          <strong>{picker === 'settings' ? 'Settings' : 'Tools'}</strong>
+          <strong>
+            {picker === 'settings' ? 'Settings' : picker === 'notes' ? 'Notes' : 'Tools'}
+          </strong>
           <button className="quiet" onClick={toggleDrawer}>
             Hide
           </button>
@@ -1230,6 +1303,16 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
         {picker === 'settings' ? (
           <SettingsPanel settings={settings} onClose={() => setPicker(null)} />
+        ) : picker === 'notes' ? (
+          <NotesPanel
+            coachingPoint={coachingPoint}
+            notes={notes}
+            tags={tags}
+            onCoachingPoint={setCoachingPoint}
+            onNotes={setNotes}
+            onTags={setTags}
+            onClose={() => setPicker(null)}
+          />
         ) : (
           <>
             {picker === 'route' && selectedPlayer && (
@@ -1264,7 +1347,9 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                   ? 'Tap a man to pick him up, tap again to set him down.'
                   : tool === 'draw'
                     ? 'Tap to start, move the pen, tap to finish. It does not have to stay down.'
-                    : 'Tap the blocker, then tap who he goes to.'}
+                    : tool === 'erase'
+                      ? 'Tap to start, sweep over the ink, tap to stop. Freehand rubs out in parts; a route or block goes whole.'
+                      : 'Tap the blocker, then tap who he goes to.'}
               </p>
             </section>
 
@@ -1336,7 +1421,12 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                   {saving ? 'Saving…' : 'Save'}
                 </button>
                 <button
-                  onClick={() => setPicker((v) => (v === 'settings' ? null : 'settings'))}
+                  onClick={() => setPicker('notes')}
+                >
+                  Notes{tags.length ? ` · ${tags.length}` : ''}
+                </button>
+                <button
+                  onClick={() => setPicker('settings')}
                 >
                   Settings
                 </button>

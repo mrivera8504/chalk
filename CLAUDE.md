@@ -84,6 +84,21 @@ stepping back undoes the whole drag rather than the last few pixels of it. It is
 reset when a fresh grab starts, and deliberately *not* reset when a contact
 bounce resumes one.
 
+## The eraser
+
+`domain/erase.ts` is pure and tested. It rubs out the points within a radius
+and **splits** the stroke, which is why the annotation layer is a list of paths
+rather than one. A run that starts partway through a stroke has its control
+point stripped: a control point describes the curve arriving from the point
+before it, and if that point was just erased the curve swings off across the
+field. It returns null when nothing was touched, because it runs on every
+pointer move and a fresh array each time would re-render the board and push an
+identical annotation set into the play on every sample.
+
+Freehand erases in parts; a route or a block goes whole, matching what Delete
+in the inspector does. Same tap-move-tap grammar as drawing, and hovering
+counts.
+
 ## Settings
 
 `store/settings.ts` is the one adjustable surface: colours, pen behaviour, board

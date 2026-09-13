@@ -906,6 +906,47 @@ button:focus-visible {
   cursor: pointer;
 }
 
+.notes-panel {
+  max-height: none;
+  border-top: 1px solid var(--line);
+  background: none;
+}
+
+.notes-line,
+.notes-body {
+  font: inherit;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+  color: var(--chalk);
+}
+
+.notes-body {
+  resize: vertical;
+  line-height: 1.45;
+}
+
+/* The tag input keeps its Add button beside it rather than wrapping under. */
+.notes-panel .picker-row .notes-line {
+  flex: 1 1 120px;
+  width: auto;
+  min-width: 0;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 7px;
+}
+
+.tag-row .chip button {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
 .export-panel {
   margin: 0 14px 12px;
   max-height: none;
