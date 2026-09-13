@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ExportPanel } from '../export/ExportPanel';
 import { UNFILED_SECTION, type Play, type Section } from '../domain/types';
 import type { SyncState } from '../store/sync';
 import { PlayCard } from './PlayCard';
@@ -11,7 +12,10 @@ interface Props {
   onNew: () => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
-  onAddSection: (name: string) => void;
+  onAddSection: (name: string) => Section;
+  onRenameSection: (id: string, name: string) => void;
+  onDeleteSection: (id: string) => void;
+  onSetSection: (id: string, sectionId: string) => void;
   onMovePlay: (id: string, toIndex: number) => void;
   onExport: () => void;
 }
@@ -39,11 +43,15 @@ export function PlaybookList({
   onDuplicate,
   onDelete,
   onAddSection,
+  onRenameSection,
+  onDeleteSection,
+  onSetSection,
   onMovePlay,
   onExport,
 }: Props) {
   const [query, setQuery] = useState('');
   const [dragging, setDragging] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   /** Name, suggested name, tags and notes all match, because coaches search by feel. */
   const matches = useMemo(() => {
@@ -56,6 +64,8 @@ export function PlaybookList({
         .includes(q),
     );
   }, [plays, query]);
+
+  const searching = query.trim().length > 0;
 
   const grouped = useMemo(() => {
     const known = [...sections].sort((a, b) => a.order - b.order);
@@ -70,8 +80,42 @@ export function PlaybookList({
         plays: unfiled,
       });
     }
-    return buckets.filter((b) => b.plays.length > 0);
-  }, [matches, sections]);
+    /*
+     * An empty folder still shows, otherwise creating one looked like the button
+     * did nothing at all: the section was made and saved, and then filtered out
+     * of the only view of it. A folder with nothing in it is also the only thing
+     * to drop the first play into.
+     *
+     * Under a search it does go, because an empty folder is not a result.
+     */
+    return searching ? buckets.filter((b) => b.plays.length > 0) : buckets;
+  }, [matches, sections, searching]);
+
+  function addSection() {
+    const name = prompt('Folder name');
+    if (name?.trim()) onAddSection(name.trim());
+  }
+
+  /** Make a folder and drop this play straight into it, in one prompt. */
+  function fileInNew(playId: string) {
+    const name = prompt('New folder name');
+    if (!name?.trim()) return;
+    onSetSection(playId, onAddSection(name.trim()).id);
+  }
+
+  function renameSection(s: Section) {
+    const name = prompt('Rename folder', s.name);
+    if (name?.trim()) onRenameSection(s.id, name.trim());
+  }
+
+  function deleteSection(s: Section, count: number) {
+    const warning = count
+      ? `Delete the folder "${s.name}"? The ${count} ${
+          count === 1 ? 'play goes' : 'plays go'
+        } back to Unfiled.`
+      : `Delete the empty folder "${s.name}"?`;
+    if (confirm(warning)) onDeleteSection(s.id);
+  }
 
   return (
     <div className="playbook">
@@ -89,23 +133,30 @@ export function PlaybookList({
           aria-label="Search"
         />
         <button onClick={onNew}>New play</button>
-        <button
-          className="quiet"
-          onClick={() => {
-            const name = prompt('Section name');
-            if (name?.trim()) onAddSection(name.trim());
-          }}
-        >
-          Add section
+        <button className="quiet" onClick={addSection}>
+          Add folder
         </button>
         {plays.length > 0 && (
-          <button className="quiet" onClick={onExport}>
+          <button
+            className="quiet"
+            onClick={() => setExporting((v) => !v)}
+            aria-pressed={exporting}
+          >
             Export
           </button>
         )}
       </div>
 
-      {plays.length === 0 ? (
+      {exporting && (
+        <ExportPanel
+          plays={matches}
+          sections={sections}
+          onJson={onExport}
+          onClose={() => setExporting(false)}
+        />
+      )}
+
+      {plays.length === 0 && sections.length === 0 ? (
         <p className="empty">
           Nothing here yet. Start a play and it saves itself as you draw.
         </p>
@@ -116,35 +167,62 @@ export function PlaybookList({
           <section key={section.id}>
             <h2>
               {section.name} <span>{inSection.length}</span>
+              {/* Unfiled is not a real folder, so it has nothing to rename. */}
+              {section.id !== UNFILED_SECTION && (
+                <span className="section-tools">
+                  <button className="quiet" onClick={() => renameSection(section)}>
+                    Rename
+                  </button>
+                  <button
+                    className="quiet"
+                    onClick={() => deleteSection(section, inSection.length)}
+                  >
+                    Delete
+                  </button>
+                </span>
+              )}
             </h2>
-            <div className="card-grid">
-              {inSection.map((play) => (
-                <div
-                  key={play.id}
-                  draggable
-                  onDragStart={() => setDragging(play.id)}
-                  onDragEnd={() => setDragging(null)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    if (dragging && dragging !== play.id) {
-                      onMovePlay(
-                        dragging,
-                        plays.findIndex((p) => p.id === play.id),
-                      );
-                    }
-                    setDragging(null);
-                  }}
-                  className={dragging === play.id ? 'card-drag' : undefined}
-                >
-                  <PlayCard
-                    play={play}
-                    onOpen={onOpen}
-                    onDuplicate={onDuplicate}
-                    onDelete={onDelete}
-                  />
-                </div>
-              ))}
-            </div>
+            {inSection.length === 0 ? (
+              <p className="empty-folder">
+                Empty. Put a play in it from the folder menu on its card.
+              </p>
+            ) : (
+              <div className="card-grid">
+                {inSection.map((play) => (
+                  <div
+                    key={play.id}
+                    draggable
+                    onDragStart={() => setDragging(play.id)}
+                    onDragEnd={() => setDragging(null)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      if (dragging && dragging !== play.id) {
+                        onMovePlay(
+                          dragging,
+                          plays.findIndex((p) => p.id === play.id),
+                        );
+                        // Dropping a card into a folder files it there too,
+                        // otherwise it lands in the middle of a list it is not
+                        // a member of and jumps back on the next render.
+                        onSetSection(dragging, section.id);
+                      }
+                      setDragging(null);
+                    }}
+                    className={dragging === play.id ? 'card-drag' : undefined}
+                  >
+                    <PlayCard
+                      play={play}
+                      sections={sections}
+                      onOpen={onOpen}
+                      onDuplicate={onDuplicate}
+                      onDelete={onDelete}
+                      onSetSection={onSetSection}
+                      onFileInNew={fileInNew}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         ))
       )}

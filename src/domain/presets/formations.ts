@@ -103,3 +103,40 @@ export function writeFormations(all: Formation[]): void {
     /* storage blocked; the session keeps working */
   }
 }
+
+const FOUNDATION_KEY = 'chalk.foundation.v1';
+
+/*
+ * The foundation is the set this team actually lines up in, and every new play
+ * opens in it. Stored as an id rather than a copy of the players, so editing
+ * and re-saving that formation carries forward; stored next to the formations
+ * rather than in the playbook document, because it describes this team's base
+ * rather than any one play, and a play already keeps its own players.
+ */
+export function readFoundationId(): string | null {
+  try {
+    return localStorage.getItem(FOUNDATION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeFoundationId(id: string | null): void {
+  try {
+    if (id) localStorage.setItem(FOUNDATION_KEY, id);
+    else localStorage.removeItem(FOUNDATION_KEY);
+  } catch {
+    /* storage blocked; the session keeps working */
+  }
+}
+
+/**
+ * The offense a new play starts from. Falls back to the built-in set whenever
+ * no foundation is set, or when the one that was set has since been deleted.
+ */
+export function foundationOffense(): PlayerSlot[] {
+  const id = readFoundationId();
+  if (!id) return defaultOffense();
+  const found = readFormations().find((f) => f.id === id);
+  return found ? structuredClone(found.players) : defaultOffense();
+}

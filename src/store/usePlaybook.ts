@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { applyOnLine } from '../domain/legality';
 import { withSuggestion } from '../domain/naming';
-import { defaultOffense } from '../domain/presets/formations';
-import { DEFAULT_SETTINGS, UNFILED_SECTION, type Play, type Section } from '../domain/types';
+import { foundationOffense } from '../domain/presets/formations';
+import { UNFILED_SECTION, type Play, type Section } from '../domain/types';
+import { getSettings } from './settings';
 import { EMPTY, pullFromCloud, pushToCloud, readLocal, writeLocal, type SyncState } from './sync';
 
 const AUTOSAVE_MS = 800;
@@ -16,7 +17,7 @@ export function blankPlay(sectionId = UNFILED_SECTION): Play {
     id: newId('p'),
     name: '',
     sectionId,
-    players: applyOnLine(defaultOffense(), DEFAULT_SETTINGS),
+    players: applyOnLine(foundationOffense(), getSettings()),
     assignments: [],
     annotations: [],
     notes: '',
@@ -88,7 +89,7 @@ export function usePlaybook() {
   }, [plays, sections]);
 
   const savePlay = useCallback((play: Play) => {
-    const stamped = withSuggestion({ ...play, updatedAt: Date.now() }, DEFAULT_SETTINGS);
+    const stamped = withSuggestion({ ...play, updatedAt: Date.now() }, getSettings());
     setPlays((prev) => {
       const i = prev.findIndex((p) => p.id === stamped.id);
       if (i === -1) return [...prev, stamped];
@@ -117,6 +118,13 @@ export function usePlaybook() {
       const at = prev.findIndex((p) => p.id === id);
       return [...prev.slice(0, at + 1), copy, ...prev.slice(at + 1)];
     });
+  }, []);
+
+  /** Move a play into a folder, or out to Unfiled. */
+  const setPlaySection = useCallback((id: string, sectionId: string) => {
+    setPlays((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, sectionId, updatedAt: Date.now() } : p)),
+    );
   }, []);
 
   const addSection = useCallback((name: string) => {
@@ -148,6 +156,19 @@ export function usePlaybook() {
     });
   }, []);
 
+  /**
+   * Push now instead of waiting out the debounce.
+   *
+   * The local copy is already written synchronously on every change, so this is
+   * only ever about the cloud. Cancels the pending timer first, or the debounce
+   * fires again a moment later and pushes the very same document twice.
+   */
+  const saveNow = useCallback(async () => {
+    if (timer.current) window.clearTimeout(timer.current);
+    setSync('syncing');
+    setSync(await pushToCloud({ plays, sections }));
+  }, [plays, sections]);
+
   const exportJson = useCallback(
     () => JSON.stringify({ plays, sections, exportedAt: Date.now() }, null, 2),
     [plays, sections],
@@ -160,6 +181,8 @@ export function usePlaybook() {
     savePlay,
     deletePlay,
     duplicatePlay,
+    setPlaySection,
+    saveNow,
     addSection,
     renameSection,
     deleteSection,

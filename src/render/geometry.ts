@@ -35,6 +35,23 @@ export function snap(value: number, step = 0.25): number {
   return Math.round(value / step) * step;
 }
 
+/**
+ * Depth snap, with a magnet on the line.
+ *
+ * The grid alone leaves linemen sitting a notch high or low, which reads as a
+ * sloppy line and, worse, as a deliberate off-ball split. Inside the magnet
+ * there is only one sane answer, so take it.
+ *
+ * The magnet is a distance in yards, zero to switch it off, and it belongs
+ * inside the on-line tolerance: a mark that snaps to the line was already going
+ * to count as on it, so tidying the drawing never changes the legality count or
+ * the hole map under the user's hand.
+ */
+export function snapDepth(y: number, magnetYards: number, step: number): number {
+  if (magnetYards > 0 && Math.abs(y) <= magnetYards) return 0;
+  return snap(y, step);
+}
+
 export function clamp(value: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, value));
 }

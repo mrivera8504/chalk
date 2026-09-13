@@ -81,14 +81,20 @@ function Cap({
 interface Props {
   assignment: Assignment;
   selected?: boolean;
+  /** Per-receiver colour, when the caller has one. A hand-picked colour wins. */
+  autoColor?: string;
 }
 
-export function AssignmentPath({ assignment, selected = false }: Props) {
+export function AssignmentPath({ assignment, selected = false, autoColor }: Props) {
   const { kind, path } = assignment;
   if (path.length < 2) return null;
 
   const style = STYLE[kind];
-  const color = selected ? 'var(--select)' : (assignment.color ?? style.color);
+  // Selection first so the highlight is never lost to a colour close to it,
+  // then the hand-picked colour, then the automatic one, then the kind.
+  const color = selected
+    ? 'var(--select)'
+    : (assignment.color ?? autoColor ?? style.color);
   const width = selected ? 0.24 : 0.17;
   const d = toPathD(path);
 

@@ -24,6 +24,19 @@
   --ink-motion: #b9a8ff;
   --ink-option: #9fb4bf;
 
+  /*
+   * One per receiver. Tokens rather than literals so the export can swap the
+   * whole set for ink that survives white paper; see PRINT_TOKENS in
+   * export/render.tsx. A colour picked by hand is stored as one of these names,
+   * so it adapts too.
+   */
+  --route-0: #7fd4ff;
+  --route-1: #86e5a0;
+  --route-2: #c4a7ff;
+  --route-3: #ff9ecb;
+  --route-4: #d6e86b;
+  --route-5: #79e0d8;
+
   --select: #4fb8ff;
   --hover: #7fe0c4;
   --locked: #f2c14e;
@@ -145,10 +158,6 @@ body,
   pointer-events: none;
 }
 
-.blocktool {
-  flex: 0 0 auto;
-}
-
 /*
  * Floats over the board rather than sitting below it. As a flex sibling it
  * changed .stage's height every time something was selected, which rescaled the
@@ -184,27 +193,204 @@ body,
   flex-wrap: wrap;
   gap: 6px;
   padding: 8px 12px;
-  background: var(--panel);
+}
+
+/*
+ * The sliding tool drawer.
+ *
+ * Absolute, like .inspector and for the same reason: as a flex sibling of
+ * .stage every open and close would have changed the board's height, and the
+ * board's height is the scale of every coordinate on it.
+ *
+ * It leaves from the side, not the bottom. The bottom of the view is the
+ * backfield, where the carrier and the quarterback stand, so a panel there
+ * covers the men being drawn. Closed, the panel is off the canvas entirely and
+ * only the tab is left over the field.
+ */
+.stage .drawer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  /* Inert, so taps fall through to the board everywhere the panel is not. */
+  pointer-events: none;
+}
+
+.drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(320px, 85%);
+  transform: translateX(100%);
+  transition: transform 180ms ease;
+  pointer-events: auto;
+  overflow-y: auto;
+  /* .stage kills touch scrolling for the pen. The panel's lists need it back. */
+  touch-action: auto;
+  background: color-mix(in srgb, var(--panel) 95%, transparent);
+  backdrop-filter: blur(8px);
+  border-left: 1px solid var(--line);
+}
+
+.drawer.open .drawer-panel {
+  transform: none;
+}
+
+/*
+ * Mirrored for a left-hander, or for anyone whose hand covers the right edge.
+ * Only the anchoring flips; everything inside is unchanged.
+ */
+.drawer.left .drawer-panel {
+  right: auto;
+  left: 0;
+  transform: translateX(-100%);
+  border-left: 0;
+  border-right: 1px solid var(--line);
+}
+
+.drawer.left.open .drawer-panel {
+  transform: none;
+}
+
+.drawer.left .drawer-tab {
+  right: auto;
+  left: 0;
+  border-radius: 0 9px 9px 0;
+  border-right: 1px solid var(--line);
+  border-left: 0;
+  transition: left 180ms ease;
+}
+
+.drawer.left.open .drawer-tab {
+  left: min(320px, 85%);
+}
+
+/*
+ * Rides the panel's edge in and out. Tall and pinned to the middle of the side,
+ * because it is the one control that reaches every other control and a pen
+ * should never have to hunt for it.
+ */
+.drawer-tab {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  transition: right 180ms ease;
+  pointer-events: auto;
+  width: 34px;
+  min-height: 68px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px 0 0 9px;
+  border-right: 0;
+  color: var(--dim);
+  font-size: 18px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.drawer.open .drawer-tab {
+  right: min(320px, 85%);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 6px;
+}
+
+.drawer-head strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.drawer-head .quiet {
+  margin-left: auto;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+/*
+ * One labelled group per thing a coach is trying to do. A flat wall of pills
+ * gave every button the same weight and told you what none of them were for.
+ */
+.tool-group {
+  padding: 4px 0 10px;
   border-top: 1px solid var(--line);
 }
 
-.blocktool {
-  border-top: 1px solid var(--line);
-}
-
-.blocktool .tools {
+.tool-group:first-of-type {
   border-top: 0;
 }
 
-/* Height is reserved whether or not there is a hint, for the same reason. */
-.hint {
-  padding: 0 12px 8px;
-  background: var(--panel);
-  font-size: 11.5px;
-  line-height: 1.4;
-  min-height: 24px;
+.tool-group h4 {
+  margin: 8px 12px 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* Says what the group in front of you actually does, in a coach's words. */
+.tool-note {
+  margin: 2px 12px 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--dim);
+}
+
+/* Two columns: a narrow panel makes a wrapped row of pills hard to aim at. */
+.drawer-panel .tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 6px 12px 10px;
+}
+
+.drawer-panel .tools button {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.drawer-panel .tool-group .tools {
+  padding-bottom: 4px;
+}
+
+.drawer-panel .picker {
+  background: none;
+  max-height: none;
+  border-top: 1px solid var(--line);
+}
+
+/*
+ * Whose block you are halfway through assigning, floating over the board so it
+ * outlives the drawer. Inert: it must never swallow a tap meant for the field.
+ */
+.hint-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 2;
+  pointer-events: none;
+  max-width: 84%;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(6px);
   color: var(--select);
-  white-space: pre;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 button {
@@ -277,6 +463,22 @@ button:focus-visible {
 .inspector .row strong {
   font-size: 13px;
   font-weight: 600;
+}
+
+.swatches { flex-wrap: wrap; }
+
+.inspector .swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+
+/* The ring is outside the colour, so the colour itself is never obscured. */
+.inspector .swatch[aria-pressed='true'] {
+  border-color: var(--chalk);
+  outline: 1px solid var(--bg);
 }
 
 .inspector .pos {
@@ -432,9 +634,53 @@ button:focus-visible {
   color: var(--dim);
 }
 
+.playbook h2 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .playbook h2 span {
   color: var(--line);
   margin-left: 4px;
+}
+
+.section-tools {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.section-tools button {
+  padding: 3px 7px;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.empty-folder {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  color: var(--dim);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: center;
+}
+
+.card-file {
+  padding: 0 8px 8px;
+}
+
+.card-file select {
+  font: inherit;
+  font-size: 11px;
+  width: 100%;
+  padding: 5px 7px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+  color: var(--dim);
 }
 
 .card-grid {
@@ -586,13 +832,118 @@ button:focus-visible {
   line-height: 1.5;
 }
 
+/* Inline in the playbook rather than docked to an edge, so it reads as a
+   step in the page rather than something covering it. */
+/* Full height of the panel: settings is a page, not a popover. */
+.settings-panel {
+  max-height: none;
+  border-top: 1px solid var(--line);
+  background: none;
+}
+
+.setting {
+  padding: 7px 0 9px;
+}
+
+.setting-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 6px;
+}
+
+.setting-label strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.setting-label span {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--dim);
+}
+
+.setting .picker-row button {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.setting-num {
+  font: inherit;
+  width: 88px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+  color: var(--chalk);
+}
+
+/* The colour wells. Big enough that a pen tip is not the limiting factor. */
+.swatch-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.swatch-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--dim);
+}
+
+.swatch-slot input[type='color'] {
+  width: 38px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-hi);
+  cursor: pointer;
+}
+
+.export-panel {
+  margin: 0 14px 12px;
+  max-height: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.picker-note.bad {
+  color: var(--bad);
+}
+
 .chip { display: inline-flex; }
-.chip button { border-radius: 7px 0 0 7px; }
+.chip > button { border-radius: 0; }
+.chip > button:first-child { border-radius: 7px 0 0 7px; }
+.chip > button:last-child { border-radius: 0 7px 7px 0; }
+.chip > button + button { border-left: 0; }
+
 .chip .chip-x {
-  border-radius: 0 7px 7px 0;
-  border-left: 0;
   padding: 8px 9px;
   color: var(--dim);
+}
+
+/* The foundation star. Dim until it is the one new plays open in. */
+.chip .chip-star {
+  padding: 8px 8px;
+  color: var(--line);
+}
+
+/*
+ * Opts out of the chalk-on-dark inversion every other pressed button takes. A
+ * white block beside the formation's name reads as the name being selected,
+ * which is what tapping the name next to it actually does.
+ */
+.chip .chip-star.on,
+.chip .chip-star[aria-pressed='true'] {
+  background: var(--panel-hi);
+  border-color: var(--line);
+  color: var(--locked);
 }
 
 button:disabled { opacity: 0.4; cursor: default; }

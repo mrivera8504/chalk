@@ -2,7 +2,7 @@ import type { BlockKind, PlayerSlot } from '../domain/types';
 
 export type Tool = 'select' | 'draw' | BlockKind;
 
-const TOOLS: { id: Tool; label: string }[] = [
+export const TOOLS: { id: Tool; label: string }[] = [
   { id: 'select', label: 'Select' },
   { id: 'draw', label: 'Draw' },
   { id: 'block', label: 'Block' },
@@ -54,32 +54,30 @@ export function tapBlock(
   return { type: 'commit', blockerId: pending.blockerId, targetId: tapped.id };
 }
 
+/** For the dock handle, which names the current mode when nothing is pending. */
+export function toolLabel(tool: Tool): string {
+  return TOOLS.find((t) => t.id === tool)?.label ?? 'Select';
+}
+
 interface Props {
   tool: Tool;
   onTool: (t: Tool) => void;
-  /** What to tap next. Empty in select mode. */
-  hint: string;
-  blockCount: number;
-  onClear: () => void;
 }
 
-export function BlockTool({ tool, onTool, hint, blockCount, onClear }: Props) {
+/*
+ * The hint that used to live here now rides on the dock handle, so it is still
+ * there when the tools are folded away. That is the line telling you whose
+ * block you are halfway through assigning, and it is worth more than the
+ * buttons when the board is what you want to see.
+ */
+export function BlockTool({ tool, onTool }: Props) {
   return (
-    <div className="blocktool">
-      <div className="tools">
-        {TOOLS.map((t) => (
-          <button key={t.id} aria-pressed={tool === t.id} onClick={() => onTool(t.id)}>
-            {t.label}
-          </button>
-        ))}
-        {blockCount > 0 && (
-          <button className="quiet" onClick={onClear}>
-            Clear {blockCount}
-          </button>
-        )}
-      </div>
-      {/* Always rendered. Letting it mount and unmount would resize the board. */}
-      <div className="hint">{hint || '\u00a0'}</div>
+    <div className="tools">
+      {TOOLS.map((t) => (
+        <button key={t.id} aria-pressed={tool === t.id} onClick={() => onTool(t.id)}>
+          {t.label}
+        </button>
+      ))}
     </div>
   );
 }

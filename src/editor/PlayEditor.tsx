@@ -2,9 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { computeHoles } from '../domain/holes';
 import { applyOnLine, checkFormation, countOnLine } from '../domain/legality';
 import { describeAssignment, makeBlock, refreshBlocks } from '../domain/presets/blocks';
-import { defaultDefense, defaultOffense } from '../domain/presets/formations';
+import { defaultDefense } from '../domain/presets/formations';
 import {
-  DEFAULT_SETTINGS,
   PLAYER_R,
   isBlockKind,
   type Assignment,
@@ -28,23 +27,34 @@ import {
   pickRadius,
   pxToYards,
   snap,
+  snapDepth,
   toYards,
   toPathD,
   type Yards,
 } from '../render/geometry';
 import { mirrorAnnotations, mirrorAssignments, mirrorPlayers } from '../domain/mirror';
+import { SWATCHES, autoRouteColor } from '../domain/colors';
 import { naturalHand, type RoutePreset } from '../domain/presets/routes';
-import { readFormations, writeFormations } from '../domain/presets/formations';
+import {
+  foundationOffense,
+  readFormations,
+  readFoundationId,
+  writeFormations,
+  writeFoundationId,
+} from '../domain/presets/formations';
 import { UndoStack } from '../store/undo';
 import { newId } from '../store/usePlaybook';
 import { BlockTool, tapBlock, type Pending, type Tool } from './BlockTool';
+import { Drawer } from './Drawer';
+import { SettingsPanel } from './SettingsPanel';
+import { useSettings, getSettings } from '../store/settings';
 import { FormationPicker } from './FormationPicker';
 import { RoutePicker } from './RoutePicker';
 import { TracePanel } from './TracePanel';
 import { TRACING, describeEvent, trace } from './trace';
 import { LegalityBadge } from './LegalityBadge';
-
-const settings = DEFAULT_SETTINGS;
+import { singlePlayPdf } from '../export/pdf';
+import { download, playToPng, playTitle, stamp } from '../export/render';
 
 /*
  * Measured from a real S Pen trace: bounce gaps ran 10-25ms, while a genuine
@@ -91,12 +101,40 @@ const INK_MIN_SPAN = 0.8;
  */
 const INK_OWNER_YARDS = PLAYER_R * 1.6;
 
+/*
+ * Whether the drawer is open, remembered across plays and sessions. The editor
+ * remounts for every play, and a coach who slid the tools away to see the board
+ * wants them to stay away. Defaults to open, so the tools are not hidden behind
+ * a tab from someone who has never seen one.
+ */
+const DRAWER_KEY = 'chalk.drawer.v1';
+
+function readDrawerOpen(): boolean {
+  try {
+    return localStorage.getItem(DRAWER_KEY) !== 'closed';
+  } catch {
+    return true;
+  }
+}
+
+function writeDrawerOpen(open: boolean): void {
+  try {
+    localStorage.setItem(DRAWER_KEY, open ? 'open' : 'closed');
+  } catch {
+    /* storage blocked; the session keeps working */
+  }
+}
+
 let inkCounter = 0;
 const inkId = () => `k${Date.now().toString(36)}${(inkCounter++).toString(36)}`;
 
-/** Offense only. The defense goes on the board when it is asked for. */
+/**
+ * Offense only; the defense goes on the board when it is asked for. Reset goes
+ * back to the foundation rather than to the built-in set, so it means "start
+ * this play over" rather than "throw away how this team lines up".
+ */
 function initialPlayers(): PlayerSlot[] {
-  return applyOnLine(defaultOffense(), settings);
+  return applyOnLine(foundationOffense(), getSettings());
 }
 
 type Selection = { kind: 'player' | 'assignment'; id: string } | null;
@@ -124,23 +162,31 @@ interface EditorProps {
   play: Play;
   onChange: (play: Play) => void;
   onClose: () => void;
+  /** Flush to the cloud now, rather than waiting out the autosave debounce. */
+  onSave: () => Promise<void>;
 }
 
-export function PlayEditor({ play, onChange, onClose }: EditorProps) {
+export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
+  const settings = useSettings();
   const [players, setPlayers] = useState<PlayerSlot[]>(play.players);
   const [assignments, setAssignments] = useState<Assignment[]>(play.assignments);
   const [tool, setTool] = useState<Tool>('select');
   const [pending, setPending] = useState<Pending | null>(null);
   const [sel, setSel] = useState<Selection>(null);
-  const [showHoles, setShowHoles] = useState(true);
-  const [showDefense, setShowDefense] = useState(false);
+  const [showHoles, setShowHoles] = useState(() => getSettings().showHoles);
+  const [showDefense, setShowDefense] = useState(() => getSettings().showDefense);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<PathPoint[][]>(play.annotations);
   const [name, setName] = useState(play.name);
-  const [picker, setPicker] = useState<'route' | 'formation' | null>(null);
+  const [picker, setPicker] = useState<'route' | 'formation' | 'settings' | null>(null);
   const [formations, setFormations] = useState<Formation[]>(readFormations);
+  const [foundationId, setFoundationId] = useState<string | null>(readFoundationId);
   const [drawing, setDrawing] = useState(false);
   const [carrying, setCarrying] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(readDrawerOpen);
+  const [exporting, setExporting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(0);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -172,7 +218,14 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
    */
   const tapGuard = useRef(0);
   const undo = useRef(new UndoStack<Snapshot>());
-  const [undoDepth, setUndoDepth] = useState(0);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  /**
+   * True once this gesture has already taken a snapshot. A drag arrives as
+   * dozens of moves, and on this device as several contacts as well, and all of
+   * it is one thing the user did: one step back has to undo the whole of it.
+   */
+  const gestureRemembered = useRef(false);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
@@ -187,8 +240,10 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
    */
   const drawn = useMemo(() => refreshBlocks(assignments, players), [assignments, players]);
 
-  const holes = useMemo(() => computeHoles(players, settings), [players]);
-  const issues = useMemo(() => checkFormation(players, settings), [players]);
+  // settings belongs in both: the rules are live now, and changing which way
+  // the even holes run has to renumber the board without touching a player.
+  const holes = useMemo(() => computeHoles(players, settings), [players, settings]);
+  const issues = useMemo(() => checkFormation(players, settings), [players, settings]);
   const onLine = countOnLine(players);
   const defenseExists = players.some((p) => p.side === 'defense');
 
@@ -224,6 +279,14 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
     }
     return `Tap who ${blocker.label} blocks`;
   }, [tool, pending, players, drawing, carrying]);
+
+  function toggleDrawer() {
+    const next = !drawerOpen;
+    setDrawerOpen(next);
+    writeDrawerOpen(next);
+    // A picker left open behind a closed drawer reappears unasked next time.
+    if (!next) setPicker(null);
+  }
 
   useEffect(() => {
     onChange({ ...play, name, players, assignments, annotations });
@@ -360,20 +423,38 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
     }
   }
 
+  function syncUndo() {
+    setCanUndo(undo.current.canUndo);
+    setCanRedo(undo.current.canRedo);
+  }
+
   /** Call before any edit worth stepping back over. */
   function remember() {
     undo.current.push({ players, assignments, annotations });
-    setUndoDepth((n) => n + 1);
+    syncUndo();
+  }
+
+  function restore(snap: Snapshot) {
+    setPlayers(snap.players);
+    setAssignments(snap.assignments);
+    setAnnotations(snap.annotations);
+    setSel(null);
+    setPending(null);
+    syncUndo();
   }
 
   function stepBack() {
+    dropCarried('undo');
     const prev = undo.current.undo({ players, assignments, annotations });
-    if (!prev) return;
-    setPlayers(prev.players);
-    setAssignments(prev.assignments);
-    setAnnotations(prev.annotations);
-    setSel(null);
-    setUndoDepth((n) => n - 1);
+    if (prev) restore(prev);
+    else syncUndo();
+  }
+
+  function stepForward() {
+    dropCarried('redo');
+    const next = undo.current.redo({ players, assignments, annotations });
+    if (next) restore(next);
+    else syncUndo();
   }
 
   /**
@@ -439,6 +520,14 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
     const all = formations.filter((f) => f.id !== id);
     setFormations(all);
     writeFormations(all);
+    // A foundation pointing at a formation that no longer exists would silently
+    // fall back to the built-in set, which reads as the star being ignored.
+    if (id === foundationId) setFoundation(null);
+  }
+
+  function setFoundation(id: string | null) {
+    setFoundationId(id);
+    writeFoundationId(id);
   }
 
   function dropCarried(reason: string) {
@@ -479,8 +568,27 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
       d.moved = true;
     }
 
-    const x = clamp(snap(at.x + d.dx), -VIEW.halfWidth + 1, VIEW.halfWidth - 1);
-    const y = clamp(snap(at.y + d.dy), -VIEW.downfield + 1, VIEW.behind - 1);
+    // The first movement of a gesture is the moment there is something to step
+    // back over, and the snapshot taken here is still the pre-drag board.
+    if (!gestureRemembered.current) {
+      gestureRemembered.current = true;
+      remember();
+    }
+
+    /*
+     * Only the offense is magnetised to the line. A defender belongs head-up on
+     * the ball often enough, and snapping him flush would sit him exactly on top
+     * of the lineman he is over, which draws as one mark rather than two.
+     */
+    const onOffense = byId(d.id)?.side === 'offense';
+    const step = settings.snapStepYards;
+    const magnet = onOffense ? settings.losMagnetYards : 0;
+    const x = clamp(snap(at.x + d.dx, step), -VIEW.halfWidth + 1, VIEW.halfWidth - 1);
+    const y = clamp(
+      snapDepth(at.y + d.dy, magnet, step),
+      -VIEW.downfield + 1,
+      VIEW.behind - 1,
+    );
 
     setPlayers((prev) =>
       applyOnLine(
@@ -654,8 +762,11 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
   function handleStageDown(e: React.PointerEvent) {
     const svg = svgRef.current;
     if (!svg) return;
-    // The inspector floats inside the stage; taps on it are not board taps.
-    if ((e.target as Element).closest?.('.inspector')) return;
+    // The inspector and the drawer float inside the stage; taps on either are
+    // not board taps. Returning before preventDefault is what lets their
+    // buttons behave like buttons. The drawer's own wrapper is inert, so this
+    // only ever catches the panel and its tab.
+    if ((e.target as Element).closest?.('.inspector, .drawer')) return;
     e.preventDefault();
 
     const at = toYards(svg, e.clientX, e.clientY);
@@ -808,6 +919,9 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
     }
 
     drag.current = { id: p.id, dx: p.x - at.x, dy: p.y - at.y, ox: at.x, oy: at.y, moved: false };
+    // A bounce resuming a drag deliberately does not reset this: it is the same
+    // gesture continuing, and it must not cost a second step of undo.
+    gestureRemembered.current = false;
     setSel({ kind: 'player', id: p.id });
     // Capture can throw if the pointer is already gone. The drag survives
     // without it, because every move bubbles back to this same element.
@@ -819,17 +933,26 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
   }
 
   function deleteAssignment(id: string) {
+    remember();
     setAssignments((prev) => prev.filter((a) => a.id !== id));
     setSel(null);
   }
 
   /** A base block and a pull differ only in the path, so the swap is free. */
   function retype(id: string, kind: 'block' | 'pull') {
+    remember();
     setAssignments((prev) => prev.map((a) => (a.id === id ? { ...a, kind } : a)));
+  }
+
+  /** Undefined puts the line back under whatever the automatic rule says. */
+  function recolor(id: string, color: string | undefined) {
+    remember();
+    setAssignments((prev) => prev.map((a) => (a.id === id ? { ...a, color } : a)));
   }
 
   function toggleOnLine() {
     if (!selectedPlayer) return;
+    remember();
     setPlayers((prev) =>
       prev.map((p) =>
         p.id === selectedPlayer.id ? { ...p, onLine: !p.onLine, onLineLocked: true } : p,
@@ -839,6 +962,7 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
 
   function releaseLock() {
     if (!selectedPlayer) return;
+    remember();
     setPlayers((prev) =>
       applyOnLine(
         prev.map((p) => (p.id === selectedPlayer.id ? { ...p, onLineLocked: false } : p)),
@@ -854,8 +978,56 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
     );
   }
 
+  /**
+   * This one play as a file.
+   *
+   * Exports what is in hand rather than what was last autosaved, so a sheet
+   * printed mid-edit matches the board. The name is the play's, slugged, so a
+   * folder of these sorts the way the playbook does.
+   */
+  async function exportPlay(kind: 'pdf' | 'png') {
+    const current = { ...play, name, players, assignments, annotations };
+    const slug =
+      playTitle(current)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'play';
+    setExporting(true);
+    try {
+      if (kind === 'pdf') {
+        download(await singlePlayPdf(current, { showHoles }), `${slug}-${stamp()}.pdf`, 'application/pdf');
+      } else {
+        // 2000px across is a little over 300 DPI at the width this prints.
+        const bytes = await playToPng(current, 2000, { showHoles, showDefense });
+        download(bytes, `${slug}-${stamp()}.png`, 'image/png');
+      }
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  /**
+   * Save now.
+   *
+   * Everything is already on this device — writeLocal runs synchronously on
+   * every change — so this is really "push to the cloud without waiting out the
+   * debounce". It says so afterwards, because a save button that does nothing
+   * visible is a save button nobody trusts.
+   */
+  async function saveNow() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSave();
+      setSaved(Date.now());
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function reset() {
     dropCarried('reset');
+    remember();
     setPlayers(initialPlayers());
     setAssignments([]);
     setAnnotations([]);
@@ -917,6 +1089,7 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
             <AssignmentPath
               key={a.id}
               assignment={a}
+              autoColor={autoRouteColor(a, players)}
               selected={sel?.kind === 'assignment' && sel.id === a.id}
             />
           ))}
@@ -981,6 +1154,30 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
               Delete
             </button>
           </div>
+
+          {/*
+            * Colour is per line, not per player, so a receiver running a route
+            * and carrying the ball on a reverse can read as two different
+            * things. Auto colouring is per receiver, which covers the common
+            * case; this row is for the one line that needs to stand out.
+            */}
+          <div className="row swatches">
+            {SWATCHES.map((c) => (
+              <button
+                key={c}
+                className="swatch"
+                style={{ background: c }}
+                aria-label={`Colour ${c}`}
+                aria-pressed={selectedBlock.color === c}
+                onClick={() => recolor(selectedBlock.id, c)}
+              />
+            ))}
+            {selectedBlock.color !== undefined && (
+              <button className="quiet" onClick={() => recolor(selectedBlock.id, undefined)}>
+                Auto
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -1016,63 +1213,152 @@ export function PlayEditor({ play, onChange, onClose }: EditorProps) {
           </div>
         </div>
       )}
+      {/*
+        * The one line that guides the tap-tap grammar, floating clear of the
+        * panel so it survives the drawer being shut. Inert, and only there when
+        * there is something to say.
+        */}
+      {hint && <div className="hint-pill">{hint}</div>}
+
+      <Drawer open={drawerOpen} onToggle={toggleDrawer} side={settings.drawerSide}>
+        <div className="drawer-head">
+          <strong>{picker === 'settings' ? 'Settings' : 'Tools'}</strong>
+          <button className="quiet" onClick={toggleDrawer}>
+            Hide
+          </button>
+        </div>
+
+        {picker === 'settings' ? (
+          <SettingsPanel settings={settings} onClose={() => setPicker(null)} />
+        ) : (
+          <>
+            {picker === 'route' && selectedPlayer && (
+              <RoutePicker
+                player={selectedPlayer}
+                onPick={applyRoute}
+                onClose={() => setPicker(null)}
+              />
+            )}
+            {picker === 'formation' && (
+              <FormationPicker
+                formations={formations}
+                foundationId={foundationId}
+                onApply={applyFormation}
+                onSave={saveFormation}
+                onDelete={deleteFormation}
+                onSetFoundation={setFoundation}
+                onClose={() => setPicker(null)}
+              />
+            )}
+
+            {/*
+              * Grouped by what each button does to the play rather than listed
+              * flat. Sixteen unlabelled pills all looked equally important and
+              * none of them said what they were for.
+              */}
+            <section className="tool-group">
+              <h4>Mode</h4>
+              <BlockTool tool={tool} onTool={handleTool} />
+              <p className="tool-note">
+                {tool === 'select'
+                  ? 'Tap a man to pick him up, tap again to set him down.'
+                  : tool === 'draw'
+                    ? 'Tap to start, move the pen, tap to finish. It does not have to stay down.'
+                    : 'Tap the blocker, then tap who he goes to.'}
+              </p>
+            </section>
+
+            <section className="tool-group">
+              <h4>Assign</h4>
+              <div className="tools">
+                <button
+                  disabled={!selectedPlayer}
+                  onClick={() => setPicker((v) => (v === 'route' ? null : 'route'))}
+                  aria-pressed={picker === 'route'}
+                >
+                  Route
+                </button>
+                <button
+                  onClick={() => setPicker((v) => (v === 'formation' ? null : 'formation'))}
+                  aria-pressed={picker === 'formation'}
+                >
+                  Formation
+                </button>
+                <button onClick={mirror}>Flip sides</button>
+                <button
+                  className="quiet"
+                  disabled={drawn.length + annotations.length === 0}
+                  onClick={() => {
+                    remember();
+                    setAssignments([]);
+                    setAnnotations([]);
+                    setSel(null);
+                    setPending(null);
+                  }}
+                >
+                  Clear {drawn.length + annotations.length || ''}
+                </button>
+              </div>
+              {!selectedPlayer && <p className="tool-note">Pick a man to give him a route.</p>}
+            </section>
+
+            <section className="tool-group">
+              <h4>Undo</h4>
+              <div className="tools">
+                <button disabled={!canUndo} onClick={stepBack}>
+                  Step back
+                </button>
+                <button disabled={!canRedo} onClick={stepForward}>
+                  Step forward
+                </button>
+                <button className="quiet" onClick={reset}>
+                  Start over
+                </button>
+              </div>
+            </section>
+
+            <section className="tool-group">
+              <h4>Show</h4>
+              <div className="tools">
+                <button aria-pressed={showHoles} onClick={() => setShowHoles((v) => !v)}>
+                  Hole numbers
+                </button>
+                <button aria-pressed={showDefense} onClick={handleDefense}>
+                  {defenseExists ? 'Defense' : 'Add defense'}
+                </button>
+              </div>
+            </section>
+
+            <section className="tool-group">
+              <h4>This play</h4>
+              <div className="tools">
+                <button onClick={() => void saveNow()} disabled={saving}>
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  onClick={() => setPicker((v) => (v === 'settings' ? null : 'settings'))}
+                >
+                  Settings
+                </button>
+                <button disabled={exporting} onClick={() => void exportPlay('pdf')}>
+                  {exporting ? 'Working…' : 'Print sheet'}
+                </button>
+                <button disabled={exporting} onClick={() => void exportPlay('png')}>
+                  Save image
+                </button>
+              </div>
+              <p className="tool-note">
+                {saved && Date.now() - saved < 4000
+                  ? 'Saved to the cloud.'
+                  : 'Every change is already kept on this phone. Save pushes it to the cloud now.'}
+              </p>
+            </section>
+          </>
+        )}
+      </Drawer>
       </div>
 
       {TRACING && <TracePanel />}
-
-      <BlockTool
-        tool={tool}
-        onTool={handleTool}
-        hint={hint}
-        blockCount={drawn.length + annotations.length}
-        onClear={() => {
-          setAssignments([]);
-          setAnnotations([]);
-          setSel(null);
-          setPending(null);
-        }}
-      />
-
-      {picker === 'route' && selectedPlayer && (
-        <RoutePicker player={selectedPlayer} onPick={applyRoute} onClose={() => setPicker(null)} />
-      )}
-      {picker === 'formation' && (
-        <FormationPicker
-          formations={formations}
-          onApply={applyFormation}
-          onSave={saveFormation}
-          onDelete={deleteFormation}
-          onClose={() => setPicker(null)}
-        />
-      )}
-
-      <div className="tools">
-        <button
-          disabled={!selectedPlayer}
-          onClick={() => setPicker((v) => (v === 'route' ? null : 'route'))}
-          aria-pressed={picker === 'route'}
-        >
-          Route
-        </button>
-        <button
-          onClick={() => setPicker((v) => (v === 'formation' ? null : 'formation'))}
-          aria-pressed={picker === 'formation'}
-        >
-          Formation
-        </button>
-        <button onClick={mirror}>Mirror</button>
-        <button disabled={undoDepth === 0} onClick={stepBack}>
-          Undo
-        </button>
-        <button aria-pressed={showHoles} onClick={() => setShowHoles((v) => !v)}>
-          Holes
-        </button>
-        <button aria-pressed={showDefense} onClick={handleDefense}>
-          {defenseExists ? 'Defense' : 'Add defense'}
-        </button>
-        <button onClick={reset}>Reset</button>
-      </div>
-
     </div>
   );
 }

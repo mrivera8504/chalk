@@ -5,10 +5,16 @@ Full spec and stage list: `docs/build-spec.md`.
 
 ## Where it stands
 
-Stages 1-5 done: field and players, blocking tool, route and run presets with
-formations and auto play-naming, freehand ink, and a playbook that saves.
-**Stage 6 (export) is next** and needs `pdf-lib` added. Stage 7 is offline shell
-and install prompt, needing `vite-plugin-pwa`.
+Stages 1-6 done: field and players, blocking tool, route and run presets with
+formations and auto play-naming, freehand ink, a playbook that saves, and
+export. **Stage 7 is next** — offline shell and install prompt, needing
+`vite-plugin-pwa`.
+
+Since stage 5: marks magnetise to the LOS, folders hold plays and empty ones
+show, routes colour per receiver with a manual override, undo covers a drag,
+a starred formation is the foundation every new play opens in, and every
+control slides away into the side drawer, which is grouped and labelled and can
+sit on either hand.
 
 The S Pen is still inconsistent in the app. Read the device section below
 before touching input code.
@@ -37,6 +43,22 @@ a sibling that mounts or grows rescales the whole field and moves every
 coordinate under the user's hand. Panels overlay the stage absolutely; the
 inspector is pinned to the downfield end because the backfield is at the bottom.
 
+**Every control lives in the drawer, and the drawer overlays the board.**
+`Drawer.tsx` holds the tool rows and both pickers, slides off the right edge on
+a tap of its tab, and remembers that it was closed. It is `position: absolute`
+inside `.stage` for the reason above: as a flex sibling, sliding the tools away
+would have resized the board and moved every player. Measured both states: the
+board's box is identical open and closed.
+
+It leaves from the **side**, not the bottom — the bottom of the view is the
+backfield, so a panel there covers the carrier and the quarterback, which is
+what a bottom dock got wrong. Closed, the panel is off-canvas entirely and only
+the tab is over the field. The drawer's wrapper is `pointer-events: none` so
+taps fall through to the board everywhere the panel is not, and
+`handleStageDown` ignores anything inside `.inspector, .drawer`. The hint lives
+on `.hint-pill`, floating over the board and inert, so the line telling you
+whose block you are halfway through outlives the drawer being shut.
+
 ## The target device
 
 A Galaxy S-series Ultra with an S Pen, measured from real traces:
@@ -54,6 +76,46 @@ working.
 **Every gesture that finishes something must arm `tapGuard`** in
 `PlayEditor.tsx`. Otherwise the bounce after the finishing tap starts the next
 gesture. That bug appeared three times before it was fixed in one place.
+
+**One gesture is one step of undo.** A drag arrives as dozens of moves and, on
+this device, as several separate contacts. `gestureRemembered` in
+`PlayEditor.tsx` takes the snapshot at the first real movement and not again, so
+stepping back undoes the whole drag rather than the last few pixels of it. It is
+reset when a fresh grab starts, and deliberately *not* reset when a contact
+bounce resumes one.
+
+## Settings
+
+`store/settings.ts` is the one adjustable surface: colours, pen behaviour, board
+defaults and the league rules. It is a tiny external store read through
+`useSettings()`, plus `getSettings()` for code outside a component.
+
+The colours work by writing onto the document root — `--route-0..5`,
+`--ink-carry`, `--ink-block`. Because every renderer asks for the token and
+never a literal, one assignment reaches the board, the playbook thumbnails and
+the exporter at once; the exporter copies whatever the root computes into the
+SVG it writes.
+
+**`DEFAULT_SETTINGS` is no longer the live value.** The league rules are real
+settings now, so anything deriving from them must take `settings` as a
+dependency — `computeHoles` and `checkFormation` in `PlayEditor.tsx` had stale
+`useMemo` arrays and silently ignored a changed rule until it was fixed.
+
+## Export
+
+`export/render.tsx` turns a play into a standalone SVG using the *same*
+components the editor draws with, then rasterizes it through an `<img>` and a
+canvas. A serialized SVG carries no stylesheet, so every custom property is
+written into the file's own `<style>`; `TOKENS` lists them and must be kept in
+step with what the renderers reference. `PRINT_TOKENS` then overrides the lot
+for paper — white turf, black marks, and saturated ink, because the screen
+palette is pastel for dark turf and vanishes on white. Verified in-browser that
+custom properties do resolve inside a rasterized SVG.
+
+`export/pdf.ts` composes the sheets with `pdf-lib`: single play, call sheet at
+4/6/9 up, wristband strips (names only — a wristband is read in two seconds),
+big-print player cards, and the whole playbook in folder order. Every play is
+rasterized and embedded **once** per document.
 
 ## Debugging input
 

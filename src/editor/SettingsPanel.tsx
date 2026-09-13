@@ -1,0 +1,280 @@
+import { DEFAULT_APP_SETTINGS, resetSettings, setSettings, type AppSettings } from '../store/settings';
+
+interface Props {
+  settings: AppSettings;
+  onClose: () => void;
+}
+
+const MAGNETS = [
+  { v: 0, label: 'Off' },
+  { v: 0.25, label: 'Light' },
+  { v: 0.5, label: 'Normal' },
+  { v: 1, label: 'Strong' },
+];
+
+const GRIDS = [
+  { v: 0.25, label: '¼ yd' },
+  { v: 0.5, label: '½ yd' },
+  { v: 1, label: '1 yd' },
+];
+
+/** A labelled row of mutually exclusive choices. Every setting here is one. */
+function Choice<T extends string | number>({
+  label,
+  hint,
+  value,
+  options,
+  onPick,
+}: {
+  label: string;
+  hint?: string;
+  value: T;
+  options: { v: T; label: string }[];
+  onPick: (v: T) => void;
+}) {
+  return (
+    <div className="setting">
+      <div className="setting-label">
+        <strong>{label}</strong>
+        {hint && <span>{hint}</span>}
+      </div>
+      <div className="picker-row">
+        {options.map((o) => (
+          <button key={String(o.v)} aria-pressed={value === o.v} onClick={() => onPick(o.v)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** A number a coach might actually change, with the units spelled out. */
+function Num({
+  label,
+  hint,
+  value,
+  min,
+  max,
+  step = 1,
+  onSet,
+}: {
+  label: string;
+  hint?: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onSet: (n: number) => void;
+}) {
+  return (
+    <div className="setting">
+      <div className="setting-label">
+        <strong>{label}</strong>
+        {hint && <span>{hint}</span>}
+      </div>
+      <input
+        type="number"
+        className="setting-num"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          // A half-typed number must not become the live rule and renumber the
+          // holes under the user's hand.
+          if (Number.isFinite(n) && n >= min && n <= max) onSet(n);
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Settings.
+ *
+ * Grouped by what a change actually affects rather than by which module holds
+ * the value: how the board behaves under the pen, what the lines look like,
+ * and what counts as a legal formation. A coach looking for the colour of a
+ * corner route should not have to know it lives next to the hole numbering.
+ */
+export function SettingsPanel({ settings, onClose }: Props) {
+  const s = settings;
+
+  return (
+    <div className="picker settings-panel">
+      <div className="picker-head">
+        <strong>Settings</strong>
+        <span>saved on this device</span>
+        <button className="quiet" onClick={onClose}>
+          Close
+        </button>
+      </div>
+
+      <div className="picker-group">
+        <h3>Route colours</h3>
+        <p className="picker-note">
+          Each receiver's route takes the next colour, so routes that cross can
+          be told apart. Tap a line on the board to give that one route a colour
+          of its own.
+        </p>
+        <div className="swatch-edit">
+          {s.routeColors.map((c, i) => (
+            <label key={i} className="swatch-slot">
+              <input
+                type="color"
+                value={c}
+                aria-label={`Receiver ${i + 1} colour`}
+                onChange={(e) => {
+                  const next = s.routeColors.slice();
+                  next[i] = e.target.value;
+                  setSettings({ routeColors: next });
+                }}
+              />
+              <span>{i + 1}</span>
+            </label>
+          ))}
+        </div>
+
+        <div className="swatch-edit">
+          <label className="swatch-slot">
+            <input
+              type="color"
+              value={s.carryColor}
+              aria-label="Ball carrier colour"
+              onChange={(e) => setSettings({ carryColor: e.target.value })}
+            />
+            <span>Carry</span>
+          </label>
+          <label className="swatch-slot">
+            <input
+              type="color"
+              value={s.blockColor}
+              aria-label="Block colour"
+              onChange={(e) => setSettings({ blockColor: e.target.value })}
+            />
+            <span>Block</span>
+          </label>
+          <button
+            className="quiet"
+            onClick={() =>
+              setSettings({
+                routeColors: DEFAULT_APP_SETTINGS.routeColors,
+                carryColor: DEFAULT_APP_SETTINGS.carryColor,
+                blockColor: DEFAULT_APP_SETTINGS.blockColor,
+              })
+            }
+          >
+            Reset colours
+          </button>
+        </div>
+      </div>
+
+      <div className="picker-group">
+        <h3>The pen</h3>
+        <Choice
+          label="Tools on the"
+          hint="put them away from your writing hand"
+          value={s.drawerSide}
+          options={[
+            { v: 'left' as const, label: 'Left' },
+            { v: 'right' as const, label: 'Right' },
+          ]}
+          onPick={(v) => setSettings({ drawerSide: v })}
+        />
+        <Choice
+          label="Snap to the line"
+          hint="how near a mark clicks flush onto the LOS"
+          value={s.losMagnetYards}
+          options={MAGNETS}
+          onPick={(v) => setSettings({ losMagnetYards: v })}
+        />
+        <Choice
+          label="Grid"
+          hint="how far a mark moves at a time"
+          value={s.snapStepYards}
+          options={GRIDS}
+          onPick={(v) => setSettings({ snapStepYards: v })}
+        />
+      </div>
+
+      <div className="picker-group">
+        <h3>A new play opens with</h3>
+        <Choice
+          label="Hole numbers"
+          value={s.showHoles ? 'on' : 'off'}
+          options={[
+            { v: 'on' as const, label: 'Shown' },
+            { v: 'off' as const, label: 'Hidden' },
+          ]}
+          onPick={(v) => setSettings({ showHoles: v === 'on' })}
+        />
+        <Choice
+          label="Defense"
+          value={s.showDefense ? 'on' : 'off'}
+          options={[
+            { v: 'off' as const, label: 'Offense only' },
+            { v: 'on' as const, label: 'Both' },
+          ]}
+          onPick={(v) => setSettings({ showDefense: v === 'on' })}
+        />
+      </div>
+
+      <div className="picker-group">
+        <h3>Your league</h3>
+        <p className="picker-note">
+          These decide what the badge calls legal and how the holes are
+          numbered. Changing them renumbers every play at once, because the hole
+          map is worked out from the formation rather than stored.
+        </p>
+        <Num
+          label="Players a side"
+          value={s.playersPerSide}
+          min={5}
+          max={11}
+          onSet={(n) => setSettings({ playersPerSide: n })}
+        />
+        <Num
+          label="Must be on the line"
+          value={s.minOnLine}
+          min={3}
+          max={8}
+          onSet={(n) => setSettings({ minOnLine: n })}
+        />
+        <Num
+          label="On-line tolerance"
+          hint="yards from the LOS that still counts as on it"
+          value={s.onLineToleranceYards}
+          min={0.25}
+          max={3}
+          step={0.25}
+          onSet={(n) => setSettings({ onLineToleranceYards: n })}
+        />
+        <Choice
+          label="Even holes to the"
+          hint="odd holes run the other way"
+          value={s.evenHolesSide}
+          options={[
+            { v: 'left' as const, label: 'Left' },
+            { v: 'right' as const, label: 'Right' },
+          ]}
+          onPick={(v) => setSettings({ evenHolesSide: v })}
+        />
+      </div>
+
+      <div className="picker-group">
+        <div className="picker-row">
+          <button
+            className="quiet"
+            onClick={() => {
+              if (confirm('Put every setting back the way it came?')) resetSettings();
+            }}
+          >
+            Reset everything
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

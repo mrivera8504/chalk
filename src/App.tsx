@@ -36,6 +36,7 @@ export function App() {
         key={open.id}
         play={open}
         onChange={book.savePlay}
+        onSave={book.saveNow}
         onClose={() => setOpenId(null)}
       />
     );
@@ -53,6 +54,9 @@ export function App() {
         if (confirm('Delete this play?')) book.deletePlay(id);
       }}
       onAddSection={book.addSection}
+      onRenameSection={book.renameSection}
+      onDeleteSection={book.deleteSection}
+      onSetSection={book.setPlaySection}
       onMovePlay={book.movePlay}
       onExport={exportBook}
     />

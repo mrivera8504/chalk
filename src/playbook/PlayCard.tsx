@@ -1,21 +1,44 @@
+import { autoRouteColor } from '../domain/colors';
 import { computeHoles } from '../domain/holes';
-import { DEFAULT_SETTINGS, type Play } from '../domain/types';
+import { UNFILED_SECTION, type Play, type Section } from '../domain/types';
+import { useSettings } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
 import { VIEW_BOX, toPathD } from '../render/geometry';
 
+/** Not a section id, just the sentinel the folder menu uses for its last row. */
+export const NEW_SECTION = ' new';
+
 interface Props {
   play: Play;
+  sections: Section[];
   onOpen: (id: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  onSetSection: (id: string, sectionId: string) => void;
+  onFileInNew: (id: string) => void;
 }
 
 /** The same renderer the editor uses, so a card can never drift from the play. */
-export function PlayCard({ play, onOpen, onDuplicate, onDelete }: Props) {
-  const holes = computeHoles(play.players, DEFAULT_SETTINGS);
+export function PlayCard({
+  play,
+  sections,
+  onOpen,
+  onDuplicate,
+  onDelete,
+  onSetSection,
+  onFileInNew,
+}: Props) {
+  const settings = useSettings();
+  const holes = computeHoles(play.players, settings);
   const title = play.name || play.suggestedName || 'Untitled';
+
+  // A play filed in a section that has since been deleted reads as unfiled,
+  // which is where deleteSection already put it.
+  const filedIn = sections.some((s) => s.id === play.sectionId)
+    ? play.sectionId
+    : UNFILED_SECTION;
 
   return (
     <div className="play-card">
@@ -34,7 +57,7 @@ export function PlayCard({ play, onOpen, onDuplicate, onDelete }: Props) {
             />
           ))}
           {play.assignments.map((a) => (
-            <AssignmentPath key={a.id} assignment={a} />
+            <AssignmentPath key={a.id} assignment={a} autoColor={autoRouteColor(a, play.players)} />
           ))}
           {play.players
             .filter((p) => p.side === 'offense')
@@ -57,6 +80,31 @@ export function PlayCard({ play, onOpen, onDuplicate, onDelete }: Props) {
             Delete
           </button>
         </div>
+      </div>
+
+      {/*
+        * A native select, because it is one tap on a touch device and the system
+        * picker is the one control on this page a pen has never had trouble with.
+        * Always rendered, so every card in a row is the same height.
+        */}
+      <div className="card-file">
+        <select
+          value={filedIn}
+          aria-label={`Folder for ${title}`}
+          onChange={(e) => {
+            const to = e.target.value;
+            if (to === NEW_SECTION) onFileInNew(play.id);
+            else onSetSection(play.id, to);
+          }}
+        >
+          <option value={UNFILED_SECTION}>Unfiled</option>
+          {sections.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+          <option value={NEW_SECTION}>New folder</option>
+        </select>
       </div>
 
       {play.tags.length > 0 && (
