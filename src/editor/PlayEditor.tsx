@@ -21,6 +21,7 @@ import {
   pxToYards,
   snap,
   toYards,
+  type Yards,
 } from '../render/geometry';
 import { BlockTool, tapBlock, type Pending, type Tool } from './BlockTool';
 import { TracePanel } from './TracePanel';
@@ -232,6 +233,34 @@ export function PlayEditor() {
     }
   }
 
+  /**
+   * Move the player under a drag to a pointer position.
+   *
+   * Called from pointermove, and also from pointerdown when a bounce resumes.
+   * The pen's contacts run 2-5ms, far too short for a move event to fire inside
+   * one, and it travels while it is off the glass. So for this device the down
+   * events carry nearly all the position information there is. Using them only
+   * to choose a player, then waiting for a move that never arrives, is why a
+   * drag picked the right man and then left him standing where he was.
+   */
+  function applyDrag(svg: SVGSVGElement, d: DragState, at: Yards): boolean {
+    if (!d.moved) {
+      if (Math.hypot(at.x - d.ox, at.y - d.oy) < pxToYards(svg, DRAG_SLOP_PX)) return false;
+      d.moved = true;
+    }
+
+    const x = clamp(snap(at.x + d.dx), -VIEW.halfWidth + 1, VIEW.halfWidth - 1);
+    const y = clamp(snap(at.y + d.dy), -VIEW.downfield + 1, VIEW.behind - 1);
+
+    setPlayers((prev) =>
+      applyOnLine(
+        prev.map((p) => (p.id === d.id ? { ...p, x, y } : p)),
+        settings,
+      ),
+    );
+    return true;
+  }
+
   function handleMove(e: React.PointerEvent) {
     const d = drag.current;
     const svg = svgRef.current;
@@ -247,24 +276,7 @@ export function PlayEditor() {
       return;
     }
 
-    const at = toYards(svg, e.clientX, e.clientY);
-
-    // Still a tap until the pen has travelled past the slop. Selecting a player
-    // must never nudge him.
-    if (!d.moved) {
-      if (Math.hypot(at.x - d.ox, at.y - d.oy) < pxToYards(svg, DRAG_SLOP_PX)) return;
-      d.moved = true;
-    }
-
-    const x = clamp(snap(at.x + d.dx), -VIEW.halfWidth + 1, VIEW.halfWidth - 1);
-    const y = clamp(snap(at.y + d.dy), -VIEW.downfield + 1, VIEW.behind - 1);
-
-    setPlayers((prev) =>
-      applyOnLine(
-        prev.map((p) => (p.id === d.id ? { ...p, x, y } : p)),
-        settings,
-      ),
-    );
+    applyDrag(svg, d, toYards(svg, e.clientX, e.clientY));
     e.preventDefault();
   }
 
@@ -345,10 +357,12 @@ export function PlayEditor() {
         } catch {
           /* not fatal */
         }
+        const moved = applyDrag(svg, drag.current, at);
         if (TRACING) {
           trace(
             `${describeEvent(e, at)}\n            -> RESUMED ${held.label} ` +
-              `(contact bounce, ${(now - bounce.at).toFixed(0)}ms gap)`,
+              `(contact bounce, ${(now - bounce.at).toFixed(0)}ms gap)` +
+              `${moved ? ' + moved' : ', within slop'}`,
           );
         }
         return;
