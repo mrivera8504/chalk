@@ -2,7 +2,31 @@
 
 Play designer for 7-man youth tackle football. Pen-first, offline-first, installable.
 
-## Stage 2 (current) — the blocking tool
+## Stages 3 and 5 (current) — presets, formations and the playbook
+
+Plays are saved now. The app opens on a playbook rather than a blank field.
+
+- **Route presets** — seven run concepts and nine pass routes. Each is a
+  function of where the player is standing, not a stored shape, so the same
+  slant works from a tight end or a wing without anyone editing geometry.
+- **Formations** — save the current set under a name and recall it. Ships with
+  one balanced default; the library is meant to be filled from your own
+  playbook rather than invented here.
+- **Mirror** — flips the play about the middle of the field. Hole numbers
+  renumber themselves, because they are computed from the formation rather than
+  stored: a sweep through the 6 hole becomes a sweep through the 5.
+- **Play names** — one ball carrier plus the hole its path crosses gives `26
+  Sweep`. Always a suggestion, shown as the placeholder; whatever you type wins.
+- **Undo** — 50 steps, per editing session, in memory.
+- **Playbook** — sections, search across names, tags and notes, duplicate,
+  delete, drag to reorder.
+- **Saving** — local storage first and synchronously, Firestore 800ms behind it.
+  The app works with anonymous auth disabled or with no signal; it just says "on
+  this device" instead of "saved".
+- **Export** — the whole playbook as JSON, since the anonymous account lives in
+  this browser's storage and clearing site data would otherwise orphan it.
+
+## Stage 2 — the blocking tool
 
 Tap the blocker, tap the defender. The tool stays armed, so every man after the
 first is two taps. Picking Block, Pull or Combo puts a front on the board if
@@ -23,7 +47,7 @@ the blocker or the defender redraws the line. Every waypoint scales to the
 distance actually travelled — a short pull bends tighter instead of kinking
 backwards past its own target.
 
-## Stage 1
+## Stage 1 — field and players
 
 Field renderer, player placement, on-line detection, formation legality, computed hole numbering.
 

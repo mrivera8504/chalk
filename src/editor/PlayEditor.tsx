@@ -8,7 +8,9 @@ import {
   PLAYER_R,
   isBlockKind,
   type Assignment,
+  type Formation,
   type PathPoint,
+  type Play,
   type PlayerSlot,
 } from '../domain/types';
 import { AssignmentPath } from '../render/AssignmentPath';
@@ -30,7 +32,14 @@ import {
   toPathD,
   type Yards,
 } from '../render/geometry';
+import { mirrorAnnotations, mirrorAssignments, mirrorPlayers } from '../domain/mirror';
+import { naturalHand, type RoutePreset } from '../domain/presets/routes';
+import { readFormations, writeFormations } from '../domain/presets/formations';
+import { UndoStack } from '../store/undo';
+import { newId } from '../store/usePlaybook';
 import { BlockTool, tapBlock, type Pending, type Tool } from './BlockTool';
+import { FormationPicker } from './FormationPicker';
+import { RoutePicker } from './RoutePicker';
 import { TracePanel } from './TracePanel';
 import { TRACING, describeEvent, trace } from './trace';
 import { LegalityBadge } from './LegalityBadge';
@@ -104,16 +113,32 @@ interface DragState {
   moved: boolean;
 }
 
-export function PlayEditor() {
-  const [players, setPlayers] = useState<PlayerSlot[]>(initialPlayers);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+/** Everything undo has to restore. Formations and tools are not part of a play. */
+interface Snapshot {
+  players: PlayerSlot[];
+  assignments: Assignment[];
+  annotations: PathPoint[][];
+}
+
+interface EditorProps {
+  play: Play;
+  onChange: (play: Play) => void;
+  onClose: () => void;
+}
+
+export function PlayEditor({ play, onChange, onClose }: EditorProps) {
+  const [players, setPlayers] = useState<PlayerSlot[]>(play.players);
+  const [assignments, setAssignments] = useState<Assignment[]>(play.assignments);
   const [tool, setTool] = useState<Tool>('select');
   const [pending, setPending] = useState<Pending | null>(null);
   const [sel, setSel] = useState<Selection>(null);
   const [showHoles, setShowHoles] = useState(true);
   const [showDefense, setShowDefense] = useState(false);
   const [hoverId, setHoverId] = useState<string | null>(null);
-  const [annotations, setAnnotations] = useState<PathPoint[][]>([]);
+  const [annotations, setAnnotations] = useState<PathPoint[][]>(play.annotations);
+  const [name, setName] = useState(play.name);
+  const [picker, setPicker] = useState<'route' | 'formation' | null>(null);
+  const [formations, setFormations] = useState<Formation[]>(readFormations);
   const [drawing, setDrawing] = useState(false);
   const [carrying, setCarrying] = useState<string | null>(null);
 
@@ -146,6 +171,8 @@ export function PlayEditor() {
    * began. One guard, set in one place, covers all of them.
    */
   const tapGuard = useRef(0);
+  const undo = useRef(new UndoStack<Snapshot>());
+  const [undoDepth, setUndoDepth] = useState(0);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
@@ -197,6 +224,12 @@ export function PlayEditor() {
     }
     return `Tap who ${blocker.label} blocks`;
   }, [tool, pending, players, drawing, carrying]);
+
+  useEffect(() => {
+    onChange({ ...play, name, players, assignments, annotations });
+    // play and onChange are stable for the life of one editing session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, players, assignments, annotations]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -285,6 +318,7 @@ export function PlayEditor() {
     setSel(null);
     if (!blocker || !target) return;
 
+    remember();
     const next = makeBlock(kind, blocker, target, climbTo ?? undefined);
     setAssignments((prev) => [
       // One block per man. Re-tapping a blocker corrects him instead of stacking.
@@ -324,6 +358,87 @@ export function PlayEditor() {
       hoverRef.current = id;
       setHoverId(id);
     }
+  }
+
+  /** Call before any edit worth stepping back over. */
+  function remember() {
+    undo.current.push({ players, assignments, annotations });
+    setUndoDepth((n) => n + 1);
+  }
+
+  function stepBack() {
+    const prev = undo.current.undo({ players, assignments, annotations });
+    if (!prev) return;
+    setPlayers(prev.players);
+    setAssignments(prev.assignments);
+    setAnnotations(prev.annotations);
+    setSel(null);
+    setUndoDepth((n) => n - 1);
+  }
+
+  /**
+   * Apply a concept to the selected player. Presets are functions of where he
+   * is standing, so the same slant works from a tight end or a wing without
+   * anyone editing a stored shape.
+   */
+  function applyRoute(preset: RoutePreset) {
+    const p = selectedPlayer;
+    if (!p) return;
+    remember();
+    const path = preset.shape(p, naturalHand(p));
+    setAssignments((prev) => [
+      ...prev.filter((a) => !(a.playerId === p.id && !isBlockKind(a.kind))),
+      {
+        id: newId('a'),
+        playerId: p.id,
+        kind: preset.carry ? 'carry' : 'route',
+        path,
+        preset: preset.id,
+      },
+    ]);
+    setPicker(null);
+  }
+
+  /** Flip the whole play. Hole numbers follow because they are recomputed. */
+  function mirror() {
+    remember();
+    setPlayers((prev) => mirrorPlayers(prev));
+    setAssignments((prev) => mirrorAssignments(prev));
+    setAnnotations((prev) => mirrorAnnotations(prev));
+    setSel(null);
+  }
+
+  function applyFormation(f: Formation) {
+    remember();
+    setPlayers((prev) => [
+      ...applyOnLine(structuredClone(f.players), settings),
+      ...prev.filter((p) => p.side === 'defense'),
+    ]);
+    // Assignments name players that no longer exist.
+    setAssignments([]);
+    setSel(null);
+    setPicker(null);
+  }
+
+  function saveFormation() {
+    const label = prompt('Name this formation');
+    if (!label?.trim()) return;
+    const next: Formation = {
+      id: newId('f'),
+      name: label.trim(),
+      side: 'offense',
+      players: structuredClone(players.filter((p) => p.side === 'offense')),
+      builtIn: false,
+    };
+    const all = [...formations, next];
+    setFormations(all);
+    writeFormations(all);
+  }
+
+  function deleteFormation(id: string) {
+    const all = formations.filter((f) => f.id !== id);
+    setFormations(all);
+    writeFormations(all);
   }
 
   function dropCarried(reason: string) {
@@ -524,6 +639,7 @@ export function PlayEditor() {
 
     if (TRACING) trace(`stroke committed: ${pts.length} samples -> ${path.length} points`);
 
+    remember();
     if (owner) {
       // One drawn route per player; drawing again replaces it.
       setAssignments((prev) => [
@@ -752,7 +868,17 @@ export function PlayEditor() {
   return (
     <div className="editor">
       <header>
-        <h1>Chalk</h1>
+        <button className="back" onClick={onClose} aria-label="Back to playbook">
+          ‹
+        </button>
+        <input
+          className="play-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={play.suggestedName || 'Name this play'}
+          spellCheck={false}
+          aria-label="Play name"
+        />
         <LegalityBadge onLine={onLine} minOnLine={settings.minOnLine} issues={issues} />
       </header>
 
@@ -907,7 +1033,37 @@ export function PlayEditor() {
         }}
       />
 
+      {picker === 'route' && selectedPlayer && (
+        <RoutePicker player={selectedPlayer} onPick={applyRoute} onClose={() => setPicker(null)} />
+      )}
+      {picker === 'formation' && (
+        <FormationPicker
+          formations={formations}
+          onApply={applyFormation}
+          onSave={saveFormation}
+          onDelete={deleteFormation}
+          onClose={() => setPicker(null)}
+        />
+      )}
+
       <div className="tools">
+        <button
+          disabled={!selectedPlayer}
+          onClick={() => setPicker((v) => (v === 'route' ? null : 'route'))}
+          aria-pressed={picker === 'route'}
+        >
+          Route
+        </button>
+        <button
+          onClick={() => setPicker((v) => (v === 'formation' ? null : 'formation'))}
+          aria-pressed={picker === 'formation'}
+        >
+          Formation
+        </button>
+        <button onClick={mirror}>Mirror</button>
+        <button disabled={undoDepth === 0} onClick={stepBack}>
+          Undo
+        </button>
         <button aria-pressed={showHoles} onClick={() => setShowHoles((v) => !v)}>
           Holes
         </button>

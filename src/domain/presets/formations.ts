@@ -1,4 +1,4 @@
-import type { PlayerSlot } from '../types';
+import type { Formation, PlayerSlot } from '../types';
 
 let counter = 0;
 const id = (prefix: string) => `${prefix}-${++counter}`;
@@ -75,4 +75,31 @@ export function defaultDefense(): PlayerSlot[] {
     off('M', 2.6, -4.5),
     off('S', 0, -9),
   ];
+}
+
+const FORMATION_KEY = 'chalk.formations.v1';
+
+/** Built-in, always present, never deletable. */
+export function builtInFormations(): Formation[] {
+  return [
+    { id: 'builtin-balanced', name: 'Balanced', side: 'offense', players: defaultOffense(), builtIn: true },
+  ];
+}
+
+export function readFormations(): Formation[] {
+  try {
+    const raw = localStorage.getItem(FORMATION_KEY);
+    const saved = raw ? (JSON.parse(raw) as Formation[]) : [];
+    return [...builtInFormations(), ...(Array.isArray(saved) ? saved : [])];
+  } catch {
+    return builtInFormations();
+  }
+}
+
+export function writeFormations(all: Formation[]): void {
+  try {
+    localStorage.setItem(FORMATION_KEY, JSON.stringify(all.filter((f) => !f.builtIn)));
+  } catch {
+    /* storage blocked; the session keeps working */
+  }
 }

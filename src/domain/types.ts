@@ -93,3 +93,42 @@ export type BlockKind = (typeof BLOCK_KINDS)[number];
 export function isBlockKind(kind: AssignmentKind): kind is BlockKind {
   return (BLOCK_KINDS as readonly string[]).includes(kind);
 }
+
+export interface Formation {
+  id: string;
+  name: string;
+  side: Side;
+  players: PlayerSlot[];
+  builtIn: boolean;
+}
+
+export interface Section {
+  id: string;
+  name: string;
+  order: number;
+}
+
+export type ColorRule = 'byGroup' | 'byKind' | 'manual';
+
+export interface Play {
+  id: string;
+  name: string;
+  /** '26 Sweep', computed. Only a suggestion; name always wins if set. */
+  suggestedName?: string;
+  backNumber?: number;
+  hole?: number;
+  sectionId: string;
+  formationId?: string;
+  players: PlayerSlot[];
+  assignments: Assignment[];
+  /** Freehand scratch layer, owned by nobody. */
+  annotations: PathPoint[][];
+  notes: string;
+  coachingPoint: string;
+  tags: string[];
+  colorRule: ColorRule;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export const UNFILED_SECTION = 'unfiled';

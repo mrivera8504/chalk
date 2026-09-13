@@ -368,3 +368,231 @@ button:focus-visible {
   pointer-events: none;
   z-index: 1;
 }
+
+/* ---- playbook ---- */
+.playbook {
+  height: 100%;
+  overflow-y: auto;
+  padding-bottom: 32px;
+}
+
+.playbook > header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 3;
+}
+
+.playbook h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.sync {
+  font-size: 11.5px;
+  color: var(--dim);
+  margin-left: auto;
+}
+
+.book-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+}
+
+.book-tools input {
+  font: inherit;
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+  color: var(--chalk);
+}
+
+.playbook section {
+  padding: 4px 14px 8px;
+}
+
+.playbook h2 {
+  margin: 12px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.playbook h2 span {
+  color: var(--line);
+  margin-left: 4px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.play-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.card-drag { opacity: 0.45; }
+
+.play-card .thumb {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.play-card .thumb svg {
+  display: block;
+  width: 100%;
+  aspect-ratio: 22 / 30;
+}
+
+.card-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-top: 1px solid var(--line);
+}
+
+.card-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.card-name strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-name em {
+  font-size: 10.5px;
+  font-style: normal;
+  color: var(--dim);
+}
+
+.card-tools { display: flex; gap: 2px; }
+.card-tools button { padding: 4px 6px; font-size: 11px; }
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 8px;
+}
+
+.card-tags span {
+  font-size: 10.5px;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.empty {
+  padding: 28px 18px;
+  color: var(--dim);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ---- editor header and pickers ---- */
+.back {
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 10px 5px;
+}
+
+.play-name {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+  color: var(--chalk);
+}
+
+.picker {
+  flex: 0 0 auto;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.picker-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px 4px;
+}
+
+.picker-head strong { font-size: 13px; }
+.picker-head span { font-size: 11.5px; color: var(--dim); }
+.picker-head .quiet { margin-left: auto; }
+
+.picker-group { padding: 2px 12px 8px; }
+
+.picker-group h3 {
+  margin: 6px 0 5px;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 600;
+}
+
+.picker-row { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.picker-note {
+  margin: 0;
+  padding: 0 12px 10px;
+  font-size: 11.5px;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+.chip { display: inline-flex; }
+.chip button { border-radius: 7px 0 0 7px; }
+.chip .chip-x {
+  border-radius: 0 7px 7px 0;
+  border-left: 0;
+  padding: 8px 9px;
+  color: var(--dim);
+}
+
+button:disabled { opacity: 0.4; cursor: default; }
