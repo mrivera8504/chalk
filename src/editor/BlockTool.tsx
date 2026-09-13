@@ -1,10 +1,15 @@
 import type { BlockKind, PlayerSlot } from '../domain/types';
 
-export type Tool = 'select' | 'draw' | 'erase' | BlockKind;
+export type Tool = 'select' | 'routes' | 'draw' | 'erase' | BlockKind;
 
+/*
+ * Freehand is not in this row. It lives on the pencil over the board, because
+ * it is a thing you reach for in the middle of drawing a play rather than a
+ * mode you set out in.
+ */
 export const TOOLS: { id: Tool; label: string }[] = [
-  { id: 'select', label: 'Select' },
-  { id: 'draw', label: 'Draw' },
+  { id: 'select', label: 'Move' },
+  { id: 'routes', label: 'Routes' },
   { id: 'erase', label: 'Erase' },
   { id: 'block', label: 'Block' },
   { id: 'pull', label: 'Pull' },
@@ -57,7 +62,8 @@ export function tapBlock(
 
 /** For the dock handle, which names the current mode when nothing is pending. */
 export function toolLabel(tool: Tool): string {
-  return TOOLS.find((t) => t.id === tool)?.label ?? 'Select';
+  if (tool === 'draw') return 'Freehand';
+  return TOOLS.find((t) => t.id === tool)?.label ?? 'Move';
 }
 
 interface Props {

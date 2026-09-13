@@ -19,7 +19,6 @@ import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
 import {
   VIEW,
-  VIEW_BOX,
   clamp,
   distanceToPath,
   nearestAssignment,
@@ -200,6 +199,12 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   const [carrying, setCarrying] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(readDrawerOpen);
   const [exporting, setExporting] = useState(false);
+  /**
+   * Board magnification. The viewBox is still in yards, so screen-to-yards goes
+   * on working untouched: toYards reads the SVG's own matrix, which already
+   * accounts for whatever box is set here.
+   */
+  const [zoom, setZoom] = useState(1);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(0);
 
@@ -244,6 +249,18 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
+  /** The default box, centred and scaled. Yards throughout, as ever. */
+  const viewBox = useMemo(() => {
+    const w = VIEW.halfWidth * 2;
+    const h = VIEW.downfield + VIEW.behind;
+    // Centre of the default box: the middle of the field, a little downfield.
+    const cx = 0;
+    const cy = (-VIEW.downfield + VIEW.behind) / 2;
+    const zw = w / zoom;
+    const zh = h / zoom;
+    return `${cx - zw / 2} ${cy - zh / 2} ${zw} ${zh}`;
+  }, [zoom]);
+
   const visible = useMemo(
     () => (showDefense ? players : players.filter((p) => p.side === 'offense')),
     [players, showDefense],
@@ -281,6 +298,9 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         ? 'Drawing. Move the pen, then tap to finish'
         : 'Tap to start a route, move the pen, tap to finish';
     }
+    if (tool === 'routes') {
+      return selectedPlayer ? '' : 'Tap a man to see his routes';
+    }
     if (tool === 'erase') {
       return erasing
         ? 'Rubbing out. Move the pen over the ink, tap to stop'
@@ -298,7 +318,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         : `Tap the lineman ${blocker.label} doubles`;
     }
     return `Tap who ${blocker.label} blocks`;
-  }, [tool, pending, players, drawing, carrying, erasing]);
+  }, [tool, pending, players, drawing, carrying, erasing, sel]);
 
   function toggleDrawer() {
     const next = !drawerOpen;
@@ -372,7 +392,8 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
      * anything that was not Select, so picking up the pen to draw a route
      * dropped a whole defense onto the field uninvited.
      */
-    const needsFront = next !== 'select' && next !== 'draw' && next !== 'erase';
+    const needsFront =
+      next !== 'select' && next !== 'routes' && next !== 'draw' && next !== 'erase';
     if (needsFront && !defenseExists) {
       setPlayers((prev) => applyOnLine([...prev, ...defaultDefense()], settings));
     }
@@ -392,7 +413,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
   /** Tap-tap assignment. The tool stays armed so the next man is two taps away. */
   function handleBlockTap(player: PlayerSlot) {
-    if (tool === 'select' || tool === 'draw' || tool === 'erase') return;
+    if (tool === 'select' || tool === 'routes' || tool === 'draw' || tool === 'erase') return;
     const kind = tool;
     const step = tapBlock(kind, pending, player);
     if (step.type === 'none') return;
@@ -1016,6 +1037,18 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       );
     }
 
+    /*
+     * Routes mode selects and nothing else. The man stays exactly where he is,
+     * because choosing what he runs should never cost you the spot you spent a
+     * drag putting him on.
+     */
+    if (tool === 'routes') {
+      setSel(p ? { kind: 'player', id: p.id } : null);
+      setPending(null);
+      tapGuard.current = performance.now() + CHATTER_MS;
+      return;
+    }
+
     if (!p) {
       setSel(null);
       setPending(null);
@@ -1200,7 +1233,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         onPointerCancel={handleUp}
         onPointerLeave={clearAim}
       >
-        <svg ref={svgRef} viewBox={VIEW_BOX} preserveAspectRatio="xMidYMid meet">
+        <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
           <Field holes={holes} showHoles={showHoles} occupied={occupied} />
 
           {annotations.map((path, i) => (
@@ -1312,41 +1345,14 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         </div>
       )}
 
-      {selectedPlayer && (
+      {/*
+        * Only the routes. The label, the on-line toggle and the coordinates all
+        * moved into the drawer: they are set once when a formation is built and
+        * then never again, and they were sitting on top of the board every time
+        * a man was picked up.
+        */}
+      {selectedPlayer && tool !== 'select' && (
         <div className="inspector">
-          <label>
-            <span>Label</span>
-            <input
-              value={selectedPlayer.label}
-              onChange={(e) => rename(e.target.value)}
-              maxLength={3}
-              spellCheck={false}
-            />
-          </label>
-
-          {selectedPlayer.side === 'offense' && (
-            <div className="row">
-              <button aria-pressed={selectedPlayer.onLine} onClick={toggleOnLine}>
-                {selectedPlayer.onLine ? 'On the line' : 'In the backfield'}
-              </button>
-              {selectedPlayer.onLineLocked && (
-                <button className="quiet" onClick={releaseLock}>
-                  Back to auto
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="pos">
-            {selectedPlayer.x.toFixed(2)} yd across, {selectedPlayer.y.toFixed(2)} yd from the
-            line
-            {selectedPlayer.backNumber ? ` · back ${selectedPlayer.backNumber}` : ''}
-          </div>
-
-          {/*
-            * Picking a man and choosing what he runs is one thought. It used to
-            * be two taps in two different corners of the screen.
-            */}
           <RoutePicker
             player={selectedPlayer}
             custom={customRoutes.map(toPreset)}
@@ -1392,6 +1398,40 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
             ↷
           </button>
         )}
+
+        {/* Freehand is a thing you reach for mid-play, not a mode you set out in. */}
+        <button
+          className={tool === 'draw' ? 'quick pencil on' : 'quick pencil'}
+          aria-pressed={tool === 'draw'}
+          aria-label={tool === 'draw' ? 'Stop drawing freehand' : 'Draw freehand'}
+          onClick={() => handleTool(tool === 'draw' ? 'routes' : 'draw')}
+        >
+          ✎
+        </button>
+
+        <div className="zoom">
+          <button
+            className="quick"
+            aria-label="Zoom in"
+            disabled={zoom >= 2.5}
+            onClick={() => setZoom((z) => Math.min(2.5, +(z * 1.25).toFixed(3)))}
+          >
+            +
+          </button>
+          <button
+            className="quick"
+            aria-label="Zoom out"
+            disabled={zoom <= 0.7}
+            onClick={() => setZoom((z) => Math.max(0.7, +(z / 1.25).toFixed(3)))}
+          >
+            −
+          </button>
+          {zoom !== 1 && (
+            <button className="quick" aria-label="Actual size" onClick={() => setZoom(1)}>
+              {Math.round(zoom * 100)}%
+            </button>
+          )}
+        </div>
       </div>
 
       <Drawer open={drawerOpen} onToggle={toggleDrawer} side={settings.drawerSide}>
@@ -1449,6 +1489,40 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
               </p>
             </section>
 
+            {selectedPlayer && (
+              <section className="tool-group">
+                <h4>{selectedPlayer.label}</h4>
+                <div className="player-row">
+                  <label>
+                    <span>Label</span>
+                    <input
+                      value={selectedPlayer.label}
+                      onChange={(e) => rename(e.target.value)}
+                      maxLength={3}
+                      spellCheck={false}
+                    />
+                  </label>
+                </div>
+                {selectedPlayer.side === 'offense' && (
+                  <div className="tools">
+                    <button aria-pressed={selectedPlayer.onLine} onClick={toggleOnLine}>
+                      {selectedPlayer.onLine ? 'On the line' : 'In the backfield'}
+                    </button>
+                    {selectedPlayer.onLineLocked && (
+                      <button className="quiet" onClick={releaseLock}>
+                        Back to auto
+                      </button>
+                    )}
+                  </div>
+                )}
+                <p className="tool-note">
+                  {selectedPlayer.x.toFixed(2)} yd across, {selectedPlayer.y.toFixed(2)} yd from
+                  the line
+                  {selectedPlayer.backNumber ? ` · back ${selectedPlayer.backNumber}` : ''}
+                </p>
+              </section>
+            )}
+
             <section className="tool-group">
               <h4>Assign</h4>
               <div className="tools">
@@ -1473,7 +1547,9 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                   Clear {drawn.length + annotations.length || ''}
                 </button>
               </div>
-              <p className="tool-note">Tap a man on the board to give him a route.</p>
+              <p className="tool-note">
+                Routes mode: tap a man on the board and pick what he runs.
+              </p>
             </section>
 
             <section className="tool-group">

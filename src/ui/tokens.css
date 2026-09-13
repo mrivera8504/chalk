@@ -443,6 +443,30 @@ body,
   border: 1px solid var(--line);
 }
 
+/* The zoom pair reads as one control rather than two loose pills. */
+.quick-bar .zoom {
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.quick-bar .zoom .quick {
+  min-width: 40px;
+  padding: 8px 10px;
+  font-size: 15px;
+}
+
+.quick-bar .pencil {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.quick-bar .pencil.on {
+  border-color: var(--hover);
+  color: var(--hover);
+  background: color-mix(in srgb, var(--hover) 16%, var(--panel));
+}
+
 /* Setting a carried player down is the one that is urgent. */
 .quick-bar .quick.place {
   border-color: var(--select);

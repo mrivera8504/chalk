@@ -102,6 +102,22 @@ Freehand erases in parts; a route or a block goes whole, matching what Delete
 in the inspector does. Same tap-move-tap grammar as drawing, and hovering
 counts.
 
+## Tools and the board
+
+**Move** drags players. **Routes** selects a man and leaves him exactly where he
+is, so choosing what he runs never costs the spot a drag just put him on.
+Freehand is not in the mode row at all — it is the pencil over the board,
+because it is reached for mid-play rather than set out in.
+
+The board inspector holds the route list and nothing else. Label, the on-line
+toggle and the coordinates moved into the drawer: they are set once when a
+formation is built and then never again, and they sat over the board every time
+a man was picked up.
+
+Zoom rewrites the `viewBox`, still in yards. Nothing else had to change:
+`toYards()` reads the SVG's own matrix, which already accounts for whatever box
+is set.
+
 ## Routes
 
 Tapping a man opens his route list in the inspector — picking a player and
