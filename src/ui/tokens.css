@@ -128,12 +128,21 @@ body,
   overflow: hidden;
 }
 
+/*
+ * The board is a picture, not a control. Every rect, line, circle and text in
+ * it used to be hit-testable, so crossing the board fired a storm of boundary
+ * events: one trace logged 190 pointerout events and not a single pointerdown.
+ * spen-test.html, the one page confirmed to take S Pen contact on the target
+ * device, makes its svg inert exactly like this. The .stage div is the only
+ * thing that handles pointers, and it hit-tests by distance instead.
+ */
 .stage svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   display: block;
+  pointer-events: none;
 }
 
 .blocktool {

@@ -16,6 +16,8 @@ import {
   VIEW,
   VIEW_BOX,
   clamp,
+  distanceToPath,
+  nearestAssignment,
   nearestPlayer,
   pickRadius,
   pxToYards,
@@ -81,6 +83,7 @@ export function PlayEditor() {
   const aimRef = useRef<SVGGElement>(null);
   const ringRef = useRef<SVGCircleElement>(null);
   const hoverRef = useRef<string | null>(null);
+  const aimQueued = useRef(false);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
@@ -211,6 +214,14 @@ export function PlayEditor() {
    * changes rarely, goes through state.
    */
   function showAim(svg: SVGSVGElement, e: React.PointerEvent) {
+    // Hover arrives far faster than a frame. Coalesce, or the board re-renders
+    // on every sample and the main thread has nothing left for real contacts.
+    if (aimQueued.current) return;
+    aimQueued.current = true;
+    requestAnimationFrame(() => {
+      aimQueued.current = false;
+    });
+
     const at = toYards(svg, e.clientX, e.clientY);
     const radius = pickRadius(svg);
 
@@ -372,6 +383,26 @@ export function PlayEditor() {
     const radius = pickRadius(svg);
     const p = nearestPlayer(visible, at, radius);
 
+    /*
+     * A block line runs between two men who are often less than two yards
+     * apart, so it lies inside both their pick radii. Checking players first
+     * would make the line unselectable; whichever is genuinely nearer wins.
+     * Tapping a mark still gets the mark, because the line stops at its edge.
+     */
+    const line = tool === 'select' ? nearestAssignment(drawn, at, radius) : null;
+    if (line) {
+      const toLine = distanceToPath(line.path, at);
+      const toPlayer = p ? Math.hypot(p.x - at.x, p.y - at.y) : Infinity;
+      if (toLine < toPlayer) {
+        if (TRACING) {
+          trace(`${describeEvent(e, at)}\n            -> picked a block line at ${toLine.toFixed(2)}yd`);
+        }
+        setPending(null);
+        setSel({ kind: 'assignment', id: line.id });
+        return;
+      }
+    }
+
     if (TRACING) {
       const d = p ? Math.hypot(p.x - at.x, p.y - at.y) : NaN;
       trace(
@@ -401,11 +432,6 @@ export function PlayEditor() {
     } catch {
       /* not fatal */
     }
-  }
-
-  function selectAssignment(e: React.PointerEvent, id: string) {
-    e.stopPropagation();
-    setSel({ kind: 'assignment', id });
   }
 
   function deleteAssignment(id: string) {
@@ -483,7 +509,6 @@ export function PlayEditor() {
               key={a.id}
               assignment={a}
               selected={sel?.kind === 'assignment' && sel.id === a.id}
-              onSelect={tool === 'select' ? selectAssignment : undefined}
             />
           ))}
 

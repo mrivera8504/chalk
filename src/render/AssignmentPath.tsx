@@ -81,10 +81,9 @@ function Cap({
 interface Props {
   assignment: Assignment;
   selected?: boolean;
-  onSelect?: (e: React.PointerEvent, id: string) => void;
 }
 
-export function AssignmentPath({ assignment, selected = false, onSelect }: Props) {
+export function AssignmentPath({ assignment, selected = false }: Props) {
   const { kind, path } = assignment;
   if (path.length < 2) return null;
 
@@ -94,14 +93,7 @@ export function AssignmentPath({ assignment, selected = false, onSelect }: Props
   const d = toPathD(path);
 
   return (
-    <g
-      onPointerDown={onSelect ? (e) => onSelect(e, assignment.id) : undefined}
-      style={onSelect ? { cursor: 'pointer' } : undefined}
-    >
-      {/* a pen tip is small and a line is thin, so tap against a fat invisible copy */}
-      {onSelect && (
-        <path d={d} fill="none" stroke="transparent" strokeWidth={1.1} pointerEvents="stroke" />
-      )}
+    <g>
       <path
         d={d}
         fill="none"

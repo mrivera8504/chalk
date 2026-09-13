@@ -130,3 +130,58 @@ export function nearestPlayer<T extends { x: number; y: number }>(
   }
   return best;
 }
+
+function segmentDistance(ax: number, ay: number, bx: number, by: number, px: number, py: number) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+/**
+ * Shortest distance from a point to an assignment path, in yards. Curves are
+ * walked in a few steps rather than solved: this decides whether a tap landed
+ * on a block line, and a quarter yard of approximation is invisible there.
+ */
+export function distanceToPath(points: PathPoint[], at: Yards): number {
+  if (points.length < 2) return Infinity;
+  let best = Infinity;
+  let prev = points[0];
+
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i];
+    if (p.cx !== undefined && p.cy !== undefined) {
+      let last = prev;
+      for (let t = 0.25; t <= 1.0001; t += 0.25) {
+        const mt = 1 - t;
+        const qx = mt * mt * prev.x + 2 * mt * t * p.cx + t * t * p.x;
+        const qy = mt * mt * prev.y + 2 * mt * t * p.cy + t * t * p.y;
+        best = Math.min(best, segmentDistance(last.x, last.y, qx, qy, at.x, at.y));
+        last = { x: qx, y: qy };
+      }
+    } else {
+      best = Math.min(best, segmentDistance(prev.x, prev.y, p.x, p.y, at.x, at.y));
+    }
+    prev = p;
+  }
+  return best;
+}
+
+/** Nearest assignment to a tap, so block lines are pickable without the DOM. */
+export function nearestAssignment<T extends { path: PathPoint[] }>(
+  list: T[],
+  at: Yards,
+  radius: number,
+): T | null {
+  let best: T | null = null;
+  let bestD = radius;
+  for (const a of list) {
+    const d = distanceToPath(a.path, at);
+    if (d <= bestD) {
+      bestD = d;
+      best = a;
+    }
+  }
+  return best;
+}
