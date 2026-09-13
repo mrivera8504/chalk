@@ -795,7 +795,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     // not board taps. Returning before preventDefault is what lets their
     // buttons behave like buttons. The drawer's own wrapper is inert, so this
     // only ever catches the panel and its tab.
-    if ((e.target as Element).closest?.('.inspector, .drawer')) return;
+    if ((e.target as Element).closest?.('.inspector, .drawer, .quick-bar')) return;
     e.preventDefault();
 
     const at = toYards(svg, e.clientX, e.clientY);
@@ -1290,6 +1290,39 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         * there is something to say.
         */}
       {hint && <div className="hint-pill">{hint}</div>}
+
+      {/*
+        * The handful of actions worth reaching without opening anything, each
+        * one present only while it would do something. The container is inert
+        * and sits opposite the drawer, so it never competes with the tab.
+        */}
+      <div className={`quick-bar ${settings.drawerSide === 'right' ? 'left' : 'right'}`}>
+        {carrying && (
+          <button className="quick place" onClick={() => dropCarried('quick bar')}>
+            Place {byId(carrying)?.label}
+          </button>
+        )}
+        {selectedPlayer && !carrying && (
+          <button className="quick" onClick={() => setPicker('route')}>
+            Route
+          </button>
+        )}
+        {selectedBlock && (
+          <button className="quick" onClick={() => deleteAssignment(selectedBlock.id)}>
+            Delete line
+          </button>
+        )}
+        {canUndo && (
+          <button className="quick" onClick={stepBack} aria-label="Undo">
+            ↶
+          </button>
+        )}
+        {canRedo && (
+          <button className="quick" onClick={stepForward} aria-label="Redo">
+            ↷
+          </button>
+        )}
+      </div>
 
       <Drawer open={drawerOpen} onToggle={toggleDrawer} side={settings.drawerSide}>
         <div className="drawer-head">

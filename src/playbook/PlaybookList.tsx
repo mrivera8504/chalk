@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ExportPanel } from '../export/ExportPanel';
+import { AccountPanel } from './AccountPanel';
+import { useInstallPrompt } from '../store/install';
 import { UNFILED_SECTION, type Play, type Section } from '../domain/types';
 import type { SyncState } from '../store/sync';
 import { PlayCard } from './PlayCard';
@@ -18,6 +20,7 @@ interface Props {
   onSetSection: (id: string, sectionId: string) => void;
   onMovePlay: (id: string, toIndex: number) => void;
   onExport: () => void;
+  onSaveNow: () => Promise<void>;
 }
 
 /*
@@ -48,10 +51,13 @@ export function PlaybookList({
   onSetSection,
   onMovePlay,
   onExport,
+  onSaveNow,
 }: Props) {
   const [query, setQuery] = useState('');
   const [dragging, setDragging] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [account, setAccount] = useState(false);
+  const install = useInstallPrompt();
 
   /** Name, suggested name, tags and notes all match, because coaches search by feel. */
   const matches = useMemo(() => {
@@ -139,13 +145,34 @@ export function PlaybookList({
         {plays.length > 0 && (
           <button
             className="quiet"
-            onClick={() => setExporting((v) => !v)}
+            onClick={() => {
+              setAccount(false);
+              setExporting((v) => !v);
+            }}
             aria-pressed={exporting}
           >
             Export
           </button>
         )}
+        <button
+          className="quiet"
+          onClick={() => {
+            setExporting(false);
+            setAccount((v) => !v);
+          }}
+          aria-pressed={account}
+        >
+          Account
+        </button>
+        {/* Only there when the browser has actually offered; see useInstallPrompt. */}
+        {install && (
+          <button className="quiet" onClick={install}>
+            Install
+          </button>
+        )}
       </div>
+
+      {account && <AccountPanel onSaveNow={onSaveNow} onClose={() => setAccount(false)} />}
 
       {exporting && (
         <ExportPanel

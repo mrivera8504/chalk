@@ -59,6 +59,7 @@ export function App() {
       onSetSection={book.setPlaySection}
       onMovePlay={book.movePlay}
       onExport={exportBook}
+      onSaveNow={book.saveNow}
     />
   );
 }

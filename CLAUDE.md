@@ -5,10 +5,13 @@ Full spec and stage list: `docs/build-spec.md`.
 
 ## Where it stands
 
-Stages 1-6 done: field and players, blocking tool, route and run presets with
+Stages 1-7 done: field and players, blocking tool, route and run presets with
 formations and auto play-naming, freehand ink, a playbook that saves, and
-export. **Stage 7 is next** — offline shell and install prompt, needing
-`vite-plugin-pwa`.
+export, and an offline shell. The app installs to the home screen and opens
+with no signal.
+
+**Service workers need HTTPS.** The LAN dev server cannot register one, so
+offline and the install prompt are only testable on the deployed site.
 
 Since stage 5: marks magnetise to the LOS, folders hold plays and empty ones
 show, routes colour per receiver with a manual override, undo covers a drag,
@@ -98,6 +101,17 @@ identical annotation set into the play on every sample.
 Freehand erases in parts; a route or a block goes whole, matching what Delete
 in the inspector does. Same tap-move-tap grammar as drawing, and hovering
 counts.
+
+## Accounts
+
+Anonymous sign-in still happens on first launch and the app works with no
+account at all. Adding an email **links** the credential to the anonymous user
+rather than creating a second one, so the uid never changes and the playbook at
+`/users/{uid}` survives the upgrade. Registering fresh would have stranded
+everything drawn beforehand under an id nobody could sign back into.
+
+Email/password has to be enabled in the Firebase console; `explainAuth` says so
+in words when it is not.
 
 ## Settings
 

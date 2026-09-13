@@ -370,6 +370,48 @@ body,
 }
 
 /*
+ * The contextual controls. Inert container, live buttons: a tap that lands
+ * between them still reaches the board underneath.
+ */
+.quick-bar {
+  position: absolute;
+  bottom: 10px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.quick-bar.left {
+  left: 10px;
+}
+
+.quick-bar.right {
+  right: 10px;
+  align-items: flex-end;
+}
+
+.quick-bar .quick {
+  pointer-events: auto;
+  min-width: 44px;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--line);
+}
+
+/* Setting a carried player down is the one that is urgent. */
+.quick-bar .quick.place {
+  border-color: var(--select);
+  color: var(--select);
+}
+
+/*
  * Whose block you are halfway through assigning, floating over the board so it
  * outlives the drawer. Inert: it must never swallow a tap meant for the field.
  */
@@ -487,15 +529,64 @@ button:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-@media (orientation: landscape) and (max-height: 500px) {
+/*
+ * Landscape.
+ *
+ * The board is taller than it is wide, so turning the phone makes it
+ * height-constrained and leaves room either side — which is exactly where the
+ * drawer already lives, so it costs nothing there. What does hurt is vertical
+ * chrome, and every pixel of header comes straight off the board.
+ */
+@media (orientation: landscape) {
   .editor > header {
-    padding: 6px 12px;
+    padding: 5px 10px;
+    gap: 8px;
   }
+
+  .editor > header .play-name {
+    padding: 6px 9px;
+  }
+
+  /* Narrower, because in landscape the board needs the width less than the
+     portrait board needs it, and a shorter panel has to scroll otherwise. */
+  .drawer-panel {
+    width: min(300px, 46%);
+  }
+
+  .drawer.open .drawer-tab {
+    right: min(300px, 46%);
+  }
+
+  .drawer.left.open .drawer-tab {
+    left: min(300px, 46%);
+  }
+
+  /* One row of buttons rather than two: vertical space is the scarce one. */
+  .drawer-panel .tools {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
   .inspector {
     flex-direction: row;
     align-items: center;
     flex-wrap: wrap;
-    padding: 8px 14px;
+    padding: 6px 14px;
+  }
+
+  .quick-bar {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .tool-group h4 {
+    margin-top: 5px;
+  }
+
+  /* The explanatory lines are the first thing to go when there is no room. */
+  .tool-note {
+    display: none;
   }
 }
 
@@ -947,6 +1038,7 @@ button:focus-visible {
   font-size: 11px;
 }
 
+.account-panel,
 .export-panel {
   margin: 0 14px 12px;
   max-height: none;
@@ -956,6 +1048,20 @@ button:focus-visible {
 
 .picker-note.bad {
   color: var(--bad);
+}
+
+.picker-note.good {
+  color: var(--ok);
+}
+
+/* The two-way toggle on the account screen reads as one control. */
+.seg button {
+  flex: 1 1 0;
+  justify-content: center;
+}
+
+.account-panel .notes-line {
+  width: 100%;
 }
 
 .chip { display: inline-flex; }
