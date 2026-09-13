@@ -12,7 +12,7 @@ import {
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
-import { VIEW, VIEW_BOX, clamp, snap, toYards } from '../render/geometry';
+import { VIEW, VIEW_BOX, clamp, nearestPlayer, pickRadius, snap, toYards } from '../render/geometry';
 import { BlockTool, tapBlock, type Pending, type Tool } from './BlockTool';
 import { LegalityBadge } from './LegalityBadge';
 
@@ -35,6 +35,7 @@ export function PlayEditor() {
   const [showDefense, setShowDefense] = useState(false);
 
   const svgRef = useRef<SVGSVGElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
 
   const visible = useMemo(
@@ -144,24 +145,6 @@ export function PlayEditor() {
     ]);
   }
 
-  function handleDown(e: React.PointerEvent, id: string) {
-    const svg = svgRef.current;
-    const p = byId(id);
-    if (!svg || !p) return;
-    e.stopPropagation();
-    e.preventDefault();
-
-    if (tool !== 'select') {
-      handleBlockTap(p);
-      return;
-    }
-
-    const at = toYards(svg, e.clientX, e.clientY);
-    drag.current = { id, dx: p.x - at.x, dy: p.y - at.y };
-    setSel({ kind: 'player', id });
-    svg.setPointerCapture(e.pointerId);
-  }
-
   function handleMove(e: React.PointerEvent) {
     const d = drag.current;
     const svg = svgRef.current;
@@ -183,12 +166,50 @@ export function PlayEditor() {
   function handleUp(e: React.PointerEvent) {
     if (!drag.current) return;
     drag.current = null;
-    svgRef.current?.releasePointerCapture(e.pointerId);
+    try {
+      stageRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
   }
 
-  function handleStageDown() {
-    setSel(null);
-    setPending(null);
+  /**
+   * The stage owns hit testing rather than each player shape. Chrome applies
+   * touch adjustment to a finger but hit-tests a stylus at the exact pixel, so
+   * a mark a finger grabs first time needs the pen placed dead on it. Missing
+   * used to land on the background and clear the selection, which is why a drag
+   * appeared to deselect itself halfway.
+   */
+  function handleStageDown(e: React.PointerEvent) {
+    const svg = svgRef.current;
+    if (!svg) return;
+    // The inspector floats inside the stage; taps on it are not board taps.
+    if ((e.target as Element).closest?.('.inspector')) return;
+    e.preventDefault();
+
+    const at = toYards(svg, e.clientX, e.clientY);
+    const p = nearestPlayer(visible, at, pickRadius(svg));
+
+    if (!p) {
+      setSel(null);
+      setPending(null);
+      return;
+    }
+
+    if (tool !== 'select') {
+      handleBlockTap(p);
+      return;
+    }
+
+    drag.current = { id: p.id, dx: p.x - at.x, dy: p.y - at.y };
+    setSel({ kind: 'player', id: p.id });
+    // Capture can throw if the pointer is already gone. The drag survives
+    // without it, because every move bubbles back to this same element.
+    try {
+      stageRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      /* not fatal */
+    }
   }
 
   function selectAssignment(e: React.PointerEvent, id: string) {
@@ -248,17 +269,21 @@ export function PlayEditor() {
         <LegalityBadge onLine={onLine} minOnLine={settings.minOnLine} issues={issues} />
       </header>
 
-      <div className="stage">
-        <svg
-          ref={svgRef}
-          viewBox={VIEW_BOX}
-          preserveAspectRatio="xMidYMid meet"
-          onPointerMove={handleMove}
-          onPointerUp={handleUp}
-          onPointerCancel={handleUp}
-          onPointerDown={handleStageDown}
-          style={{ touchAction: 'none' }}
-        >
+      {/*
+        * Pointer listeners live on this div, not on the <svg>. The stylus
+        * diagnostic, the one build confirmed to take S Pen input on the target
+        * device, listens on a plain HTML element too. The svg fills the div
+        * exactly, so screen-to-yards is unaffected.
+        */}
+      <div
+        className="stage"
+        ref={stageRef}
+        onPointerDown={handleStageDown}
+        onPointerMove={handleMove}
+        onPointerUp={handleUp}
+        onPointerCancel={handleUp}
+      >
+        <svg ref={svgRef} viewBox={VIEW_BOX} preserveAspectRatio="xMidYMid meet">
           <Field holes={holes} showHoles={showHoles} occupied={occupied} />
 
           {drawn.map((a) => (
@@ -276,7 +301,6 @@ export function PlayEditor() {
               player={p}
               selected={sel?.kind === 'player' && sel.id === p.id}
               pending={p.id === pending?.blockerId || p.id === pending?.targetId}
-              onPointerDown={handleDown}
             />
           ))}
         </svg>

@@ -5,10 +5,9 @@ interface Props {
   selected: boolean;
   /** Picked as the blocker, waiting on a defender. */
   pending?: boolean;
-  onPointerDown: (e: React.PointerEvent, id: string) => void;
 }
 
-export function PlayerShape({ player, selected, pending = false, onPointerDown }: Props) {
+export function PlayerShape({ player, selected, pending = false }: Props) {
   const fill = player.side === 'offense' ? 'var(--off-fill)' : 'var(--def-fill)';
   const stroke = selected || pending
     ? 'var(--select)'
@@ -48,13 +47,9 @@ export function PlayerShape({ player, selected, pending = false, onPointerDown }
   }
 
   return (
-    <g
-      transform={`translate(${player.x} ${player.y})`}
-      onPointerDown={(e) => onPointerDown(e, player.id)}
-      style={{ cursor: 'grab', touchAction: 'none' }}
-    >
-      {/* generous invisible hit area, a fingertip is about a yard and a half */}
-      <circle r={R * 1.9} fill="transparent" />
+    /* No pointer handler and no hit area: the stage hit-tests by proximity, so
+       a pen does not have to land exactly on the mark. See nearestPlayer. */
+    <g transform={`translate(${player.x} ${player.y})`} style={{ cursor: 'grab' }}>
       {pending && (
         <circle
           r={R * 1.5}

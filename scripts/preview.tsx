@@ -89,7 +89,7 @@ const markup = renderToStaticMarkup(
       <AssignmentPath key={a.id} assignment={a} />
     ))}
     {players.map((p) => (
-      <PlayerShape key={p.id} player={p} selected={false} onPointerDown={() => {}} />
+      <PlayerShape key={p.id} player={p} selected={false} />
     ))}
   </svg>,
 );

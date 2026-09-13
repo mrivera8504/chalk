@@ -77,3 +77,42 @@ export function headingInto(points: PathPoint[], i: number): Yards {
   if (len < 1e-6) return { x: 0, y: -1 };
   return { x: dx / len, y: dy / len };
 }
+
+/** Minimum slop around a player mark, in screen pixels, at any board scale. */
+const PICK_PX = 26;
+
+/**
+ * How close a tap has to land, in yards. Derived from the live screen scale so
+ * the target stays the same physical size whether the board is drawn on a phone
+ * or a tablet.
+ */
+export function pickRadius(svg: SVGSVGElement): number {
+  const ctm = svg.getScreenCTM();
+  const perYard = ctm ? Math.abs(ctm.a) : 20;
+  return Math.max(1.1, PICK_PX / perYard);
+}
+
+/**
+ * Nearest player to a point, rather than whichever element the browser happens
+ * to hit-test. Chrome applies touch adjustment to a finger but hit-tests a
+ * stylus at the exact pixel, so a mark a finger grabs on the first try needs
+ * the pen placed dead on it. Nearest-wins also settles the overlap between
+ * linemen at a tight split, which a fattened hit area cannot.
+ */
+export function nearestPlayer<T extends { x: number; y: number }>(
+  players: T[],
+  at: Yards,
+  radius: number,
+): T | null {
+  let best: T | null = null;
+  let bestD = radius;
+
+  for (const p of players) {
+    const d = Math.hypot(p.x - at.x, p.y - at.y);
+    if (d <= bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best;
+}

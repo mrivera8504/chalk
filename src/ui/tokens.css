@@ -148,8 +148,21 @@ body,
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  /*
+   * Pinned to the downfield end, not the near end. The backfield sits at the
+   * bottom of the board, so a panel there covers the backs you just selected.
+   * Nothing is ever drawn 15 yards downfield of the LOS.
+   */
+  top: 0;
   z-index: 2;
+  /* One compact row, so it covers as little of the board as it can. */
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   backdrop-filter: blur(6px);
 }
