@@ -1,0 +1,203 @@
+:root {
+  --bg: #10161a;
+  --panel: #1a2329;
+  --panel-hi: #222e36;
+  --line: #2f3d46;
+  --chalk: #e8ede9;
+  --dim: #8b9aa3;
+
+  --turf: #1e3a2b;
+  --turf-line: rgba(232, 237, 233, 0.22);
+  --los: rgba(232, 237, 233, 0.62);
+  --hole: rgba(232, 237, 233, 0.5);
+
+  --off-fill: #e8ede9;
+  --off-line: #10161a;
+  --off-text: #10161a;
+  --def-fill: rgba(16, 22, 26, 0.55);
+  --def-line: #ff9b7a;
+  --def-text: #ffd9cc;
+
+  --select: #4fb8ff;
+  --locked: #f2c14e;
+  --ok: #5fd39a;
+  --bad: #ff6b5a;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--chalk);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  overscroll-behavior: none;
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.editor > header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.legality {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.legality .count {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ok);
+}
+
+.legality.bad .count {
+  color: var(--bad);
+}
+
+.legality.bad {
+  border-color: var(--bad);
+}
+
+.stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.stage svg {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.tools {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tools::-webkit-scrollbar {
+  display: none;
+}
+
+button {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--chalk);
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  border-radius: 7px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+button[aria-pressed='true'] {
+  background: var(--chalk);
+  color: var(--bg);
+  border-color: var(--chalk);
+}
+
+button.quiet {
+  background: transparent;
+  color: var(--dim);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--select);
+  outline-offset: 2px;
+}
+
+.inspector {
+  padding: 10px 14px 14px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.inspector label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.inspector label span {
+  font-size: 11.5px;
+  color: var(--dim);
+  min-width: 42px;
+}
+
+.inspector input {
+  font: inherit;
+  width: 74px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+  color: var(--chalk);
+  text-transform: uppercase;
+}
+
+.inspector .row {
+  display: flex;
+  gap: 6px;
+}
+
+.inspector .pos {
+  font-size: 11.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .editor > header {
+    padding: 6px 12px;
+  }
+  .inspector {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 8px 14px;
+  }
+}
