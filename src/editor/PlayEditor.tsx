@@ -20,6 +20,13 @@ import { LegalityBadge } from './LegalityBadge';
 
 const settings = DEFAULT_SETTINGS;
 
+/*
+ * Measured from a real S Pen trace: bounce gaps ran 10-25ms, while a genuine
+ * second tap was never under 200ms. The window sits well clear of both.
+ */
+const CHATTER_MS = 120;
+const CHATTER_YARDS = 2.5;
+
 /** Offense only. The defense goes on the board when it is asked for. */
 function initialPlayers(): PlayerSlot[] {
   return applyOnLine(defaultOffense(), settings);
@@ -40,6 +47,15 @@ export function PlayEditor() {
   const stageRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
   const moveCount = useRef(0);
+  /** Where a drag was when contact broke, so a bounce can pick it back up. */
+  const lastDrop = useRef<{
+    id: string;
+    dx: number;
+    dy: number;
+    at: number;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const visible = useMemo(
     () => (showDefense ? players : players.filter((p) => p.side === 'offense')),
@@ -185,6 +201,14 @@ export function PlayEditor() {
   function handleUp(e: React.PointerEvent) {
     if (TRACING) trace(`${describeEvent(e)}  drag=${drag.current ? 'yes' : 'NONE'}`);
     if (!drag.current) return;
+
+    // Provisional, not final: the pen may simply have bounced. handleStageDown
+    // decides, by how soon and how near the next contact lands.
+    const svg = svgRef.current;
+    const at = svg ? toYards(svg, e.clientX, e.clientY) : null;
+    lastDrop.current = at
+      ? { ...drag.current, at: performance.now(), x: at.x, y: at.y }
+      : null;
     drag.current = null;
     try {
       stageRef.current?.releasePointerCapture(e.pointerId);
@@ -208,6 +232,49 @@ export function PlayEditor() {
     e.preventDefault();
 
     const at = toYards(svg, e.clientX, e.clientY);
+
+    /*
+     * The S Pen breaks contact constantly. Traced on a Galaxy Ultra, one
+     * deliberate press arrived as five pointerdown/pointerup pairs inside
+     * 150ms, every one reporting pressure 0.00. So a bounce close in time and
+     * space to a drag that just ended is the same gesture continuing, not a new
+     * tap: resume the player already in hand rather than re-picking. Without
+     * this, a bounce landing in open grass cleared the selection mid-drag.
+     */
+    const now = performance.now();
+    const bounce = lastDrop.current;
+    if (
+      tool === 'select' &&
+      bounce &&
+      now - bounce.at < CHATTER_MS &&
+      Math.hypot(bounce.x - at.x, bounce.y - at.y) < CHATTER_YARDS
+    ) {
+      const held = byId(bounce.id);
+      if (held) {
+        /*
+         * Carry the original grab offset rather than deriving a new one from
+         * the player's position. Bounces land 10-25ms apart, inside a single
+         * frame, so a re-render is not guaranteed and that position may be
+         * stale. Keeping the offset also means the player tracks the pen
+         * across the break, which is what a continuing gesture should do.
+         */
+        drag.current = { id: bounce.id, dx: bounce.dx, dy: bounce.dy };
+        setSel({ kind: 'player', id: held.id });
+        try {
+          stageRef.current?.setPointerCapture(e.pointerId);
+        } catch {
+          /* not fatal */
+        }
+        if (TRACING) {
+          trace(
+            `${describeEvent(e, at)}\n            -> RESUMED ${held.label} ` +
+              `(contact bounce, ${(now - bounce.at).toFixed(0)}ms gap)`,
+          );
+        }
+        return;
+      }
+    }
+
     const radius = pickRadius(svg);
     const p = nearestPlayer(visible, at, radius);
 
