@@ -64,7 +64,7 @@ export function Field({ holes, showHoles, occupied = [] }: Props) {
 
       {showHoles &&
         holes
-          .filter((h) => !occupied.some((x) => Math.abs(x - h.x) < 0.85))
+          .filter((h) => !occupied.some((x) => Math.abs(x - h.x) < 1.15))
           .map((h) => (
           <text
             key={`hole${h.number}-${h.x.toFixed(2)}`}
