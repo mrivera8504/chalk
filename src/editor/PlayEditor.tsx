@@ -54,6 +54,17 @@ const DRAG_SLOP_PX = 12;
 /** Freehand tolerance, in yards. Roughly a tenth of a player's width. */
 const INK_TOLERANCE = 0.15;
 
+/**
+ * A stroke ends when the pen goes quiet, not when it lifts.
+ *
+ * This digitizer reports contact for three to five milliseconds at a time
+ * unless the pen is pressed hard, so a stroke that needs held pressure cannot
+ * be drawn. Hover, by contrast, tracks perfectly: every trace carries hundreds
+ * of clean hover samples at zero pressure. So contact is used only to start and
+ * finish, and the shape in between is taken from wherever the pen goes.
+ */
+const INK_IDLE_MS = 700;
+
 let inkCounter = 0;
 const inkId = () => `k${Date.now().toString(36)}${(inkCounter++).toString(36)}`;
 
@@ -86,6 +97,7 @@ export function PlayEditor() {
   const [showDefense, setShowDefense] = useState(false);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<PathPoint[][]>([]);
+  const [drawing, setDrawing] = useState(false);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -101,6 +113,7 @@ export function PlayEditor() {
   const commitTimer = useRef<number | null>(null);
   const lastPenAt = useRef(0);
   const rawBound = useRef(false);
+  const idleTimer = useRef<number | null>(null);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
@@ -134,6 +147,11 @@ export function PlayEditor() {
   );
 
   const hint = useMemo(() => {
+    if (tool === 'draw') {
+      return drawing
+        ? 'Drawing. Move the pen, then tap to finish'
+        : 'Tap to start a route, move the pen, tap to finish';
+    }
     if (tool === 'select') return '';
     const blocker = byId(pending?.blockerId);
     if (!blocker) return 'Tap a blocker';
@@ -144,7 +162,7 @@ export function PlayEditor() {
         : `Tap the lineman ${blocker.label} doubles`;
     }
     return `Tap who ${blocker.label} blocks`;
-  }, [tool, pending, players]);
+  }, [tool, pending, players, drawing]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -315,6 +333,7 @@ export function PlayEditor() {
       // Raw updates, where supported, carry one sample per event and are bound
       // natively below. Handling both would double every point.
       if (stroke.current && !rawBound.current) extendStroke(e);
+      else if (!stroke.current && e.pointerType !== 'touch') showAim(svg, e);
       return;
     }
 
@@ -336,11 +355,9 @@ export function PlayEditor() {
   function handleUp(e: React.PointerEvent) {
     if (TRACING) trace(`${describeEvent(e)}  drag=${drag.current ? 'yes' : 'NONE'}`);
 
-    if (tool === 'draw' && stroke.current) {
-      if (commitTimer.current) window.clearTimeout(commitTimer.current);
-      commitTimer.current = window.setTimeout(commitStroke, CHATTER_MS);
-      return;
-    }
+    // A lift means nothing while drawing: this pen lifts constantly. The idle
+    // timer, or a second tap, is what ends a stroke.
+    if (tool === 'draw') return;
     if (!drag.current) return;
 
     // Provisional, not final: the pen may simply have bounced. handleStageDown
@@ -391,6 +408,10 @@ export function PlayEditor() {
       pts,
       ahead.map((p) => ({ x: p.clientX, y: p.clientY })),
     );
+
+    // Any movement, hovering or not, keeps the stroke alive.
+    if (idleTimer.current) window.clearTimeout(idleTimer.current);
+    idleTimer.current = window.setTimeout(commitStroke, INK_IDLE_MS);
   }
 
   /**
@@ -404,6 +425,9 @@ export function PlayEditor() {
     stroke.current = null;
     strokeOwner.current = null;
     commitTimer.current = null;
+    if (idleTimer.current) window.clearTimeout(idleTimer.current);
+    idleTimer.current = null;
+    setDrawing(false);
     ink.current?.clear();
 
     const svg = svgRef.current;
@@ -438,33 +462,25 @@ export function PlayEditor() {
     if (tool === 'draw') {
       if (!accepts(e)) return;
 
-      /*
-       * A stroke does not end at pointerup, it ends when the pen stays off.
-       * This device breaks contact constantly mid-gesture, so a lift is held
-       * provisionally: land again soon enough and near enough and the same
-       * stroke carries on, rather than being chopped into fragments.
-       */
-      const resuming = commitTimer.current !== null && stroke.current !== null;
-      if (resuming) {
-        window.clearTimeout(commitTimer.current!);
-        commitTimer.current = null;
-        if (TRACING) trace(`${describeEvent(e, at)}\n            -> stroke continues after a break`);
-      } else {
-        stroke.current = [];
-        strokeOwner.current = nearestPlayer(visible, at, pickRadius(svg))?.id ?? null;
-        if (TRACING) {
-          trace(
-            `${describeEvent(e, at)}\n            -> stroke started` +
-              `${strokeOwner.current ? ` for ${byId(strokeOwner.current)?.label}` : ' (annotation)'}`,
-          );
-        }
+      // A second tap ends the route. One tap starts it, the pen draws the shape
+      // in between whether or not it is touching the glass.
+      if (stroke.current) {
+        stroke.current.push({ x: e.clientX, y: e.clientY });
+        if (TRACING) trace(`${describeEvent(e, at)}\n            -> stroke finished by tap`);
+        commitStroke();
+        return;
       }
 
-      stroke.current!.push({ x: e.clientX, y: e.clientY });
-      try {
-        stageRef.current?.setPointerCapture(e.pointerId);
-      } catch {
-        /* not fatal */
+      stroke.current = [{ x: e.clientX, y: e.clientY }];
+      strokeOwner.current = nearestPlayer(visible, at, pickRadius(svg))?.id ?? null;
+      setDrawing(true);
+      if (idleTimer.current) window.clearTimeout(idleTimer.current);
+      idleTimer.current = window.setTimeout(commitStroke, INK_IDLE_MS);
+      if (TRACING) {
+        trace(
+          `${describeEvent(e, at)}\n            -> stroke started` +
+            `${strokeOwner.current ? ` for ${byId(strokeOwner.current)?.label}` : ' (annotation)'}`,
+        );
       }
       return;
     }
