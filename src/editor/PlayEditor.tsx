@@ -14,6 +14,8 @@ import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
 import { VIEW, VIEW_BOX, clamp, nearestPlayer, pickRadius, snap, toYards } from '../render/geometry';
 import { BlockTool, tapBlock, type Pending, type Tool } from './BlockTool';
+import { TracePanel } from './TracePanel';
+import { TRACING, describeEvent, trace } from './trace';
 import { LegalityBadge } from './LegalityBadge';
 
 const settings = DEFAULT_SETTINGS;
@@ -37,6 +39,7 @@ export function PlayEditor() {
   const svgRef = useRef<SVGSVGElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const moveCount = useRef(0);
 
   const visible = useMemo(
     () => (showDefense ? players : players.filter((p) => p.side === 'offense')),
@@ -79,6 +82,15 @@ export function PlayEditor() {
     }
     return `Tap who ${blocker.label} blocks`;
   }, [tool, pending, players]);
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!TRACING || !el) return;
+    const log = (e: Event) => trace(describeEvent(e as PointerEvent));
+    const kinds = ['pointercancel', 'lostpointercapture', 'gotpointercapture', 'pointerout'];
+    kinds.forEach((k) => el.addEventListener(k, log));
+    return () => kinds.forEach((k) => el.removeEventListener(k, log));
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -148,7 +160,14 @@ export function PlayEditor() {
   function handleMove(e: React.PointerEvent) {
     const d = drag.current;
     const svg = svgRef.current;
-    if (!d || !svg) return;
+    if (!d || !svg) {
+      // A move with no drag underway is either hover or a lost grip. Both are
+      // worth seeing, but only occasionally, or the log is nothing else.
+      if (TRACING && e.pointerType === 'pen' && moveCount.current++ % 25 === 0) {
+        trace(`${describeEvent(e)}  [no drag underway]`);
+      }
+      return;
+    }
 
     const at = toYards(svg, e.clientX, e.clientY);
     const x = clamp(snap(at.x + d.dx), -VIEW.halfWidth + 1, VIEW.halfWidth - 1);
@@ -164,6 +183,7 @@ export function PlayEditor() {
   }
 
   function handleUp(e: React.PointerEvent) {
+    if (TRACING) trace(`${describeEvent(e)}  drag=${drag.current ? 'yes' : 'NONE'}`);
     if (!drag.current) return;
     drag.current = null;
     try {
@@ -188,7 +208,17 @@ export function PlayEditor() {
     e.preventDefault();
 
     const at = toYards(svg, e.clientX, e.clientY);
-    const p = nearestPlayer(visible, at, pickRadius(svg));
+    const radius = pickRadius(svg);
+    const p = nearestPlayer(visible, at, radius);
+
+    if (TRACING) {
+      const d = p ? Math.hypot(p.x - at.x, p.y - at.y) : NaN;
+      trace(
+        `${describeEvent(e, at)}\n            -> ${
+          p ? `picked ${p.label} at ${d.toFixed(2)}yd` : 'NOTHING'
+        } (radius ${radius.toFixed(2)}yd, tool ${tool})`,
+      );
+    }
 
     if (!p) {
       setSel(null);
@@ -367,6 +397,8 @@ export function PlayEditor() {
         </div>
       )}
       </div>
+
+      {TRACING && <TracePanel />}
 
       <BlockTool
         tool={tool}
