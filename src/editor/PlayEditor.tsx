@@ -5,6 +5,7 @@ import { describeAssignment, makeBlock, refreshBlocks } from '../domain/presets/
 import { defaultDefense, defaultOffense } from '../domain/presets/formations';
 import {
   DEFAULT_SETTINGS,
+  PLAYER_R,
   isBlockKind,
   type Assignment,
   type PathPoint,
@@ -65,6 +66,22 @@ const INK_TOLERANCE = 0.15;
  */
 const INK_IDLE_MS = 700;
 
+/**
+ * A stroke has to actually go somewhere. Contact bounce delivers two samples a
+ * few milliseconds apart, which is enough to satisfy a bare length check and
+ * commit a stub that then displaces a real route.
+ */
+const INK_MIN_SPAN = 0.8;
+
+/**
+ * How close a stroke must begin to a player to be counted as his route, rather
+ * than free annotation. Deliberately far tighter than the tap radius: that one
+ * is generous so a pen can select at all, but at 2.46 yards everything below
+ * the line of scrimmage falls inside somebody's claim, and since a player keeps
+ * only one drawn route, every new stroke silently deleted the last.
+ */
+const INK_OWNER_YARDS = PLAYER_R * 1.6;
+
 let inkCounter = 0;
 const inkId = () => `k${Date.now().toString(36)}${(inkCounter++).toString(36)}`;
 
@@ -117,6 +134,18 @@ export function PlayEditor() {
   const idleTimer = useRef<number | null>(null);
   /** A player lifted off the board, following the pen until it is tapped down. */
   const carry = useRef<{ id: string; dx: number; dy: number; at: number } | null>(null);
+  const strokeAt = useRef(0);
+  const lastRawAt = useRef(0);
+  /**
+   * Taps are ignored until this moment. Every gesture that finishes something
+   * sets it, because the contact bounce that follows the finishing tap would
+   * otherwise be read as the start of the next gesture. That mistake appeared
+   * three separate times: a bounce ended a stroke it had just begun, a bounce
+   * after setting a player down picked one straight back up, and a bounce after
+   * finishing a route started a phantom one that ran to wherever the next route
+   * began. One guard, set in one place, covers all of them.
+   */
+  const tapGuard = useRef(0);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
@@ -176,6 +205,7 @@ export function PlayEditor() {
       return;
     }
     const onRaw = (ev: Event) => {
+      lastRawAt.current = performance.now();
       if (stroke.current) extendStroke(ev as PointerEvent);
     };
     el.addEventListener('pointerrawupdate', onRaw);
@@ -299,6 +329,7 @@ export function PlayEditor() {
   function dropCarried(reason: string) {
     const held = carry.current;
     carry.current = null;
+    tapGuard.current = performance.now() + CHATTER_MS;
     setCarrying(null);
     if (TRACING && held) trace(`            -> placed ${byId(held.id)?.label} (${reason})`);
   }
@@ -350,9 +381,15 @@ export function PlayEditor() {
     const svg = svgRef.current;
     if (!svg) return;
     if (tool === 'draw') {
-      // Raw updates, where supported, carry one sample per event and are bound
-      // natively below. Handling both would double every point.
-      if (stroke.current && !rawBound.current) extendStroke(e);
+      /*
+       * Raw updates carry one sample per event and are bound natively below, so
+       * plain moves are ignored while they are arriving; handling both would
+       * double every point. But the browser advertising pointerrawupdate is not
+       * a promise that it fires for a hovering pen, and hover is how a stroke
+       * gets its shape here. If none has arrived recently, take the move.
+       */
+      const rawFlowing = rawBound.current && performance.now() - lastRawAt.current < 100;
+      if (stroke.current && !rawFlowing) extendStroke(e);
       else if (!stroke.current && e.pointerType !== 'touch') showAim(svg, e);
       return;
     }
@@ -463,13 +500,26 @@ export function PlayEditor() {
     commitTimer.current = null;
     if (idleTimer.current) window.clearTimeout(idleTimer.current);
     idleTimer.current = null;
+    tapGuard.current = performance.now() + CHATTER_MS;
     setDrawing(false);
     ink.current?.clear();
 
     const svg = svgRef.current;
     if (!pts || pts.length < 2 || !svg) return;
 
-    const path = toSmoothPath(simplify(pts.map((q) => toYards(svg, q.x, q.y)), INK_TOLERANCE));
+    const yards = pts.map((q) => toYards(svg, q.x, q.y));
+
+    // Furthest any sample strayed from the start. A stray contact never leaves.
+    const span = yards.reduce(
+      (far, q) => Math.max(far, Math.hypot(q.x - yards[0].x, q.y - yards[0].y)),
+      0,
+    );
+    if (span < INK_MIN_SPAN) {
+      if (TRACING) trace(`stroke discarded: ${pts.length} samples spanning ${span.toFixed(2)}yd`);
+      return;
+    }
+
+    const path = toSmoothPath(simplify(yards, INK_TOLERANCE));
     if (path.length < 2) return;
 
     if (TRACING) trace(`stroke committed: ${pts.length} samples -> ${path.length} points`);
@@ -495,12 +545,24 @@ export function PlayEditor() {
     const at = toYards(svg, e.clientX, e.clientY);
     clearAim();
 
+    // Nothing that just finished gets to be restarted by its own bounce.
+    if (performance.now() < tapGuard.current && !carry.current) {
+      if (TRACING) trace(`${describeEvent(e, at)}\n            -> bounce after a finished gesture, ignored`);
+      return;
+    }
+
     if (tool === 'draw') {
       if (!accepts(e)) return;
 
       // A second tap ends the route. One tap starts it, the pen draws the shape
       // in between whether or not it is touching the glass.
       if (stroke.current) {
+        // A bounce is not a second tap. Without this, the contact that follows
+        // a starting tap by 10 to 25ms ends the stroke before it has begun.
+        if (performance.now() - strokeAt.current < CHATTER_MS) {
+          if (TRACING) trace(`${describeEvent(e, at)}\n            -> bounce ignored, still drawing`);
+          return;
+        }
         stroke.current.push({ x: e.clientX, y: e.clientY });
         if (TRACING) trace(`${describeEvent(e, at)}\n            -> stroke finished by tap`);
         commitStroke();
@@ -508,7 +570,8 @@ export function PlayEditor() {
       }
 
       stroke.current = [{ x: e.clientX, y: e.clientY }];
-      strokeOwner.current = nearestPlayer(visible, at, pickRadius(svg))?.id ?? null;
+      strokeAt.current = performance.now();
+      strokeOwner.current = nearestPlayer(visible, at, INK_OWNER_YARDS)?.id ?? null;
       setDrawing(true);
       if (idleTimer.current) window.clearTimeout(idleTimer.current);
       idleTimer.current = window.setTimeout(commitStroke, INK_IDLE_MS);
