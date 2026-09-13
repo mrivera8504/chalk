@@ -67,7 +67,7 @@ Rules live in `firestore.rules`. Deploy them from the Firebase console or the CL
 ## Docs
 
 - `docs/build-spec.md` — full spec, data model, and remaining stages
-- `docs/spen-test.html` — stylus diagnostic. Open it on any target device to confirm latency, pressure and pen detection before trusting it.
+- `public/spen-test.html` — stylus diagnostic. Deployed alongside the app, so it is reachable at `/spen-test.html` on any target device to confirm latency, pressure and pen detection before trusting them.
 
 ## Measured on a Galaxy S-series Ultra with S Pen
 

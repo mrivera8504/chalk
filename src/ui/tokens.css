@@ -52,6 +52,19 @@ body,
   display: flex;
   flex-direction: column;
   height: 100%;
+  /*
+   * A stylus drag over non-editable content starts a text selection on Android,
+   * which eats the gesture before any pointer handler sees it. The board is full
+   * of <text> labels, so the pen had plenty to grab. Nothing here is meant to be
+   * selected except the label field below.
+   */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.inspector input {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .editor > header {
@@ -104,6 +117,14 @@ body,
   min-height: 0;
   min-width: 0;
   position: relative;
+  /*
+   * Has to live on the HTML container, not on the <svg> inside it. Chromium does
+   * not apply touch-action to SVG elements, so the inline touch-action on the
+   * svg and on each player <g> was never doing anything. docs/spen-test.html,
+   * which measured the pen working on this device, puts it on a plain div.
+   */
+  touch-action: none;
+  overflow: hidden;
 }
 
 .stage svg {
