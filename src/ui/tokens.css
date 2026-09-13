@@ -167,6 +167,8 @@ body,
   position: absolute;
   left: 0;
   right: 0;
+  max-height: 70%;
+  overflow-y: auto;
   /*
    * Pinned to the downfield end, not the near end. The backfield sits at the
    * bottom of the board, so a panel there covers the backs you just selected.
@@ -367,6 +369,42 @@ body,
   background: none;
   max-height: none;
   border-top: 1px solid var(--line);
+}
+
+/*
+ * The route list, inside the player inspector.
+ *
+ * Capped and scrollable: the inspector overlays the board, and a list long
+ * enough to reach the line of scrimmage would hide the man it is asking about.
+ */
+.route-picker {
+  width: 100%;
+  max-height: 34vh;
+  overflow-y: auto;
+  touch-action: auto;
+  margin-top: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.route-picker .picker-head {
+  padding: 7px 0 2px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
+.route-picker .picker-group {
+  padding: 0 0 6px;
+}
+
+.route-picker .picker-row button {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.route-picker .picker-note {
+  padding: 0 0 6px;
 }
 
 /*

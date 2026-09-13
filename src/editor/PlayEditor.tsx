@@ -34,7 +34,15 @@ import {
 } from '../render/geometry';
 import { mirrorAnnotations, mirrorAssignments, mirrorPlayers } from '../domain/mirror';
 import { SWATCHES, autoRouteColor } from '../domain/colors';
-import { naturalHand, type RoutePreset } from '../domain/presets/routes';
+import {
+  naturalHand,
+  readCustomRoutes,
+  toPreset,
+  toRelative,
+  writeCustomRoutes,
+  type CustomRoute,
+  type RoutePreset,
+} from '../domain/presets/routes';
 import {
   foundationOffense,
   readFormations,
@@ -184,11 +192,10 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   const [coachingPoint, setCoachingPoint] = useState(play.coachingPoint);
   const [tags, setTags] = useState<string[]>(play.tags);
   const [erasing, setErasing] = useState(false);
-  const [picker, setPicker] = useState<'route' | 'formation' | 'settings' | 'notes' | null>(
-    null,
-  );
+  const [picker, setPicker] = useState<'formation' | 'settings' | 'notes' | null>(null);
   const [formations, setFormations] = useState<Formation[]>(readFormations);
   const [foundationId, setFoundationId] = useState<string | null>(readFoundationId);
+  const [customRoutes, setCustomRoutes] = useState<CustomRoute[]>(readCustomRoutes);
   const [drawing, setDrawing] = useState(false);
   const [carrying, setCarrying] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(readDrawerOpen);
@@ -486,7 +493,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     const p = selectedPlayer;
     if (!p) return;
     remember();
-    const path = preset.shape(p, naturalHand(p));
+    const path = preset.shape(p, preset.hand ?? naturalHand(p));
     setAssignments((prev) => [
       ...prev.filter((a) => !(a.playerId === p.id && !isBlockKind(a.kind))),
       {
@@ -497,7 +504,46 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         preset: preset.id,
       },
     ]);
-    setPicker(null);
+  }
+
+  /** The route this player is actually running, if he has one drawn. */
+  function routeOf(playerId: string) {
+    return assignments.find((a) => a.playerId === playerId && !isBlockKind(a.kind)) ?? null;
+  }
+
+  /**
+   * Keep a drawn route as a concept.
+   *
+   * Stored relative to the man who ran it, so it can be given to anybody
+   * afterwards — the same rule every built-in preset follows.
+   */
+  function saveDrawnRoute(player: PlayerSlot) {
+    const current = routeOf(player.id);
+    if (!current || current.path.length < 2) return;
+    const label = prompt('Name this route');
+    if (!label?.trim()) return;
+
+    const route: CustomRoute = {
+      id: newId('r'),
+      name: label.trim(),
+      group: current.kind === 'carry' ? 'run' : 'pass',
+      carry: current.kind === 'carry',
+      points: toRelative(current.path),
+    };
+    const all = [...customRoutes, route];
+    setCustomRoutes(all);
+    writeCustomRoutes(all);
+  }
+
+  function deleteCustomRoute(id: string) {
+    const all = customRoutes.filter((r) => r.id !== id);
+    setCustomRoutes(all);
+    writeCustomRoutes(all);
+  }
+
+  function clearRoute(playerId: string) {
+    remember();
+    setAssignments((prev) => prev.filter((a) => !(a.playerId === playerId && !isBlockKind(a.kind))));
   }
 
   /** Flip the whole play. Hole numbers follow because they are recomputed. */
@@ -623,6 +669,20 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     const d = drag.current;
     const svg = svgRef.current;
     if (!svg) return;
+
+    /*
+     * A move across a floating panel is not a move across the board.
+     *
+     * pointerdown has always been guarded, but this was not, so a carried
+     * player followed the pen onto the inspector and was dropped wherever the
+     * finger happened to land on it. Reaching for the route list flung him
+     * downfield. A genuine drag is unaffected: it holds pointer capture on the
+     * stage, so its events retarget there and never match this.
+     */
+    if (!d && (e.target as Element).closest?.('.inspector, .drawer, .quick-bar')) {
+      clearAim();
+      return;
+    }
     if (tool === 'erase') {
       const at = toYards(svg, e.clientX, e.clientY);
       // Hovering counts. This pen is off the glass most of the time, and an
@@ -1282,6 +1342,21 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
             line
             {selectedPlayer.backNumber ? ` · back ${selectedPlayer.backNumber}` : ''}
           </div>
+
+          {/*
+            * Picking a man and choosing what he runs is one thought. It used to
+            * be two taps in two different corners of the screen.
+            */}
+          <RoutePicker
+            player={selectedPlayer}
+            custom={customRoutes.map(toPreset)}
+            onPick={applyRoute}
+            onDeleteCustom={deleteCustomRoute}
+            onSaveDrawn={
+              routeOf(selectedPlayer.id) ? () => saveDrawnRoute(selectedPlayer) : null
+            }
+            onClear={routeOf(selectedPlayer.id) ? () => clearRoute(selectedPlayer.id) : null}
+          />
         </div>
       )}
       {/*
@@ -1300,11 +1375,6 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         {carrying && (
           <button className="quick place" onClick={() => dropCarried('quick bar')}>
             Place {byId(carrying)?.label}
-          </button>
-        )}
-        {selectedPlayer && !carrying && (
-          <button className="quick" onClick={() => setPicker('route')}>
-            Route
           </button>
         )}
         {selectedBlock && (
@@ -1348,13 +1418,6 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
           />
         ) : (
           <>
-            {picker === 'route' && selectedPlayer && (
-              <RoutePicker
-                player={selectedPlayer}
-                onPick={applyRoute}
-                onClose={() => setPicker(null)}
-              />
-            )}
             {picker === 'formation' && (
               <FormationPicker
                 formations={formations}
@@ -1390,13 +1453,6 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
               <h4>Assign</h4>
               <div className="tools">
                 <button
-                  disabled={!selectedPlayer}
-                  onClick={() => setPicker((v) => (v === 'route' ? null : 'route'))}
-                  aria-pressed={picker === 'route'}
-                >
-                  Route
-                </button>
-                <button
                   onClick={() => setPicker((v) => (v === 'formation' ? null : 'formation'))}
                   aria-pressed={picker === 'formation'}
                 >
@@ -1417,7 +1473,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                   Clear {drawn.length + annotations.length || ''}
                 </button>
               </div>
-              {!selectedPlayer && <p className="tool-note">Pick a man to give him a route.</p>}
+              <p className="tool-note">Tap a man on the board to give him a route.</p>
             </section>
 
             <section className="tool-group">

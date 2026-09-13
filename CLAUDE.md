@@ -102,6 +102,25 @@ Freehand erases in parts; a route or a block goes whole, matching what Delete
 in the inspector does. Same tap-move-tap grammar as drawing, and hovering
 counts.
 
+## Routes
+
+Tapping a man opens his route list in the inspector — picking a player and
+choosing what he runs is one thought, and it used to be two taps in two
+corners of the screen.
+
+Presets stay functions of where a player is standing, never stored shapes, so
+one concept serves any position. Two things extend that:
+
+- `hand` on a preset **forces** the direction. "All the way left" means left
+  from wherever he is; every other concept means toward the wide side.
+- A saved route (`chalk.routes.v1`) is stored relative to **its own first
+  point**, not the player. Routes are not regenerated when their man is dragged
+  — only blocks are — so anchoring on the player would bake the gap between
+  them into the saved shape and apply it crooked to everyone afterwards.
+
+`in`/`out` keep their ids as the medium pair, so plays saved before the depth
+variants still name the preset they came from.
+
 ## Accounts
 
 Anonymous sign-in still happens on first launch and the app works with no
