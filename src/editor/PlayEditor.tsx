@@ -98,6 +98,7 @@ export function PlayEditor() {
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<PathPoint[][]>([]);
   const [drawing, setDrawing] = useState(false);
+  const [carrying, setCarrying] = useState<string | null>(null);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -114,6 +115,8 @@ export function PlayEditor() {
   const lastPenAt = useRef(0);
   const rawBound = useRef(false);
   const idleTimer = useRef<number | null>(null);
+  /** A player lifted off the board, following the pen until it is tapped down. */
+  const carry = useRef<{ id: string; dx: number; dy: number; at: number } | null>(null);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
@@ -152,7 +155,9 @@ export function PlayEditor() {
         ? 'Drawing. Move the pen, then tap to finish'
         : 'Tap to start a route, move the pen, tap to finish';
     }
-    if (tool === 'select') return '';
+    if (tool === 'select') {
+      return carrying ? `Carrying ${byId(carrying)?.label}. Tap to place` : '';
+    }
     const blocker = byId(pending?.blockerId);
     if (!blocker) return 'Tap a blocker';
     if (tool === 'pull') return `Tap who ${blocker.label} pulls to`;
@@ -162,7 +167,7 @@ export function PlayEditor() {
         : `Tap the lineman ${blocker.label} doubles`;
     }
     return `Tap who ${blocker.label} blocks`;
-  }, [tool, pending, players, drawing]);
+  }, [tool, pending, players, drawing, carrying]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -193,6 +198,7 @@ export function PlayEditor() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
+        dropCarried('escape');
         setPending(null);
         setSel(null);
         return;
@@ -209,6 +215,7 @@ export function PlayEditor() {
   }, [sel]);
 
   function handleTool(next: Tool) {
+    dropCarried('tool changed');
     setPending(null);
     setSel(null);
     setTool(next);
@@ -289,6 +296,19 @@ export function PlayEditor() {
     }
   }
 
+  function dropCarried(reason: string) {
+    const held = carry.current;
+    carry.current = null;
+    setCarrying(null);
+    if (TRACING && held) trace(`            -> placed ${byId(held.id)?.label} (${reason})`);
+  }
+
+  function moveCarried(svg: SVGSVGElement, at: Yards) {
+    const c = carry.current;
+    if (!c) return;
+    applyDrag(svg, { id: c.id, dx: c.dx, dy: c.dy, ox: 0, oy: 0, moved: true }, at);
+  }
+
   function clearAim() {
     aimRef.current?.setAttribute('opacity', '0');
     if (hoverRef.current !== null) {
@@ -338,6 +358,10 @@ export function PlayEditor() {
     }
 
     if (!d) {
+      if (carry.current) {
+        moveCarried(svg, toYards(svg, e.clientX, e.clientY));
+        return;
+      }
       // Touch has no hover, so there is nothing to preview for a finger.
       if (e.pointerType !== 'touch') showAim(svg, e);
       // A move with no drag underway is either hover or a lost grip. Both are
@@ -367,6 +391,18 @@ export function PlayEditor() {
     lastDrop.current = at
       ? { ...drag.current, at: performance.now(), x: at.x, y: at.y }
       : null;
+
+    /*
+     * Contact that ended without travelling was a tap, so lift the player and
+     * let him follow the pen. Holding contact and dragging still works and ends
+     * here as it always did, which is what a finger does; this path is for a
+     * pen that cannot hold contact at all.
+     */
+    if (!drag.current.moved && tool === 'select') {
+      carry.current = { ...drag.current, at: performance.now() };
+      setCarrying(drag.current.id);
+      if (TRACING) trace(`            -> carrying ${byId(drag.current.id)?.label}`);
+    }
     drag.current = null;
     try {
       stageRef.current?.releasePointerCapture(e.pointerId);
@@ -494,6 +530,17 @@ export function PlayEditor() {
      * this, a bounce landing in open grass cleared the selection mid-drag.
      */
     const now = performance.now();
+
+    /*
+     * Carrying beats every other interpretation of a tap. The window guards
+     * against this pen's contact bounce dropping the player the instant it was
+     * picked up, since a bounce arrives 10 to 25ms after the tap that lifted it.
+     */
+    if (carry.current) {
+      if (now - carry.current.at > CHATTER_MS) dropCarried('tapped down');
+      return;
+    }
+
     const bounce = lastDrop.current;
     if (
       tool === 'select' &&
@@ -629,6 +676,7 @@ export function PlayEditor() {
   }
 
   function reset() {
+    dropCarried('reset');
     setPlayers(initialPlayers());
     setAssignments([]);
     setAnnotations([]);
@@ -690,7 +738,9 @@ export function PlayEditor() {
               player={p}
               selected={sel?.kind === 'player' && sel.id === p.id}
               hovered={p.id === hoverId}
-              pending={p.id === pending?.blockerId || p.id === pending?.targetId}
+              pending={
+                p.id === pending?.blockerId || p.id === pending?.targetId || p.id === carrying
+              }
             />
           ))}
 
