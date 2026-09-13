@@ -1,3 +1,5 @@
+import type { PathPoint } from '../domain/types';
+
 /** The visible window, in yards. Offense sits at the bottom driving up. */
 export const VIEW = {
   halfWidth: 11,
@@ -35,4 +37,43 @@ export function snap(value: number, step = 0.25): number {
 
 export function clamp(value: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, value));
+}
+
+/**
+ * Points to an SVG path. A point carrying a control point becomes a quadratic
+ * segment. Coordinates are trimmed because these strings go straight into
+ * exported SVG and PDF later.
+ */
+export function toPathD(points: PathPoint[]): string {
+  if (!points.length) return '';
+  const n = (v: number) => Number(v.toFixed(3));
+
+  let d = `M ${n(points[0].x)} ${n(points[0].y)}`;
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i];
+    d +=
+      p.cx !== undefined && p.cy !== undefined
+        ? ` Q ${n(p.cx)} ${n(p.cy)} ${n(p.x)} ${n(p.y)}`
+        : ` L ${n(p.x)} ${n(p.y)}`;
+  }
+  return d;
+}
+
+/**
+ * Direction of travel arriving at points[i], for placing a cap or an arrowhead.
+ * A curved segment is headed at by its control point, which is where the
+ * tangent actually comes from.
+ */
+export function headingInto(points: PathPoint[], i: number): Yards {
+  const p = points[i];
+  const prev = points[i - 1];
+  if (!p || !prev) return { x: 0, y: -1 };
+
+  const fromX = p.cx ?? prev.x;
+  const fromY = p.cy ?? prev.y;
+  const dx = p.x - fromX;
+  const dy = p.y - fromY;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return { x: 0, y: -1 };
+  return { x: dx / len, y: dy / len };
 }

@@ -1,22 +1,21 @@
-import type { PlayerSlot } from '../domain/types';
-
-// Sized so linemen at typical splits keep visible daylight between them.
-const R = 0.72;
+import { PLAYER_R as R, type PlayerSlot } from '../domain/types';
 
 interface Props {
   player: PlayerSlot;
   selected: boolean;
+  /** Picked as the blocker, waiting on a defender. */
+  pending?: boolean;
   onPointerDown: (e: React.PointerEvent, id: string) => void;
 }
 
-export function PlayerShape({ player, selected, onPointerDown }: Props) {
+export function PlayerShape({ player, selected, pending = false, onPointerDown }: Props) {
   const fill = player.side === 'offense' ? 'var(--off-fill)' : 'var(--def-fill)';
-  const stroke = selected
+  const stroke = selected || pending
     ? 'var(--select)'
     : player.side === 'offense'
       ? 'var(--off-line)'
       : 'var(--def-line)';
-  const sw = selected ? 0.22 : 0.14;
+  const sw = selected || pending ? 0.22 : 0.14;
 
   let body: React.ReactNode;
   switch (player.shape) {
@@ -56,6 +55,16 @@ export function PlayerShape({ player, selected, onPointerDown }: Props) {
     >
       {/* generous invisible hit area, a fingertip is about a yard and a half */}
       <circle r={R * 1.9} fill="transparent" />
+      {pending && (
+        <circle
+          r={R * 1.5}
+          fill="none"
+          stroke="var(--select)"
+          strokeWidth={0.11}
+          strokeDasharray="0.3 0.26"
+          pointerEvents="none"
+        />
+      )}
       {body}
       {player.shape !== 'x' && (
         <text

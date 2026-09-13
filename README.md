@@ -2,7 +2,28 @@
 
 Play designer for 7-man youth tackle football. Pen-first, offline-first, installable.
 
-## Stage 1 (current)
+## Stage 2 (current) — the blocking tool
+
+Tap the blocker, tap the defender. The tool stays armed, so every man after the
+first is two taps. Picking Block, Pull or Combo puts a front on the board if
+there is not one already, because there is nobody to block otherwise.
+
+- **Block** — straight line, T-cap on the defender.
+- **Pull** — drops off the line, runs flat behind it, turns up into the defender.
+- **Combo** — three taps: blocker, the down lineman he doubles, then the
+  second-level defender he climbs to. Caps both.
+- Tapping another offensive player mid-sequence restarts on him, which is how a
+  mis-tap gets fixed. Escape clears. One block per man: re-tapping a blocker
+  replaces his block rather than stacking a second one.
+- In Select mode, tap a block to select it. The inspector names it, converts
+  between base and pull, and deletes. Delete and Backspace work too.
+
+Blocks are stored as who-blocks-whom, not as fixed geometry, so dragging either
+the blocker or the defender redraws the line. Every waypoint scales to the
+distance actually travelled — a short pull bends tighter instead of kinking
+backwards past its own target.
+
+## Stage 1
 
 Field renderer, player placement, on-line detection, formation legality, computed hole numbering.
 
@@ -25,12 +46,15 @@ npm run dev
 looked at directly. Useful for checking geometry without running the app.
 
 ```
-npm install --no-save sharp
 npx esbuild scripts/preview.tsx --bundle --platform=node --format=cjs \
-  --jsx=automatic --outfile=/tmp/preview.cjs --external:react --external:react-dom
-node /tmp/preview.cjs            # offense only
-node /tmp/preview.cjs --defense  # with a front
+  --jsx=automatic --outfile=build/preview.cjs
+node build/preview.cjs            # offense only
+node build/preview.cjs --defense  # with a front
+node build/preview.cjs --blocks   # one of every block shape
 ```
+
+React has to be bundled in rather than left external, since the output lives
+outside the project and would not resolve `node_modules` from there.
 
 ## Deploy
 

@@ -1,11 +1,19 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { computeHoles } from '../domain/holes';
 import { applyOnLine, checkFormation, countOnLine } from '../domain/legality';
+import { describeBlock, makeBlock, refreshBlocks } from '../domain/presets/blocks';
 import { defaultDefense, defaultOffense } from '../domain/presets/formations';
-import { DEFAULT_SETTINGS, type PlayerSlot } from '../domain/types';
+import {
+  DEFAULT_SETTINGS,
+  isBlockKind,
+  type Assignment,
+  type PlayerSlot,
+} from '../domain/types';
+import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
 import { VIEW, VIEW_BOX, clamp, snap, toYards } from '../render/geometry';
+import { BlockTool, tapBlock, type Pending, type Tool } from './BlockTool';
 import { LegalityBadge } from './LegalityBadge';
 
 const settings = DEFAULT_SETTINGS;
@@ -15,9 +23,14 @@ function initialPlayers(): PlayerSlot[] {
   return applyOnLine(defaultOffense(), settings);
 }
 
+type Selection = { kind: 'player' | 'assignment'; id: string } | null;
+
 export function PlayEditor() {
   const [players, setPlayers] = useState<PlayerSlot[]>(initialPlayers);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [tool, setTool] = useState<Tool>('select');
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [sel, setSel] = useState<Selection>(null);
   const [showHoles, setShowHoles] = useState(true);
   const [showDefense, setShowDefense] = useState(false);
 
@@ -29,11 +42,20 @@ export function PlayEditor() {
     [players, showDefense],
   );
 
+  /**
+   * Blocks are stored as who-blocks-whom, so the geometry is rebuilt from the
+   * current positions rather than cached. Dragging either man redraws the line.
+   */
+  const drawn = useMemo(() => refreshBlocks(assignments, players), [assignments, players]);
+
   const holes = useMemo(() => computeHoles(players, settings), [players]);
   const issues = useMemo(() => checkFormation(players, settings), [players]);
   const onLine = countOnLine(players);
-  const selected = players.find((p) => p.id === selectedId) ?? null;
   const defenseExists = players.some((p) => p.side === 'defense');
+
+  const byId = (id: string | null | undefined) => players.find((p) => p.id === id) ?? null;
+  const selectedPlayer = sel?.kind === 'player' ? byId(sel.id) : null;
+  const selectedBlock = sel?.kind === 'assignment' ? drawn.find((a) => a.id === sel.id) : null;
 
   /** Backfield players sitting just behind the LOS would cover a hole number. */
   const occupied = useMemo(
@@ -44,27 +66,100 @@ export function PlayEditor() {
     [players],
   );
 
+  const hint = useMemo(() => {
+    if (tool === 'select') return '';
+    const blocker = byId(pending?.blockerId);
+    if (!blocker) return 'Tap a blocker';
+    if (tool === 'pull') return `Tap who ${blocker.label} pulls to`;
+    if (tool === 'combo') {
+      return pending?.targetId
+        ? `Tap who ${blocker.label} climbs to`
+        : `Tap the lineman ${blocker.label} doubles`;
+    }
+    return `Tap who ${blocker.label} blocks`;
+  }, [tool, pending, players]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setPending(null);
+        setSel(null);
+        return;
+      }
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      // Leave the label field alone.
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (sel?.kind !== 'assignment') return;
+      e.preventDefault();
+      deleteAssignment(sel.id);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sel]);
+
+  function handleTool(next: Tool) {
+    setPending(null);
+    setSel(null);
+    setTool(next);
+    // There is nobody to block without a front on the board.
+    if (next !== 'select' && !defenseExists) {
+      setPlayers((prev) => applyOnLine([...prev, ...defaultDefense()], settings));
+    }
+    if (next !== 'select') setShowDefense(true);
+  }
+
   function handleDefense() {
     if (!defenseExists) {
       setPlayers((prev) => applyOnLine([...prev, ...defaultDefense()], settings));
       setShowDefense(true);
       return;
     }
+    // Hiding the defense while blocking would leave nothing to tap.
+    if (showDefense && tool !== 'select') setTool('select');
     setShowDefense((v) => !v);
+  }
+
+  /** Tap-tap assignment. The tool stays armed so the next man is two taps away. */
+  function handleBlockTap(player: PlayerSlot) {
+    if (tool === 'select') return;
+    const step = tapBlock(tool, pending, player);
+    if (step.type === 'none') return;
+    if (step.type === 'pending') {
+      setPending(step.pending);
+      return;
+    }
+
+    const blocker = byId(step.blockerId);
+    const target = byId(step.targetId);
+    const climbTo = byId(step.climbToId);
+    setPending(null);
+    setSel(null);
+    if (!blocker || !target) return;
+
+    const next = makeBlock(tool, blocker, target, climbTo ?? undefined);
+    setAssignments((prev) => [
+      // One block per man. Re-tapping a blocker corrects him instead of stacking.
+      ...prev.filter((a) => !(a.playerId === blocker.id && isBlockKind(a.kind))),
+      next,
+    ]);
   }
 
   function handleDown(e: React.PointerEvent, id: string) {
     const svg = svgRef.current;
-    if (!svg) return;
-    const p = players.find((q) => q.id === id);
-    if (!p) return;
+    const p = byId(id);
+    if (!svg || !p) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (tool !== 'select') {
+      handleBlockTap(p);
+      return;
+    }
 
     const at = toYards(svg, e.clientX, e.clientY);
     drag.current = { id, dx: p.x - at.x, dy: p.y - at.y };
-    setSelectedId(id);
+    setSel({ kind: 'player', id });
     svg.setPointerCapture(e.pointerId);
-    e.stopPropagation();
-    e.preventDefault();
   }
 
   function handleMove(e: React.PointerEvent) {
@@ -91,30 +186,59 @@ export function PlayEditor() {
     svgRef.current?.releasePointerCapture(e.pointerId);
   }
 
+  function handleStageDown() {
+    setSel(null);
+    setPending(null);
+  }
+
+  function selectAssignment(e: React.PointerEvent, id: string) {
+    e.stopPropagation();
+    setSel({ kind: 'assignment', id });
+  }
+
+  function deleteAssignment(id: string) {
+    setAssignments((prev) => prev.filter((a) => a.id !== id));
+    setSel(null);
+  }
+
+  /** A base block and a pull differ only in the path, so the swap is free. */
+  function retype(id: string, kind: 'block' | 'pull') {
+    setAssignments((prev) => prev.map((a) => (a.id === id ? { ...a, kind } : a)));
+  }
+
   function toggleOnLine() {
-    if (!selected) return;
+    if (!selectedPlayer) return;
     setPlayers((prev) =>
       prev.map((p) =>
-        p.id === selected.id ? { ...p, onLine: !p.onLine, onLineLocked: true } : p,
+        p.id === selectedPlayer.id ? { ...p, onLine: !p.onLine, onLineLocked: true } : p,
       ),
     );
   }
 
   function releaseLock() {
-    if (!selected) return;
+    if (!selectedPlayer) return;
     setPlayers((prev) =>
       applyOnLine(
-        prev.map((p) => (p.id === selected.id ? { ...p, onLineLocked: false } : p)),
+        prev.map((p) => (p.id === selectedPlayer.id ? { ...p, onLineLocked: false } : p)),
         settings,
       ),
     );
   }
 
   function rename(label: string) {
-    if (!selected) return;
+    if (!selectedPlayer) return;
     setPlayers((prev) =>
-      prev.map((p) => (p.id === selected.id ? { ...p, label: label.slice(0, 3) } : p)),
+      prev.map((p) => (p.id === selectedPlayer.id ? { ...p, label: label.slice(0, 3) } : p)),
     );
+  }
+
+  function reset() {
+    setPlayers(initialPlayers());
+    setAssignments([]);
+    setSel(null);
+    setPending(null);
+    setTool('select');
+    setShowDefense(false);
   }
 
   return (
@@ -132,20 +256,43 @@ export function PlayEditor() {
           onPointerMove={handleMove}
           onPointerUp={handleUp}
           onPointerCancel={handleUp}
-          onPointerDown={() => setSelectedId(null)}
+          onPointerDown={handleStageDown}
           style={{ touchAction: 'none' }}
         >
           <Field holes={holes} showHoles={showHoles} occupied={occupied} />
+
+          {drawn.map((a) => (
+            <AssignmentPath
+              key={a.id}
+              assignment={a}
+              selected={sel?.kind === 'assignment' && sel.id === a.id}
+              onSelect={tool === 'select' ? selectAssignment : undefined}
+            />
+          ))}
+
           {visible.map((p) => (
             <PlayerShape
               key={p.id}
               player={p}
-              selected={p.id === selectedId}
+              selected={sel?.kind === 'player' && sel.id === p.id}
+              pending={p.id === pending?.blockerId || p.id === pending?.targetId}
               onPointerDown={handleDown}
             />
           ))}
         </svg>
       </div>
+
+      <BlockTool
+        tool={tool}
+        onTool={handleTool}
+        hint={hint}
+        blockCount={drawn.length}
+        onClear={() => {
+          setAssignments([]);
+          setSel(null);
+          setPending(null);
+        }}
+      />
 
       <div className="tools">
         <button aria-pressed={showHoles} onClick={() => setShowHoles((v) => !v)}>
@@ -154,35 +301,56 @@ export function PlayEditor() {
         <button aria-pressed={showDefense} onClick={handleDefense}>
           {defenseExists ? 'Defense' : 'Add defense'}
         </button>
-        <button
-          onClick={() => {
-            setPlayers(initialPlayers());
-            setSelectedId(null);
-            setShowDefense(false);
-          }}
-        >
-          Reset
-        </button>
+        <button onClick={reset}>Reset</button>
       </div>
 
-      {selected && (
+      {selectedBlock && (
+        <div className="inspector">
+          <div className="row">
+            <strong>{describeBlock(selectedBlock, players)}</strong>
+          </div>
+          <div className="row">
+            {selectedBlock.kind !== 'combo' && (
+              <>
+                <button
+                  aria-pressed={selectedBlock.kind === 'block'}
+                  onClick={() => retype(selectedBlock.id, 'block')}
+                >
+                  Base
+                </button>
+                <button
+                  aria-pressed={selectedBlock.kind === 'pull'}
+                  onClick={() => retype(selectedBlock.id, 'pull')}
+                >
+                  Pull
+                </button>
+              </>
+            )}
+            <button className="quiet" onClick={() => deleteAssignment(selectedBlock.id)}>
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+
+      {selectedPlayer && (
         <div className="inspector">
           <label>
             <span>Label</span>
             <input
-              value={selected.label}
+              value={selectedPlayer.label}
               onChange={(e) => rename(e.target.value)}
               maxLength={3}
               spellCheck={false}
             />
           </label>
 
-          {selected.side === 'offense' && (
+          {selectedPlayer.side === 'offense' && (
             <div className="row">
-              <button aria-pressed={selected.onLine} onClick={toggleOnLine}>
-                {selected.onLine ? 'On the line' : 'In the backfield'}
+              <button aria-pressed={selectedPlayer.onLine} onClick={toggleOnLine}>
+                {selectedPlayer.onLine ? 'On the line' : 'In the backfield'}
               </button>
-              {selected.onLineLocked && (
+              {selectedPlayer.onLineLocked && (
                 <button className="quiet" onClick={releaseLock}>
                   Back to auto
                 </button>
@@ -191,8 +359,9 @@ export function PlayEditor() {
           )}
 
           <div className="pos">
-            {selected.x.toFixed(2)} yd across, {selected.y.toFixed(2)} yd from the line
-            {selected.backNumber ? ` · back ${selected.backNumber}` : ''}
+            {selectedPlayer.x.toFixed(2)} yd across, {selectedPlayer.y.toFixed(2)} yd from the
+            line
+            {selectedPlayer.backNumber ? ` · back ${selectedPlayer.backNumber}` : ''}
           </div>
         </div>
       )}

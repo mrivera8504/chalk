@@ -51,3 +51,45 @@ export const DEFAULT_SETTINGS: Settings = {
   fieldLengthYards: 70,
   onLineToleranceYards: 1,
 };
+
+/** Radius of a player mark, in yards. Blocking geometry starts at the edge. */
+export const PLAYER_R = 0.72;
+
+export type AssignmentKind =
+  | 'route' // solid, arrowhead
+  | 'block' // solid, T-cap on the defender
+  | 'combo' // T-cap on a down lineman, then climb to a second defender
+  | 'pull' // curved behind the line, T-cap
+  | 'carry' // wavy, ball carrier
+  | 'motion' // dashed, pre-snap
+  | 'option' // dotted
+  | 'stay'; // nothing drawn
+
+/** A quadratic control point turns the segment leading into this point into a curve. */
+export interface PathPoint {
+  x: number;
+  y: number;
+  cx?: number;
+  cy?: number;
+}
+
+export interface Assignment {
+  id: string;
+  playerId: string;
+  kind: AssignmentKind;
+  /** Yards. Regenerated from the players it references whenever either moves. */
+  path: PathPoint[];
+  targetPlayerId?: string;
+  climbToPlayerId?: string;
+  preset?: string;
+  /** null means derive from the kind. */
+  color?: string;
+}
+
+/** Kinds the block tool produces: all defined by a blocker and a defender. */
+export const BLOCK_KINDS = ['block', 'pull', 'combo'] as const;
+export type BlockKind = (typeof BLOCK_KINDS)[number];
+
+export function isBlockKind(kind: AssignmentKind): kind is BlockKind {
+  return (BLOCK_KINDS as readonly string[]).includes(kind);
+}
