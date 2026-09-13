@@ -280,29 +280,6 @@ export function PlayEditor() {
             />
           ))}
         </svg>
-      </div>
-
-      <BlockTool
-        tool={tool}
-        onTool={handleTool}
-        hint={hint}
-        blockCount={drawn.length}
-        onClear={() => {
-          setAssignments([]);
-          setSel(null);
-          setPending(null);
-        }}
-      />
-
-      <div className="tools">
-        <button aria-pressed={showHoles} onClick={() => setShowHoles((v) => !v)}>
-          Holes
-        </button>
-        <button aria-pressed={showDefense} onClick={handleDefense}>
-          {defenseExists ? 'Defense' : 'Add defense'}
-        </button>
-        <button onClick={reset}>Reset</button>
-      </div>
 
       {selectedBlock && (
         <div className="inspector">
@@ -365,6 +342,30 @@ export function PlayEditor() {
           </div>
         </div>
       )}
+      </div>
+
+      <BlockTool
+        tool={tool}
+        onTool={handleTool}
+        hint={hint}
+        blockCount={drawn.length}
+        onClear={() => {
+          setAssignments([]);
+          setSel(null);
+          setPending(null);
+        }}
+      />
+
+      <div className="tools">
+        <button aria-pressed={showHoles} onClick={() => setShowHoles((v) => !v)}>
+          Holes
+        </button>
+        <button aria-pressed={showDefense} onClick={handleDefense}>
+          {defenseExists ? 'Defense' : 'Add defense'}
+        </button>
+        <button onClick={reset}>Reset</button>
+      </div>
+
     </div>
   );
 }

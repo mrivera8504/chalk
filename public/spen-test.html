@@ -371,8 +371,11 @@
     schedule();
     e.preventDefault();
   }
-  stage.addEventListener('pointermove', onMove);
+  // One or the other, never both. With raw updates registered alongside
+  // pointermove every sample was handled twice, which inflated the point count
+  // and the latency this page exists to measure.
   if (hasRaw) stage.addEventListener('pointerrawupdate', onMove);
+  else stage.addEventListener('pointermove', onMove);
 
   var queued = false;
   function schedule() {

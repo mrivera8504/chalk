@@ -135,9 +135,23 @@ body,
   display: block;
 }
 
-.blocktool,
-.inspector {
+.blocktool {
   flex: 0 0 auto;
+}
+
+/*
+ * Floats over the board rather than sitting below it. As a flex sibling it
+ * changed .stage's height every time something was selected, which rescaled the
+ * whole field and moved it out from under the pen mid-drag.
+ */
+.stage .inspector {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(6px);
 }
 
 /* Wraps rather than scrolls: a tool you cannot see is a tool you will not use. */
@@ -159,11 +173,15 @@ body,
   border-top: 0;
 }
 
+/* Height is reserved whether or not there is a hint, for the same reason. */
 .hint {
   padding: 0 12px 8px;
   background: var(--panel);
   font-size: 11.5px;
+  line-height: 1.4;
+  min-height: 24px;
   color: var(--select);
+  white-space: pre;
 }
 
 button {

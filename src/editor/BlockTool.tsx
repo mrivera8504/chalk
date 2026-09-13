@@ -77,7 +77,8 @@ export function BlockTool({ tool, onTool, hint, blockCount, onClear }: Props) {
           </button>
         )}
       </div>
-      {hint && <div className="hint">{hint}</div>}
+      {/* Always rendered. Letting it mount and unmount would resize the board. */}
+      <div className="hint">{hint || '\u00a0'}</div>
     </div>
   );
 }
