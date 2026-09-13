@@ -71,11 +71,15 @@ export function PlayEditor() {
   const [sel, setSel] = useState<Selection>(null);
   const [showHoles, setShowHoles] = useState(true);
   const [showDefense, setShowDefense] = useState(false);
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const drag = useRef<DragState | null>(null);
   const moveCount = useRef(0);
+  const aimRef = useRef<SVGGElement>(null);
+  const ringRef = useRef<SVGCircleElement>(null);
+  const hoverRef = useRef<string | null>(null);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
@@ -195,10 +199,46 @@ export function PlayEditor() {
     ]);
   }
 
+  /**
+   * The pen hovers before it touches down, and the trace showed contact landing
+   * two to three yards from where it had been hovering. With no feedback there
+   * is no way to see that offset, let alone correct for it, so aim is guesswork.
+   * Draw the tip, the reach around it, and ring whoever a press would pick up.
+   *
+   * Written straight to the DOM rather than through state: hover moves arrive
+   * far faster than React should re-render. Only the ringed player, which
+   * changes rarely, goes through state.
+   */
+  function showAim(svg: SVGSVGElement, e: React.PointerEvent) {
+    const at = toYards(svg, e.clientX, e.clientY);
+    const radius = pickRadius(svg);
+
+    aimRef.current?.setAttribute('transform', `translate(${at.x.toFixed(2)} ${at.y.toFixed(2)})`);
+    aimRef.current?.setAttribute('opacity', '1');
+    ringRef.current?.setAttribute('r', radius.toFixed(2));
+
+    const id = nearestPlayer(visible, at, radius)?.id ?? null;
+    if (id !== hoverRef.current) {
+      hoverRef.current = id;
+      setHoverId(id);
+    }
+  }
+
+  function clearAim() {
+    aimRef.current?.setAttribute('opacity', '0');
+    if (hoverRef.current !== null) {
+      hoverRef.current = null;
+      setHoverId(null);
+    }
+  }
+
   function handleMove(e: React.PointerEvent) {
     const d = drag.current;
     const svg = svgRef.current;
-    if (!d || !svg) {
+    if (!svg) return;
+    if (!d) {
+      // Touch has no hover, so there is nothing to preview for a finger.
+      if (e.pointerType !== 'touch') showAim(svg, e);
       // A move with no drag underway is either hover or a lost grip. Both are
       // worth seeing, but only occasionally, or the log is nothing else.
       if (TRACING && e.pointerType === 'pen' && moveCount.current++ % 25 === 0) {
@@ -262,6 +302,7 @@ export function PlayEditor() {
     e.preventDefault();
 
     const at = toYards(svg, e.clientX, e.clientY);
+    clearAim();
 
     /*
      * The S Pen breaks contact constantly. Traced on a Galaxy Ultra, one
@@ -418,6 +459,7 @@ export function PlayEditor() {
         onPointerMove={handleMove}
         onPointerUp={handleUp}
         onPointerCancel={handleUp}
+        onPointerLeave={clearAim}
       >
         <svg ref={svgRef} viewBox={VIEW_BOX} preserveAspectRatio="xMidYMid meet">
           <Field holes={holes} showHoles={showHoles} occupied={occupied} />
@@ -436,9 +478,29 @@ export function PlayEditor() {
               key={p.id}
               player={p}
               selected={sel?.kind === 'player' && sel.id === p.id}
+              hovered={p.id === hoverId}
               pending={p.id === pending?.blockerId || p.id === pending?.targetId}
             />
           ))}
+
+          {/* Above the players, so the tip is never hidden under a mark. */}
+          <g ref={aimRef} opacity="0" pointerEvents="none">
+            <circle
+              ref={ringRef}
+              r={1.8}
+              fill="none"
+              stroke="var(--hover)"
+              strokeWidth={0.07}
+              strokeDasharray="0.34 0.3"
+              opacity={0.45}
+            />
+            <g stroke="var(--hover)" strokeWidth={0.1} strokeLinecap="round">
+              <line x1={-0.55} x2={-0.16} y1={0} y2={0} />
+              <line x1={0.16} x2={0.55} y1={0} y2={0} />
+              <line x1={0} x2={0} y1={-0.55} y2={-0.16} />
+              <line x1={0} x2={0} y1={0.16} y2={0.55} />
+            </g>
+          </g>
         </svg>
 
       {selectedBlock && (

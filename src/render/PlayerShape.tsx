@@ -5,9 +5,11 @@ interface Props {
   selected: boolean;
   /** Picked as the blocker, waiting on a defender. */
   pending?: boolean;
+  /** The pen is hovering close enough that a press would land on this one. */
+  hovered?: boolean;
 }
 
-export function PlayerShape({ player, selected, pending = false }: Props) {
+export function PlayerShape({ player, selected, pending = false, hovered = false }: Props) {
   const fill = player.side === 'offense' ? 'var(--off-fill)' : 'var(--def-fill)';
   const stroke = selected || pending
     ? 'var(--select)'
@@ -50,6 +52,16 @@ export function PlayerShape({ player, selected, pending = false }: Props) {
     /* No pointer handler and no hit area: the stage hit-tests by proximity, so
        a pen does not have to land exactly on the mark. See nearestPlayer. */
     <g transform={`translate(${player.x} ${player.y})`} style={{ cursor: 'grab' }}>
+      {/* Says, before the pen touches down, who a press would actually pick up. */}
+      {hovered && !selected && (
+        <circle
+          r={R * 1.4}
+          fill="none"
+          stroke="var(--hover)"
+          strokeWidth={0.13}
+          pointerEvents="none"
+        />
+      )}
       {pending && (
         <circle
           r={R * 1.5}
