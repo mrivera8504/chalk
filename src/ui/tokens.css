@@ -165,6 +165,7 @@ body,
  */
 .stage .inspector {
   position: absolute;
+  touch-action: manipulation;
   left: 0;
   right: 0;
   max-height: 70%;
@@ -222,7 +223,7 @@ body,
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(320px, 85%);
+  width: min(300px, 58%);
   transform: translateX(100%);
   transition: transform 180ms ease;
   pointer-events: auto;
@@ -264,7 +265,7 @@ body,
 }
 
 .drawer.left.open .drawer-tab {
-  left: min(320px, 85%);
+  left: min(300px, 58%);
 }
 
 /*
@@ -279,8 +280,15 @@ body,
   transform: translateY(-50%);
   transition: right 180ms ease;
   pointer-events: auto;
-  width: 34px;
-  min-height: 68px;
+  /*
+   * Wide enough for a stylus. Chrome applies touch adjustment to a finger but
+   * hit-tests a pen at the exact pixel, so the 34px this used to be was a
+   * target a finger found first time and a pen kept missing.
+   */
+  width: 52px;
+  min-height: 96px;
+  /* .stage sets touch-action: none, which this must not inherit. */
+  touch-action: manipulation;
   padding: 0;
   display: flex;
   align-items: center;
@@ -294,7 +302,7 @@ body,
 }
 
 .drawer.open .drawer-tab {
-  right: min(320px, 85%);
+  right: min(300px, 58%);
 }
 
 .drawer-head {
@@ -433,8 +441,9 @@ body,
 
 .quick-bar .quick {
   pointer-events: auto;
-  min-width: 44px;
-  min-height: 40px;
+  min-width: 46px;
+  min-height: 44px;
+  touch-action: manipulation;
   padding: 8px 12px;
   font-size: 13px;
   border-radius: 10px;

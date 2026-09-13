@@ -181,6 +181,26 @@ custom properties do resolve inside a rasterized SVG.
 big-print player cards, and the whole playbook in folder order. Every play is
 rasterized and embedded **once** per document.
 
+## Why buttons needed a hard press
+
+The board listens to `pointerdown`, which this digitizer fires reliably. A
+`<button>` does not: it waits for the click the browser synthesizes from a
+well-formed down/up pair, and a light pen tap here is 3-5ms of contact broken
+into a burst of pairs, which often produces no click at all. A finger holds
+contact and always worked, so this read as "the pen needs a hard press".
+
+`ui/penTaps.ts` installs one global listener: a pen tap that starts and ends on
+the same button gets 150ms for the browser to fire its own click, and only if
+none arrives does it click the button itself. Guarded against contact bounce the
+same way the board is, so one press stays one press. Verified all three cases —
+no click at all, a real click (fires once, not twice), and a four-pair bounce
+burst (once).
+
+The other half was size: the drawer tab was 34px, and Chrome hit-tests a stylus
+at the exact pixel while giving a finger touch adjustment. Anything floating
+over the board also needs `touch-action: manipulation`, because `.stage` sets
+`none` and it inherits.
+
 ## Debugging input
 
 `?trace` on any URL opens a pointer trace: every event plus the decision the

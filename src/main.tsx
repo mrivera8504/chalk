@@ -2,6 +2,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import './ui/tokens.css';
+import { installPenTaps } from './ui/penTaps';
+
+// Before anything renders, so the first tap on the first button already works.
+installPenTaps();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
