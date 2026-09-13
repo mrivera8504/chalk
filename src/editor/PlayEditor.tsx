@@ -12,7 +12,16 @@ import {
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
-import { VIEW, VIEW_BOX, clamp, nearestPlayer, pickRadius, snap, toYards } from '../render/geometry';
+import {
+  VIEW,
+  VIEW_BOX,
+  clamp,
+  nearestPlayer,
+  pickRadius,
+  pxToYards,
+  snap,
+  toYards,
+} from '../render/geometry';
 import { BlockTool, tapBlock, type Pending, type Tool } from './BlockTool';
 import { TracePanel } from './TracePanel';
 import { TRACING, describeEvent, trace } from './trace';
@@ -27,12 +36,32 @@ const settings = DEFAULT_SETTINGS;
 const CHATTER_MS = 120;
 const CHATTER_YARDS = 2.5;
 
+/*
+ * A pen wobbles while it is in contact, so without a threshold every tap drags
+ * the player a little. In the device trace a 103ms tap moved a guard more than
+ * a yard and a half, far enough that the next tap at the same spot found empty
+ * grass. Nothing moves until the pen has travelled this far, in screen pixels.
+ */
+const DRAG_SLOP_PX = 12;
+
 /** Offense only. The defense goes on the board when it is asked for. */
 function initialPlayers(): PlayerSlot[] {
   return applyOnLine(defaultOffense(), settings);
 }
 
 type Selection = { kind: 'player' | 'assignment'; id: string } | null;
+
+interface DragState {
+  id: string;
+  /** Grab offset, so the mark keeps its position relative to the pen. */
+  dx: number;
+  dy: number;
+  /** Where the grab began, for measuring travel against the slop. */
+  ox: number;
+  oy: number;
+  /** True once the pen has travelled far enough that this is a drag, not a tap. */
+  moved: boolean;
+}
 
 export function PlayEditor() {
   const [players, setPlayers] = useState<PlayerSlot[]>(initialPlayers);
@@ -45,17 +74,10 @@ export function PlayEditor() {
 
   const svgRef = useRef<SVGSVGElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const drag = useRef<DragState | null>(null);
   const moveCount = useRef(0);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
-  const lastDrop = useRef<{
-    id: string;
-    dx: number;
-    dy: number;
-    at: number;
-    x: number;
-    y: number;
-  } | null>(null);
+  const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
   const visible = useMemo(
     () => (showDefense ? players : players.filter((p) => p.side === 'offense')),
@@ -186,6 +208,14 @@ export function PlayEditor() {
     }
 
     const at = toYards(svg, e.clientX, e.clientY);
+
+    // Still a tap until the pen has travelled past the slop. Selecting a player
+    // must never nudge him.
+    if (!d.moved) {
+      if (Math.hypot(at.x - d.ox, at.y - d.oy) < pxToYards(svg, DRAG_SLOP_PX)) return;
+      d.moved = true;
+    }
+
     const x = clamp(snap(at.x + d.dx), -VIEW.halfWidth + 1, VIEW.halfWidth - 1);
     const y = clamp(snap(at.y + d.dy), -VIEW.downfield + 1, VIEW.behind - 1);
 
@@ -258,7 +288,16 @@ export function PlayEditor() {
          * stale. Keeping the offset also means the player tracks the pen
          * across the break, which is what a continuing gesture should do.
          */
-        drag.current = { id: bounce.id, dx: bounce.dx, dy: bounce.dy };
+        // Keep the original grab point too, so the slop is measured across the
+        // whole gesture rather than restarting at every bounce.
+        drag.current = {
+          id: bounce.id,
+          dx: bounce.dx,
+          dy: bounce.dy,
+          ox: bounce.ox,
+          oy: bounce.oy,
+          moved: bounce.moved,
+        };
         setSel({ kind: 'player', id: held.id });
         try {
           stageRef.current?.setPointerCapture(e.pointerId);
@@ -298,7 +337,7 @@ export function PlayEditor() {
       return;
     }
 
-    drag.current = { id: p.id, dx: p.x - at.x, dy: p.y - at.y };
+    drag.current = { id: p.id, dx: p.x - at.x, dy: p.y - at.y, ox: at.x, oy: at.y, moved: false };
     setSel({ kind: 'player', id: p.id });
     // Capture can throw if the pointer is already gone. The drag survives
     // without it, because every move bubbles back to this same element.

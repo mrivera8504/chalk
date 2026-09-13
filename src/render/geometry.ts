@@ -81,15 +81,20 @@ export function headingInto(points: PathPoint[], i: number): Yards {
 /** Minimum slop around a player mark, in screen pixels, at any board scale. */
 const PICK_PX = 26;
 
+/** Screen pixels to yards at whatever scale the board is currently drawn. */
+export function pxToYards(svg: SVGSVGElement, px: number): number {
+  const ctm = svg.getScreenCTM();
+  const perYard = ctm ? Math.abs(ctm.a) : 20;
+  return px / perYard;
+}
+
 /**
  * How close a tap has to land, in yards. Derived from the live screen scale so
  * the target stays the same physical size whether the board is drawn on a phone
  * or a tablet.
  */
 export function pickRadius(svg: SVGSVGElement): number {
-  const ctm = svg.getScreenCTM();
-  const perYard = ctm ? Math.abs(ctm.a) : 20;
-  return Math.max(1.1, PICK_PX / perYard);
+  return Math.max(1.1, pxToYards(svg, PICK_PX));
 }
 
 /**
