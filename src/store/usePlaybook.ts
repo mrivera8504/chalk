@@ -4,6 +4,7 @@ import { withSuggestion } from '../domain/naming';
 import { foundationOffense } from '../domain/presets/formations';
 import { UNFILED_SECTION, type Play, type Section } from '../domain/types';
 import { getSettings } from './settings';
+import { makeBackup, readBackup } from './backup';
 import { EMPTY, pullFromCloud, pushToCloud, readLocal, writeLocal, type SyncState } from './sync';
 
 const AUTOSAVE_MS = 800;
@@ -168,10 +169,27 @@ export function usePlaybook() {
     setSync(await pushToCloud({ plays, sections }));
   }, [plays, sections]);
 
+  /**
+   * The backup file. Covers everything in local storage, not just the plays —
+   * see store/backup.ts for why that distinction matters here.
+   */
   const exportJson = useCallback(
-    () => JSON.stringify({ plays, sections, exportedAt: Date.now() }, null, 2),
+    () => JSON.stringify(makeBackup({ plays, sections }), null, 2),
     [plays, sections],
   );
+
+  /**
+   * Put a backup back. Replaces rather than merges, because two copies of a
+   * playbook with the same play ids is a worse place to be than either copy.
+   * Returns what came back so the caller can say so out loud.
+   */
+  const importJson = useCallback((text: string) => {
+    const { book, counts } = readBackup(text);
+    setPlays(book.plays);
+    setSections(book.sections);
+    writeLocal(book);
+    return counts;
+  }, []);
 
   return {
     plays,
@@ -187,6 +205,7 @@ export function usePlaybook() {
     deleteSection,
     movePlay,
     exportJson,
+    importJson,
     reset: () => {
       setPlays(EMPTY.plays);
       setSections(EMPTY.sections);

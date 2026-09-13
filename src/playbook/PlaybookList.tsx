@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { ExportPanel } from '../export/ExportPanel';
 import { AccountPanel } from './AccountPanel';
+import { RosterPanel } from './RosterPanel';
+import { readRoster, type RosterEntry } from '../domain/roster';
 import { useInstallPrompt } from '../store/install';
 import { UNFILED_SECTION, type Play, type Section } from '../domain/types';
 import type { SyncState } from '../store/sync';
@@ -20,6 +22,8 @@ interface Props {
   onSetSection: (id: string, sectionId: string) => void;
   onMovePlay: (id: string, toIndex: number) => void;
   onExport: () => void;
+  /** Put a backup file back. Throws with something readable if it is not one. */
+  onRestore: (text: string) => void;
   onSaveNow: () => Promise<void>;
 }
 
@@ -51,12 +55,15 @@ export function PlaybookList({
   onSetSection,
   onMovePlay,
   onExport,
+  onRestore,
   onSaveNow,
 }: Props) {
   const [query, setQuery] = useState('');
   const [dragging, setDragging] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [account, setAccount] = useState(false);
+  const [rostering, setRostering] = useState(false);
+  const [roster, setRoster] = useState<RosterEntry[]>(readRoster);
   const install = useInstallPrompt();
 
   /** Name, suggested name, tags and notes all match, because coaches search by feel. */
@@ -142,22 +149,33 @@ export function PlaybookList({
         <button className="quiet" onClick={addSection}>
           Add folder
         </button>
-        {plays.length > 0 && (
-          <button
-            className="quiet"
-            onClick={() => {
-              setAccount(false);
-              setExporting((v) => !v);
-            }}
-            aria-pressed={exporting}
-          >
-            Export
-          </button>
-        )}
         <button
           className="quiet"
           onClick={() => {
             setExporting(false);
+            setAccount(false);
+            setRostering((v) => !v);
+          }}
+          aria-pressed={rostering}
+        >
+          Roster{roster.length ? ` · ${roster.length}` : ''}
+        </button>
+        <button
+          className="quiet"
+          onClick={() => {
+            setAccount(false);
+            setRostering(false);
+            setExporting((v) => !v);
+          }}
+          aria-pressed={exporting}
+        >
+          Export
+        </button>
+        <button
+          className="quiet"
+          onClick={() => {
+            setExporting(false);
+            setRostering(false);
             setAccount((v) => !v);
           }}
           aria-pressed={account}
@@ -174,11 +192,21 @@ export function PlaybookList({
 
       {account && <AccountPanel onSaveNow={onSaveNow} onClose={() => setAccount(false)} />}
 
+      {rostering && (
+        <RosterPanel
+          roster={roster}
+          onChange={setRoster}
+          onClose={() => setRostering(false)}
+        />
+      )}
+
       {exporting && (
         <ExportPanel
           plays={matches}
           sections={sections}
+          roster={roster}
           onJson={onExport}
+          onRestore={onRestore}
           onClose={() => setExporting(false)}
         />
       )}

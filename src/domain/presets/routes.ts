@@ -1,7 +1,7 @@
-import type { PathPoint, PlayerSlot } from '../types';
+import type { Hand, PathPoint, PlayerSlot } from '../types';
 
 /** Which way the concept runs. Every preset is written right and mirrored. */
-export type Hand = 'right' | 'left';
+export type { Hand };
 
 export interface RoutePreset {
   id: string;
@@ -15,6 +15,14 @@ export interface RoutePreset {
    * other concept means toward the wide side.
    */
   hand?: Hand;
+  /**
+   * The concept to run when this one is flipped. Only forced-hand presets need
+   * it: everything else flips by being regenerated with the other hand, but
+   * 'All the way right' aims at an absolute sideline, so running it the other
+   * way means running its twin rather than mirroring its shape under a name
+   * that would then say the wrong thing.
+   */
+  flipId?: string;
   /** Saved by the user rather than shipped. Shown apart, and deletable. */
   custom?: boolean;
   shape: (start: PlayerSlot, hand: Hand) => PathPoint[];
@@ -258,6 +266,7 @@ ROUTES.push(
     group: 'run',
     carry: true,
     hand: 'right',
+    flipId: 'wide-left',
     shape: wideRun(1),
   },
   {
@@ -266,6 +275,7 @@ ROUTES.push(
     group: 'run',
     carry: true,
     hand: 'left',
+    flipId: 'wide-right',
     shape: wideRun(-1),
   },
 );
@@ -343,6 +353,9 @@ export function toPreset(route: CustomRoute): RoutePreset {
 }
 
 export const routeById = (id: string) => ROUTES.find((r) => r.id === id) ?? null;
+
+/** The other way round. 'right' and 'left' are the only two. */
+export const otherHand = (h: Hand): Hand => (h === 'right' ? 'left' : 'right');
 
 /** Which way a player naturally runs a concept: toward the wide side. */
 export function naturalHand(p: PlayerSlot): Hand {

@@ -10,6 +10,16 @@ interface Props {
   onPick: (preset: RoutePreset) => void;
   onDeleteCustom: (id: string) => void;
   onClear: (() => void) | null;
+  /** Run the same thing to the other side. Only there once he has a route. */
+  onFlip: (() => void) | null;
+  /** Starred as the man getting the ball. */
+  hasBall: boolean;
+  onGiveBall: () => void;
+  /** The palette, and the colour his route is wearing. Undefined means auto. */
+  swatches: readonly string[];
+  color?: string;
+  /** Null until he has a route: there is nothing to paint before that. */
+  onColor: ((color: string | undefined) => void) | null;
 }
 
 function Group({
@@ -69,18 +79,73 @@ export function RoutePicker({
   onPick,
   onDeleteCustom,
   onClear,
+  onFlip,
+  hasBall,
+  onGiveBall,
+  swatches,
+  color,
+  onColor,
 }: Props) {
   return (
     <div className="route-picker">
+      {/*
+        * Everything about this man that is decided while looking at him: what
+        * he runs, which way he runs it, and whether he is the one getting the
+        * ball. All three are the same thought, and splitting them across the
+        * board and the drawer made it two trips.
+        */}
       <div className="picker-head">
         <strong>{player.label}</strong>
         <span>runs</span>
+        <button
+          className={hasBall ? 'ball on' : 'ball'}
+          aria-pressed={hasBall}
+          aria-label={hasBall ? `${player.label} is not getting the ball` : `${player.label} gets the ball`}
+          onClick={onGiveBall}
+        >
+          ★ Ball
+        </button>
+        {onFlip && (
+          <button onClick={onFlip} aria-label="Run it to the other side">
+            ⇄ Flip
+          </button>
+        )}
         {onClear && (
           <button className="quiet" onClick={onClear}>
             No route
           </button>
         )}
       </div>
+
+      {/*
+        * His route's colour, here rather than behind the Move tool.
+        *
+        * Recolouring used to mean leaving Routes, switching to Move, and
+        * finding the line itself under the man standing on it — three steps
+        * away from the man whose route it is, when picking a receiver and
+        * saying what he runs is one thought.
+        */}
+      {onColor && (
+        <div className="picker-group">
+          <div className="picker-row swatches">
+            {swatches.map((c) => (
+              <button
+                key={c}
+                className="swatch"
+                style={{ background: c }}
+                aria-label={`Colour ${c}`}
+                aria-pressed={color === c}
+                onClick={() => onColor(c)}
+              />
+            ))}
+            {color !== undefined && (
+              <button className="quiet" onClick={() => onColor(undefined)}>
+                Auto
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <Group title="Pass" routes={ROUTES.filter((r) => r.group === 'pass')} onPick={onPick} />
       <Group title="Run" routes={ROUTES.filter((r) => r.group === 'run')} onPick={onPick} />

@@ -7,9 +7,35 @@ interface Props {
   pending?: boolean;
   /** The pen is hovering close enough that a press would land on this one. */
   hovered?: boolean;
+  /** Starred as the man getting the ball. */
+  ball?: boolean;
 }
 
-export function PlayerShape({ player, selected, pending = false, hovered = false }: Props) {
+/**
+ * A five-pointed star, in yards, centred on the origin.
+ *
+ * Drawn rather than typed as a glyph: a text star renders in whatever font the
+ * device happens to have, and this same component is serialized into an export
+ * that carries no fonts with it at all.
+ */
+function starPoints(r: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 ? r * 0.42 : r;
+    // Start at the top, so the point sits upright rather than on its side.
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    pts.push(`${(Math.cos(a) * rad).toFixed(3)},${(Math.sin(a) * rad).toFixed(3)}`);
+  }
+  return pts.join(' ');
+}
+
+export function PlayerShape({
+  player,
+  selected,
+  pending = false,
+  hovered = false,
+  ball = false,
+}: Props) {
   const fill = player.side === 'offense' ? 'var(--off-fill)' : 'var(--def-fill)';
   const stroke = selected || pending
     ? 'var(--select)'
@@ -87,6 +113,40 @@ export function PlayerShape({ player, selected, pending = false, hovered = false
       )}
       {player.onLineLocked && player.side === 'offense' && (
         <circle cx={R * 0.95} cy={-R * 0.95} r={0.2} fill="var(--locked)" pointerEvents="none" />
+      )}
+      {/*
+        * Who is getting the ball. Outside the mark and opposite the on-line
+        * dot, so it never sits over the label and the two can be told apart at
+        * a glance on a printed sheet.
+        */}
+      {ball && (
+        <polygon
+          points={starPoints(0.42)}
+          transform={`translate(${-R * 1.0} ${-R * 1.0})`}
+          fill="var(--ball)"
+          stroke="var(--ball-line)"
+          strokeWidth={0.08}
+          strokeLinejoin="round"
+          pointerEvents="none"
+        />
+      )}
+      {/*
+        * The shirt of whoever is filling this slot. Outside the mark and below
+        * it, where the label inside says the position and this says the kid —
+        * the two never compete for the same space.
+        */}
+      {player.jersey !== undefined && (
+        <text
+          x={R * 1.32}
+          y={R * 1.38}
+          textAnchor="middle"
+          fontSize={0.58}
+          fontWeight={600}
+          fill="var(--jersey)"
+          pointerEvents="none"
+        >
+          {player.jersey}
+        </text>
       )}
     </g>
   );

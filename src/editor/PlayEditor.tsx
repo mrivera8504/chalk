@@ -14,7 +14,7 @@ import {
 } from '../domain/types';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { LiveInkCanvas, type InkHandle, type InkPoint } from '../render/LiveInkCanvas';
-import { simplify, toSmoothPath } from '../render/smooth';
+import { simplify, snapEnd, straighten, toSmoothPath, widthFromPressure } from '../render/smooth';
 import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
 import {
@@ -25,16 +25,25 @@ import {
   pickAt,
   pickRadius,
   pxToYards,
+  yardsToPx,
   snap,
   snapDepth,
   toYards,
   toPathD,
   type Yards,
 } from '../render/geometry';
-import { mirrorAnnotations, mirrorAssignments, mirrorPlayers } from '../domain/mirror';
-import { SWATCHES, autoRouteColor } from '../domain/colors';
 import {
+  mirrorAbout,
+  mirrorAnnotations,
+  mirrorAssignments,
+  mirrorPlayers,
+} from '../domain/mirror';
+import { SWATCHES, autoRouteColor } from '../domain/colors';
+import { byJersey, readRoster, whoIs } from '../domain/roster';
+import {
+  ROUTES,
   naturalHand,
+  otherHand,
   readCustomRoutes,
   toPreset,
   toRelative,
@@ -165,6 +174,7 @@ interface Snapshot {
   players: PlayerSlot[];
   assignments: Assignment[];
   annotations: PathPoint[][];
+  ballCarrierId: string | null;
 }
 
 interface EditorProps {
@@ -186,6 +196,10 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   const [showDefense, setShowDefense] = useState(() => getSettings().showDefense);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<PathPoint[][]>(play.annotations);
+  /** Who is getting the ball. One man at a time; tapping the star again clears it. */
+  const [ballCarrierId, setBallCarrierId] = useState<string | null>(
+    play.ballCarrierId ?? null,
+  );
   const [name, setName] = useState(play.name);
   const [notes, setNotes] = useState(play.notes);
   const [coachingPoint, setCoachingPoint] = useState(play.coachingPoint);
@@ -195,6 +209,8 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   const [formations, setFormations] = useState<Formation[]>(readFormations);
   const [foundationId, setFoundationId] = useState<string | null>(readFoundationId);
   const [customRoutes, setCustomRoutes] = useState<CustomRoute[]>(readCustomRoutes);
+  /** The team sheet, read once. Edited on the playbook screen, never here. */
+  const [roster] = useState(readRoster);
   const [drawing, setDrawing] = useState(false);
   const [carrying, setCarrying] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(readDrawerOpen);
@@ -329,10 +345,20 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   }
 
   useEffect(() => {
-    onChange({ ...play, name, players, assignments, annotations, notes, coachingPoint, tags });
+    onChange({
+      ...play,
+      name,
+      players,
+      assignments,
+      annotations,
+      ballCarrierId: ballCarrierId ?? undefined,
+      notes,
+      coachingPoint,
+      tags,
+    });
     // play and onChange are stable for the life of one editing session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, players, assignments, annotations, notes, coachingPoint, tags]);
+  }, [name, players, assignments, annotations, ballCarrierId, notes, coachingPoint, tags]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -478,7 +504,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
   /** Call before any edit worth stepping back over. */
   function remember() {
-    undo.current.push({ players, assignments, annotations });
+    undo.current.push({ players, assignments, annotations, ballCarrierId });
     syncUndo();
   }
 
@@ -486,6 +512,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     setPlayers(snap.players);
     setAssignments(snap.assignments);
     setAnnotations(snap.annotations);
+    setBallCarrierId(snap.ballCarrierId);
     setSel(null);
     setPending(null);
     syncUndo();
@@ -493,14 +520,14 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
   function stepBack() {
     dropCarried('undo');
-    const prev = undo.current.undo({ players, assignments, annotations });
+    const prev = undo.current.undo({ players, assignments, annotations, ballCarrierId });
     if (prev) restore(prev);
     else syncUndo();
   }
 
   function stepForward() {
     dropCarried('redo');
-    const next = undo.current.redo({ players, assignments, annotations });
+    const next = undo.current.redo({ players, assignments, annotations, ballCarrierId });
     if (next) restore(next);
     else syncUndo();
   }
@@ -514,17 +541,79 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     const p = selectedPlayer;
     if (!p) return;
     remember();
-    const path = preset.shape(p, preset.hand ?? naturalHand(p));
+    const hand = preset.hand ?? naturalHand(p);
     setAssignments((prev) => [
       ...prev.filter((a) => !(a.playerId === p.id && !isBlockKind(a.kind))),
       {
         id: newId('a'),
         playerId: p.id,
         kind: preset.carry ? 'carry' : 'route',
-        path,
+        path: preset.shape(p, hand),
         preset: preset.id,
+        hand,
       },
     ]);
+  }
+
+  /**
+   * Every concept the picker can apply, the user's own included, by id.
+   *
+   * Flipping has to find the preset a line came from, and a saved route is a
+   * preset in every sense that matters here — it is a shape that is a function
+   * of where the man is standing, so it regenerates the other way for free.
+   */
+  const presetsById = useMemo(() => {
+    const all = new Map<string, RoutePreset>();
+    for (const r of ROUTES) all.set(r.id, r);
+    for (const r of customRoutes) all.set(r.id, toPreset(r));
+    return all;
+  }, [customRoutes]);
+
+  /**
+   * Run the same concept the other way.
+   *
+   * Presets are regenerated rather than mirrored, so a sweep flipped to the
+   * left is the sweep a left-handed pick would have drawn, curve and all,
+   * instead of a reflected copy of a right-handed one. The two wide runs aim at
+   * an absolute sideline and cannot be turned round that way, so they swap for
+   * their twin: the play has to keep saying which way it actually goes.
+   *
+   * A hand-drawn line has no concept behind it, so that one is genuinely
+   * mirrored — about its own first point, which leaves the start where the pen
+   * put it and sends the rest the other way.
+   */
+  function flipRoute(player: PlayerSlot) {
+    const current = routeOf(player.id);
+    if (!current) return;
+    remember();
+
+    const was = current.hand ?? naturalHand(player);
+    const preset = current.preset ? presetsById.get(current.preset) : undefined;
+    const twin = preset?.flipId ? presetsById.get(preset.flipId) : undefined;
+    const next = twin ?? preset;
+
+    setAssignments((prev) =>
+      prev.map((a) => {
+        if (a.id !== current.id) return a;
+        if (next) {
+          const hand = twin ? (twin.hand ?? otherHand(was)) : otherHand(was);
+          return {
+            ...a,
+            preset: next.id,
+            kind: next.carry ? 'carry' : 'route',
+            hand,
+            path: next.shape(player, hand),
+          };
+        }
+        return { ...a, hand: otherHand(was), path: mirrorAbout(a.path, a.path[0]?.x ?? player.x) };
+      }),
+    );
+  }
+
+  /** Star the man getting the ball, or take the star off him. */
+  function giveBall(id: string) {
+    remember();
+    setBallCarrierId((prev) => (prev === id ? null : id));
   }
 
   /** The route this player is actually running, if he has one drawn. */
@@ -582,8 +671,9 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       ...applyOnLine(structuredClone(f.players), settings),
       ...prev.filter((p) => p.side === 'defense'),
     ]);
-    // Assignments name players that no longer exist.
+    // Assignments, and the star, name players that no longer exist.
     setAssignments([]);
+    setBallCarrierId(null);
     setSel(null);
     setPicker(null);
   }
@@ -788,13 +878,23 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
    * used to land on the background and clear the selection, which is why a drag
    * appeared to deselect itself halfway.
    */
-  /** Palm rejection: ignore touch that lands while the pen is in play. */
+  /**
+   * Palm rejection: ignore touch that lands while the pen is in play.
+   *
+   * Pen-only is the stronger version of the same rule, for a hand that rests on
+   * the glass for longer than the 800ms window. It gates the ink tools alone —
+   * `accepts` is not on the path that drags a player, and a finger has to go on
+   * moving marks around whatever this is set to.
+   */
   function accepts(e: React.PointerEvent | PointerEvent): boolean {
     if (e.pointerType === 'pen') {
       lastPenAt.current = performance.now();
       return true;
     }
-    if (e.pointerType === 'touch') return performance.now() - lastPenAt.current > 800;
+    if (e.pointerType === 'touch') {
+      if (getSettings().penOnly) return false;
+      return performance.now() - lastPenAt.current > 800;
+    }
     return true;
   }
 
@@ -806,13 +906,23 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     // batched, so unpack them or the stroke corners off at speed.
     const native = 'getCoalescedEvents' in e ? (e as PointerEvent) : null;
     const batch = native?.getCoalescedEvents?.() ?? null;
-    if (batch && batch.length > 1) for (const c of batch) pts.push({ x: c.clientX, y: c.clientY });
-    else pts.push({ x: e.clientX, y: e.clientY });
+    if (batch && batch.length > 1) {
+      for (const c of batch) pts.push({ x: c.clientX, y: c.clientY, p: c.pressure });
+    } else {
+      pts.push({ x: e.clientX, y: e.clientY, p: e.pressure });
+    }
 
     const ahead = (e as PointerEvent).getPredictedEvents?.() ?? [];
+    // Preview at the width it will commit at, or the jump on release reads as
+    // the app having changed its mind about the stroke.
+    const svg = svgRef.current;
+    const yards = getSettings().pressureWidth
+      ? widthFromPressure(pts.map((q) => q.p ?? 0))
+      : undefined;
     ink.current?.draw(
       pts,
-      ahead.map((p) => ({ x: p.clientX, y: p.clientY })),
+      ahead.map((q) => ({ x: q.clientX, y: q.clientY })),
+      yards && svg ? yardsToPx(svg, yards) : undefined,
     );
 
     // Any movement, hovering or not, keeps the stroke alive.
@@ -821,9 +931,14 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   }
 
   /**
-   * Turn the raw samples into an assignment. Simplified first, because a pen
-   * lays down hundreds of points that describe a straight line, then smoothed
-   * so the retained corners read as the curve the hand actually drew.
+   * Turn the raw samples into an assignment.
+   *
+   * Simplified first, because a pen lays down hundreds of points that describe
+   * a straight line. Then, if the coach asked for it, squared up — near-flat
+   * segments go flat and the last point settles onto a yard — and only then
+   * smoothed, so the corners that survive read as the curve the hand drew.
+   * Squaring has to happen before smoothing or it would be straightening the
+   * midpoints the smoother invented rather than the corners the hand turned at.
    */
   function commitStroke() {
     const pts = stroke.current;
@@ -852,8 +967,18 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       return;
     }
 
-    const path = toSmoothPath(simplify(yards, INK_TOLERANCE));
+    let shaped = simplify(yards, INK_TOLERANCE);
+    if (settings.squareUpStrokes) shaped = snapEnd(straighten(shaped));
+
+    const path = toSmoothPath(shaped);
     if (path.length < 2) return;
+
+    // One width for the whole stroke, written onto every point so that an
+    // erased fragment keeps the weight of the stroke it was cut from.
+    const width = settings.pressureWidth
+      ? widthFromPressure(pts.map((q) => q.p ?? 0))
+      : undefined;
+    const inked = width === undefined ? path : path.map((q) => ({ ...q, w: width }));
 
     if (TRACING) trace(`stroke committed: ${pts.length} samples -> ${path.length} points`);
 
@@ -862,10 +987,10 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       // One drawn route per player; drawing again replaces it.
       setAssignments((prev) => [
         ...prev.filter((a) => !(a.playerId === owner && a.kind === 'route')),
-        { id: inkId(), playerId: owner, kind: 'route', path },
+        { id: inkId(), playerId: owner, kind: 'route', path: inked },
       ]);
     } else {
-      setAnnotations((prev) => [...prev, path]);
+      setAnnotations((prev) => [...prev, inked]);
     }
   }
 
@@ -1116,6 +1241,20 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     setAssignments((prev) => prev.map((a) => (a.id === id ? { ...a, color } : a)));
   }
 
+  /**
+   * Put a kid in this slot, or take him out.
+   *
+   * The slot stores his shirt number rather than a roster id, which is the
+   * spec's model and also the thing that is drawn on the board. Undoable like
+   * any other edit to a player.
+   */
+  function assignJersey(playerId: string, jersey: number | undefined) {
+    remember();
+    setPlayers((prev) =>
+      prev.map((p) => (p.id === playerId ? { ...p, jersey } : p)),
+    );
+  }
+
   function toggleOnLine() {
     if (!selectedPlayer) return;
     remember();
@@ -1152,7 +1291,14 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
    * folder of these sorts the way the playbook does.
    */
   async function exportPlay(kind: 'pdf' | 'png') {
-    const current = { ...play, name, players, assignments, annotations };
+    const current = {
+      ...play,
+      name,
+      players,
+      assignments,
+      annotations,
+      ballCarrierId: ballCarrierId ?? undefined,
+    };
     const slug =
       playTitle(current)
         .toLowerCase()
@@ -1161,7 +1307,11 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     setExporting(true);
     try {
       if (kind === 'pdf') {
-        download(await singlePlayPdf(current, { showHoles }), `${slug}-${stamp()}.pdf`, 'application/pdf');
+        download(
+          await singlePlayPdf(current, { showHoles }, roster),
+          `${slug}-${stamp()}.pdf`,
+          'application/pdf',
+        );
       } else {
         // 2000px across is a little over 300 DPI at the width this prints.
         const bytes = await playToPng(current, 2000, { showHoles, showDefense });
@@ -1197,6 +1347,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     setPlayers(initialPlayers());
     setAssignments([]);
     setAnnotations([]);
+    setBallCarrierId(null);
     setSel(null);
     setPending(null);
     setTool('select');
@@ -1244,7 +1395,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
               d={toPathD(path)}
               fill="none"
               stroke="var(--chalk)"
-              strokeWidth={0.14}
+              strokeWidth={path[0]?.w ?? 0.14}
               strokeLinecap="round"
               strokeLinejoin="round"
               opacity={0.75}
@@ -1266,6 +1417,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
               player={p}
               selected={sel?.kind === 'player' && sel.id === p.id}
               hovered={p.id === hoverId}
+              ball={p.id === ballCarrierId}
               pending={
                 p.id === pending?.blockerId || p.id === pending?.targetId || p.id === carrying
               }
@@ -1364,6 +1516,16 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
               routeOf(selectedPlayer.id) ? () => saveDrawnRoute(selectedPlayer) : null
             }
             onClear={routeOf(selectedPlayer.id) ? () => clearRoute(selectedPlayer.id) : null}
+            onFlip={routeOf(selectedPlayer.id) ? () => flipRoute(selectedPlayer) : null}
+            hasBall={ballCarrierId === selectedPlayer.id}
+            onGiveBall={() => giveBall(selectedPlayer.id)}
+            swatches={SWATCHES}
+            color={routeOf(selectedPlayer.id)?.color}
+            onColor={
+              routeOf(selectedPlayer.id)
+                ? (c) => recolor(routeOf(selectedPlayer.id)!.id, c)
+                : null
+            }
           />
         </div>
       )}
@@ -1487,7 +1649,9 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                     ? 'Tap to start, move the pen, tap to finish. It does not have to stay down.'
                     : tool === 'erase'
                       ? 'Tap to start, sweep over the ink, tap to stop. Freehand rubs out in parts; a route or block goes whole.'
-                      : 'Tap the blocker, then tap who he goes to.'}
+                      : tool === 'routes'
+                        ? 'Tap a man to see what he can run, which way he runs it, and whether he gets the ball.'
+                        : 'Tap the blocker, then tap who he goes to.'}
               </p>
             </section>
 
@@ -1505,6 +1669,42 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                     />
                   </label>
                 </div>
+                <div className="tools">
+                  <button
+                    aria-pressed={ballCarrierId === selectedPlayer.id}
+                    onClick={() => giveBall(selectedPlayer.id)}
+                  >
+                    ★ Gets the ball
+                  </button>
+                </div>
+                {/*
+                  * Who is in this slot. Only offered once there is a team sheet
+                  * to pick from — an empty dropdown asking a question the app
+                  * has given you no way to answer is worse than no dropdown.
+                  */}
+                {roster.length > 0 && (
+                  <div className="player-row">
+                    <label>
+                      <span>Who</span>
+                      <select
+                        value={selectedPlayer.jersey ?? ''}
+                        onChange={(e) =>
+                          assignJersey(
+                            selectedPlayer.id,
+                            e.target.value === '' ? undefined : Number(e.target.value),
+                          )
+                        }
+                      >
+                        <option value="">Nobody yet</option>
+                        {byJersey(roster).map((entry) => (
+                          <option key={entry.id} value={entry.jersey}>
+                            {entry.jersey} {entry.name || '—'}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
                 {selectedPlayer.side === 'offense' && (
                   <div className="tools">
                     <button aria-pressed={selectedPlayer.onLine} onClick={toggleOnLine}>
@@ -1521,6 +1721,9 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                   {selectedPlayer.x.toFixed(2)} yd across, {selectedPlayer.y.toFixed(2)} yd from
                   the line
                   {selectedPlayer.backNumber ? ` · back ${selectedPlayer.backNumber}` : ''}
+                  {whoIs(roster, selectedPlayer)?.name
+                    ? ` · ${whoIs(roster, selectedPlayer)!.name}`
+                    : ''}
                 </p>
               </section>
             )}

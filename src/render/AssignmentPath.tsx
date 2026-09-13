@@ -90,16 +90,34 @@ export function AssignmentPath({ assignment, selected = false, autoColor }: Prop
   if (path.length < 2) return null;
 
   const style = STYLE[kind];
-  // Selection first so the highlight is never lost to a colour close to it,
-  // then the hand-picked colour, then the automatic one, then the kind.
-  const color = selected
-    ? 'var(--select)'
-    : (assignment.color ?? autoColor ?? style.color);
-  const width = selected ? 0.24 : 0.17;
+  /*
+   * The hand-picked colour, then the automatic one, then the kind. Selection
+   * used to come first and replace all three, which meant that recolouring the
+   * line you had selected changed nothing you could see: the swatch was stored
+   * and the board went on drawing the selection blue over it. A halo says the
+   * same thing without taking the colour away.
+   */
+  const color = assignment.color ?? autoColor ?? style.color;
+  // A stroke drawn with pressure on carries its own weight; everything else
+  // takes the standard one. Selection thickens whichever it turns out to be.
+  const base = path[0]?.w ?? 0.17;
+  const width = selected ? base + 0.04 : base;
   const d = toPathD(path);
 
   return (
     <g>
+      {selected && (
+        <path
+          d={d}
+          fill="none"
+          stroke="var(--select)"
+          strokeWidth={width + 0.26}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={0.4}
+          pointerEvents="none"
+        />
+      )}
       <path
         d={d}
         fill="none"

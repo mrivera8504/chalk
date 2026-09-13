@@ -114,6 +114,13 @@ export function pxToYards(svg: SVGSVGElement, px: number): number {
   return px / perYard;
 }
 
+/** Yards back to screen pixels, for anything drawn outside the SVG's own units. */
+export function yardsToPx(svg: SVGSVGElement, yards: number): number {
+  const ctm = svg.getScreenCTM();
+  const perYard = ctm ? Math.abs(ctm.a) : 20;
+  return yards * perYard;
+}
+
 /**
  * How close a tap has to land, in yards. Derived from the live screen scale so
  * the target stays the same physical size whether the board is drawn on a phone

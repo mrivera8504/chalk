@@ -4,11 +4,17 @@ export interface InkPoint {
   /** Client coordinates. Converted to yards only when the stroke is committed. */
   x: number;
   y: number;
+  /** Reported pressure, kept only so the committed stroke can be weighted by it. */
+  p?: number;
 }
 
 export interface InkHandle {
-  /** Repaint the in-progress stroke. Called at pointer rate, not React's. */
-  draw(points: InkPoint[], predicted?: InkPoint[]): void;
+  /**
+   * Repaint the in-progress stroke. Called at pointer rate, not React's.
+   * `width` is in screen pixels and only passed when pressure is driving it;
+   * without it the stroke draws at the standard weight.
+   */
+  draw(points: InkPoint[], predicted?: InkPoint[], width?: number): void;
   clear(): void;
 }
 
@@ -57,7 +63,7 @@ export const LiveInkCanvas = forwardRef<InkHandle, { color?: string }>(function 
   }, []);
 
   useImperativeHandle(ref, () => ({
-    draw(points, predicted) {
+    draw(points, predicted, width) {
       const el = canvas.current;
       const g = el?.getContext('2d');
       if (!el || !g || points.length < 2) return;
@@ -65,7 +71,7 @@ export const LiveInkCanvas = forwardRef<InkHandle, { color?: string }>(function 
       const r = el.getBoundingClientRect();
       g.clearRect(0, 0, el.width, el.height);
       g.strokeStyle = ink.current;
-      g.lineWidth = 2.4;
+      g.lineWidth = width ?? 2.4;
 
       g.beginPath();
       g.moveTo(points[0].x - r.left, points[0].y - r.top);

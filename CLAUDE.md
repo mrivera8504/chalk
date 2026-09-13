@@ -138,6 +138,104 @@ one concept serves any position. Two things extend that:
 `in`/`out` keep their ids as the medium pair, so plays saved before the depth
 variants still name the preset they came from.
 
+## Who gets the ball
+
+`Play.ballCarrierId` stars one man on the board. It lives on the **play**, not on
+the player, so it never travels inside a saved formation — how a team lines up
+and who carries out of it are two different decisions. Applying a formation or
+resetting clears it, because it would otherwise name a player who no longer
+exists.
+
+The star is what the namer trusts: a starred man's line is the run, even when it
+was drawn as a plain route, so `22` comes out of a route that no preset would
+have marked as a carry. With no star it falls back to the old rule, one carry
+line and no more. `PlayerShape` draws the star as a polygon rather than a glyph,
+because an exported SVG carries no fonts.
+
+## Flipping one run
+
+Two different things, deliberately:
+
+- **Flip sides** (drawer) mirrors the whole play about the middle of the field.
+- **Flip** (in the route picker) turns one man's run round and leaves everyone
+  else alone.
+
+Presets are **regenerated** with the other hand, never mirrored, so a sweep
+flipped left is the sweep a left-handed pick would have drawn. `Assignment.hand`
+remembers which way it was built; without it, reversing a run would have to
+guess the current direction from the shape of the path. The two wide runs aim at
+an absolute sideline and cannot be turned round that way, so they swap for their
+twin through `flipId` — the concept name has to keep saying which way it goes.
+`mirrorAssignments` flips the hand and swaps that twin too, or a play mirrored
+and then flipped would go back the wrong way.
+
+A hand-drawn route has no concept behind it, so that one is genuinely mirrored,
+about its own first point — the same anchor a saved route uses.
+
+## Colour, and why picking a swatch "did nothing"
+
+A selected line used to be drawn in `var(--select)`, ahead of its own colour. So
+recolouring the line you had selected stored the swatch and changed nothing you
+could see. Selection is a **halo** now: a wider translucent stroke behind the
+path, with the real colour left alone.
+
+The swatches for a route live in the route picker, on the man — reaching them
+used to mean leaving Routes for Move and finding the line under the player
+standing on it. Routes mode never picks lines (`pickAt` is given an empty list),
+which is exactly why the colour had to come to the player. Block lines still
+recolour through the line inspector in Move mode.
+
+## The roster
+
+`domain/roster.ts` holds the team sheet, in local storage beside the formations
+and saved routes — it describes this team, not any one play. A slot stores the
+**shirt number**, not a roster id, which is the spec's model and also what is
+drawn on the board and shouted on a sideline. A number nobody wears still
+draws: the link is a lookup, never a requirement. Edited on the playbook screen;
+the editor only reads it. Two kids in one shirt is refused out loud rather than
+silently reassigned, because the number is what makes a slot unambiguous.
+
+## Backup, and what a backup has to carry
+
+`store/backup.ts`. The old JSON export wrote plays and sections only, and there
+was no way back in. Both were wrong: the formations, the routes drawn by hand,
+the roster and the league rules are all in local storage too, and a backup that
+left them behind only looked like one until the day it was needed.
+
+Restore **replaces** rather than merges — two copies of a playbook with the same
+play ids is worse than either copy — so it sits behind a confirm, and reloads
+afterwards. The reload is not laziness: every one of those stores is read into
+React state when its screen mounts, and a restore that left half the app showing
+the old copy would be its own kind of data loss. Bad files are refused with a
+sentence a coach can act on, and the playbook is left alone.
+
+## Finishing a freehand stroke
+
+Order matters: simplify, then square up, then smooth. Squaring after smoothing
+would be straightening the midpoints the smoother invented rather than the
+corners the hand turned at. `squareUpStrokes` is off by default — freehand is
+what you reach for when the presets do not have the shape you mean.
+
+`snapEnd` settles the last point onto a whole yard of **depth** only. A route is
+called by how deep it goes; where it finishes across the field is wherever the
+receiver ran. It moves the previous point with it when that segment is already
+flat, or it would put a kink back into the line `straighten` just cleaned up.
+
+## Pressure
+
+`pressureWidth`, off by default, gives a stroke **one** width taken from its
+hardest sample — not a width that wanders down its length, which is what the
+spec warns reads as sloppy on a printed sheet. Peak rather than mean, because
+contact here is mostly hover at 0.00 and a mean would call every stroke
+feather-light. The width rides on `PathPoint.w`, so nothing holding a path had
+to change shape: the annotation layer is a bare array of point arrays and the
+eraser splits those in place, which means an erased fragment keeps the weight of
+the stroke it was cut from.
+
+**Expect very little range on this device.** It reports 0.00 on every
+pointerdown and 0.02-0.13 while moving, so the curve reaches usable width well
+before the top of the nominal range.
+
 ## Accounts
 
 Anonymous sign-in still happens on first launch and the app works with no

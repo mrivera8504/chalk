@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { autoRouteColor } from '../domain/colors';
 import { computeHoles } from '../domain/holes';
-import { DEFAULT_SETTINGS, type Play } from '../domain/types';
+import { type Play } from '../domain/types';
+import { getSettings } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
@@ -42,6 +43,9 @@ const TOKENS = [
   '--select',
   '--hover',
   '--locked',
+  '--ball',
+  '--ball-line',
+  '--jersey',
 ];
 
 function tokenBlock(): string {
@@ -77,7 +81,8 @@ const PRINT_TOKENS =
   // receiver you could tell apart by colour on the board is the same colour,
   // still distinguishable, on the sheet.
   '--ink-carry:#c2410c;--ink-block:#a16207;--ink-motion:#6d28d9;' +
-  '--ink-option:#475569;--route-0:#0369a1;--route-1:#15803d;' +
+  '--ink-option:#475569;--ball:#000000;--ball-line:#ffffff;--jersey:#334155;' +
+  '--route-0:#0369a1;--route-1:#15803d;' +
   '--route-2:#6d28d9;--route-3:#be185d;--route-4:#4d7c0f;--route-5:#0f766e';
 
 /**
@@ -89,7 +94,13 @@ const PRINT_TOKENS =
  * serves a thumbnail and a 300 DPI sheet without any of it being redrawn.
  */
 export function playToSvg(play: Play, opts: SheetOptions = {}): string {
-  const holes = computeHoles(play.players, DEFAULT_SETTINGS);
+  /*
+   * The live rules, not the frozen defaults. The league settings are real
+   * settings now, so a sheet built from DEFAULT_SETTINGS numbered the holes the
+   * way the app shipped rather than the way this team plays — the same mistake
+   * the editor's stale useMemo arrays made.
+   */
+  const holes = computeHoles(play.players, getSettings());
   const players = opts.showDefense
     ? play.players
     : play.players.filter((p) => p.side === 'offense');
@@ -103,7 +114,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
           d={toPathD(path)}
           fill="none"
           stroke="var(--chalk)"
-          strokeWidth={0.14}
+          strokeWidth={path[0]?.w ?? 0.14}
           strokeLinecap="round"
           strokeLinejoin="round"
           opacity={0.75}
@@ -113,7 +124,12 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
         <AssignmentPath key={a.id} assignment={a} autoColor={autoRouteColor(a, play.players)} />
       ))}
       {players.map((p) => (
-        <PlayerShape key={p.id} player={p} selected={false} />
+        <PlayerShape
+          key={p.id}
+          player={p}
+          selected={false}
+          ball={p.id === play.ballCarrierId}
+        />
       ))}
     </>,
   );

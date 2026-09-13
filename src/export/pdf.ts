@@ -6,6 +6,7 @@ import {
   type PDFImage,
   type PDFPage,
 } from 'pdf-lib';
+import { byJersey, describePersonnel, type RosterEntry } from '../domain/roster';
 import { type Play, type Section } from '../domain/types';
 import { BOARD_ASPECT, playToPng, playTitle, type SheetOptions } from './render';
 
@@ -119,14 +120,21 @@ async function startDoc(): Promise<{ doc: PDFDocument; fonts: Fonts }> {
  * by default here and off on a call sheet, because this is where they are
  * taught.
  */
-export async function singlePlayPdf(play: Play, opts: SheetOptions = {}): Promise<Uint8Array> {
+export async function singlePlayPdf(
+  play: Play,
+  opts: SheetOptions = {},
+  roster: RosterEntry[] = [],
+): Promise<Uint8Array> {
   const { doc, fonts } = await startDoc();
   const png = await doc.embedPng(await playToPng(play, RASTER_PX, { ...opts, forPrint: true }));
   const page = doc.addPage([PAGE.w, PAGE.h]);
 
   header(page, fonts, playTitle(play), play.tags.join(' · '));
 
-  const notes = [play.coachingPoint, play.notes].filter(Boolean);
+  // Who is in it, when the slots have been filled in. This is the sheet that
+  // gets handed to a coach who missed practice, so the names earn their line.
+  const personnel = describePersonnel(play.players, roster);
+  const notes = [play.coachingPoint, play.notes, personnel].filter(Boolean);
   const notesRoom = notes.length ? 26 + notes.length * 13 : 0;
   const top = PAGE.h - MARGIN - 28;
   const bottom = MARGIN + notesRoom;
@@ -302,6 +310,56 @@ export async function playerCardsPdf(
       width: box.w,
       height: box.h,
     });
+  }
+
+  return doc.save();
+}
+
+/**
+ * The team sheet: numbers, names and what each kid can play.
+ *
+ * Ruled rows rather than a bare list, because this is the page that gets
+ * clipped to a board and written on during a game.
+ */
+export async function rosterPdf(roster: RosterEntry[], title = 'Roster'): Promise<Uint8Array> {
+  const { doc, fonts } = await startDoc();
+  const page = doc.addPage([PAGE.w, PAGE.h]);
+  header(page, fonts, title, `${roster.length} players`);
+
+  const rowH = 22;
+  let y = PAGE.h - MARGIN - 44;
+
+  for (const entry of byJersey(roster)) {
+    if (y < MARGIN) break;
+
+    page.drawText(String(entry.jersey), {
+      x: MARGIN,
+      y,
+      size: 13,
+      font: fonts.bold,
+      color: BLACK,
+    });
+    page.drawText(fit(entry.name || '—', fonts.body, 12, 280), {
+      x: MARGIN + 42,
+      y,
+      size: 12,
+      font: fonts.body,
+      color: BLACK,
+    });
+    page.drawText(fit(entry.positions.join(' · '), fonts.body, 10, 150), {
+      x: MARGIN + 340,
+      y: y + 1,
+      size: 10,
+      font: fonts.body,
+      color: GREY,
+    });
+    page.drawLine({
+      start: { x: MARGIN, y: y - 7 },
+      end: { x: PAGE.w - MARGIN, y: y - 7 },
+      thickness: 0.5,
+      color: RULE,
+    });
+    y -= rowH;
   }
 
   return doc.save();

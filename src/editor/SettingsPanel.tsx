@@ -197,6 +197,36 @@ export function SettingsPanel({ settings, onClose }: Props) {
           options={GRIDS}
           onPick={(v) => setSettings({ snapStepYards: v })}
         />
+        <Choice
+          label="While drawing"
+          hint="a resting hand cannot leave a mark in pen only"
+          value={s.penOnly ? 'pen' : 'both'}
+          options={[
+            { v: 'both' as const, label: 'Pen or finger' },
+            { v: 'pen' as const, label: 'Pen only' },
+          ]}
+          onPick={(v) => setSettings({ penOnly: v === 'pen' })}
+        />
+        <Choice
+          label="Press harder for a thicker line"
+          hint="this pen reports very little pressure; expect a small range"
+          value={s.pressureWidth ? 'on' : 'off'}
+          options={[
+            { v: 'off' as const, label: 'One weight' },
+            { v: 'on' as const, label: 'From pressure' },
+          ]}
+          onPick={(v) => setSettings({ pressureWidth: v === 'on' })}
+        />
+        <Choice
+          label="Square up freehand"
+          hint="nearly straight goes straight, and the end settles on a yard"
+          value={s.squareUpStrokes ? 'on' : 'off'}
+          options={[
+            { v: 'off' as const, label: 'As drawn' },
+            { v: 'on' as const, label: 'Squared up' },
+          ]}
+          onPick={(v) => setSettings({ squareUpStrokes: v === 'on' })}
+        />
       </div>
 
       <div className="picker-group">

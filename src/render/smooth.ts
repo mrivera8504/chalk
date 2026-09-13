@@ -68,7 +68,13 @@ export function toSmoothPath(points: Yards[]): PathPoint[] {
   return out;
 }
 
-/** Snap an endpoint to the nearest yard, and square up near-straight segments. */
+/**
+ * Square up the near-misses: a segment within `degrees` of flat goes flat, and
+ * one within `degrees` of straight up goes straight up.
+ *
+ * Runs on the simplified points, before smoothing, so the corners it squares
+ * are the ones a hand actually meant to turn at rather than pen wobble.
+ */
 export function straighten(points: Yards[], degrees = 8): Yards[] {
   if (points.length < 2) return points;
   const out = points.map((p) => ({ ...p }));
@@ -81,4 +87,41 @@ export function straighten(points: Yards[], degrees = 8): Yards[] {
     else if (Math.abs(dy) > 1e-9 && Math.abs(dx / dy) < limit) out[i].x = out[i - 1].x;
   }
   return out;
+}
+
+/**
+ * Settle the end of a route onto a yard line.
+ *
+ * Depth only. A route is called by how deep it goes — a twelve-yard out — and
+ * that is the number worth landing on the round figure; where it finishes
+ * across the field is wherever the receiver ran to. Squaring both would drag
+ * the end of a sideline route a yard inboard for no reason anyone asked for.
+ */
+export function snapEnd(points: Yards[]): Yards[] {
+  if (points.length < 2) return points;
+  const out = points.map((p) => ({ ...p }));
+  const last = out.length - 1;
+  const settled = Math.round(out[last].y);
+  // A segment already flat stays flat: moving one end of it alone would put a
+  // kink into the very line straighten() just took the kink out of.
+  if (Math.abs(out[last].y - out[last - 1].y) < 1e-9) out[last - 1].y = settled;
+  out[last].y = settled;
+  return out;
+}
+
+/**
+ * How thick to draw a stroke, in yards, from how hard it was pressed.
+ *
+ * Taken from the hardest sample rather than averaged: contact on this digitizer
+ * is mostly hover at zero, and a mean over those would report every stroke as
+ * feather-light. Clamped at both ends so the setting can never produce a line
+ * too thin to see or thick enough to cover a player.
+ */
+export function widthFromPressure(pressures: number[]): number | undefined {
+  const peak = pressures.reduce((hi, p) => (p > hi ? p : hi), 0);
+  if (peak <= 0) return undefined;
+  // 0.5 is a firm press on a working digitizer; this one rarely passes 0.13,
+  // so the curve has to reach usable width well before the top of the range.
+  const t = Math.min(1, peak / 0.35);
+  return Number((0.11 + t * 0.16).toFixed(3));
 }

@@ -16,7 +16,7 @@ export function App() {
   }, [book]);
 
   /**
-   * Export writes a file rather than a share sheet, because the point of it is
+   * Backup writes a file rather than a share sheet, because the point of it is
    * the anonymous account being tied to this browser's storage: clearing site
    * data would otherwise orphan the playbook with nothing to restore from.
    */
@@ -59,6 +59,7 @@ export function App() {
       onSetSection={book.setPlaySection}
       onMovePlay={book.movePlay}
       onExport={exportBook}
+      onRestore={book.importJson}
       onSaveNow={book.saveNow}
     />
   );

@@ -40,6 +40,13 @@
   --select: #4fb8ff;
   --hover: #7fe0c4;
   --locked: #f2c14e;
+  /* Who is getting the ball. Its own pair, not the block yellow: the star has
+     to stay legible against a white mark on screen and black ink on paper. */
+  --ball: #ffcf3d;
+  --ball-line: #10161a;
+  /* A shirt number beside a mark. Quieter than the label inside it: the
+     position is what you read at a glance, the kid is what you check. */
+  --jersey: rgba(232, 237, 233, 0.72);
   --ok: #5fd39a;
   --bad: #ff6b5a;
 }
@@ -395,11 +402,31 @@ body,
 }
 
 .route-picker .picker-head {
-  padding: 7px 0 2px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px 0 6px;
   position: sticky;
   top: 0;
   z-index: 1;
   background: var(--panel);
+}
+
+/*
+ * The star, in the colour it takes on the board, so the button and the mark it
+ * puts the star on read as the same thing. It keeps that colour when pressed
+ * rather than inverting to chalk like every other toggle: a white block here
+ * would say nothing about which man is carrying.
+ */
+.route-picker .picker-head .ball {
+  color: var(--ball);
+}
+
+.route-picker .picker-head .ball[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--ball) 20%, var(--panel));
+  border-color: var(--ball);
+  color: var(--ball);
 }
 
 .route-picker .picker-group {
@@ -409,6 +436,20 @@ body,
 .route-picker .picker-row button {
   padding: 7px 10px;
   font-size: 12px;
+}
+
+/*
+ * Bigger than the ones in the line inspector. Chrome hit-tests a stylus at the
+ * exact pixel where it gives a finger touch adjustment, and 26px of circle is
+ * the size that had the pen missing buttons everywhere else in this app.
+ */
+.route-picker .swatch {
+  width: 34px;
+  height: 34px;
+}
+
+.route-picker .picker-row.swatches {
+  gap: 8px;
 }
 
 .route-picker .picker-note {
@@ -1162,6 +1203,79 @@ button:focus-visible {
   background: var(--panel-hi);
   border-color: var(--line);
   color: var(--locked);
+}
+
+/*
+ * The drawer's one text field. It had no rule of its own, so the label and the
+ * input sat on the same line and the box ran over the word.
+ */
+.player-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 8px;
+}
+
+.player-row label span {
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.player-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--chalk);
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 10px;
+}
+
+/*
+ * The team sheet: one row a kid, shirt first because that is what links him to
+ * a slot and what the rows are sorted by.
+ */
+.roster-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+}
+
+.roster-row input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--chalk);
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 9px 10px;
+  min-width: 0;
+}
+
+.roster-row .roster-jersey {
+  width: 62px;
+  flex: 0 0 auto;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.roster-row .roster-name { flex: 2 1 0; }
+.roster-row .roster-positions { flex: 1 1 0; }
+
+/* The drawer's slot picker, matching the text field beside it. */
+.player-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--chalk);
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 10px;
 }
 
 button:disabled { opacity: 0.4; cursor: default; }

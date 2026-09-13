@@ -1,6 +1,6 @@
 import { computeHoles, nearestHole } from './holes';
 import { routeById } from './presets/routes';
-import type { Assignment, PathPoint, Play, PlayerSlot, Settings } from './types';
+import { isBlockKind, type Assignment, type PathPoint, type Play, type PlayerSlot, type Settings } from './types';
 
 /** Where a path crosses the line of scrimmage, going downfield. */
 function crossingX(path: PathPoint[]): number | null {
@@ -25,6 +25,24 @@ export interface Suggestion {
 }
 
 /**
+ * The line the ball actually travels on.
+ *
+ * A starred man is the whole answer: the coach has said who is getting it, so
+ * whatever he is running is the run, even when it was drawn as a plain route.
+ * Without a star it falls back to reading the lines, which only names a play
+ * when exactly one of them is a carry — two carries is a name nobody can
+ * guess at.
+ */
+function ballPath(assignments: Assignment[], ballCarrierId?: string): Assignment | null {
+  if (ballCarrierId) {
+    const his = assignments.filter((a) => a.playerId === ballCarrierId && !isBlockKind(a.kind));
+    if (his.length) return his[his.length - 1];
+  }
+  const carries = assignments.filter((a) => a.kind === 'carry' || carriesBall(a));
+  return carries.length === 1 ? carries[0] : null;
+}
+
+/**
  * Back number and hole, combined. Back 2 through hole 6 gives '26', plus the
  * concept if one was used: '26 Sweep'. Always a suggestion, never applied over
  * a name the user typed.
@@ -33,11 +51,10 @@ export function suggestName(
   players: PlayerSlot[],
   assignments: Assignment[],
   settings: Settings,
+  ballCarrierId?: string,
 ): Suggestion | null {
-  const carries = assignments.filter((a) => a.kind === 'carry' || carriesBall(a));
-  if (carries.length !== 1) return null;
-
-  const run = carries[0];
+  const run = ballPath(assignments, ballCarrierId);
+  if (!run) return null;
   const carrier = players.find((p) => p.id === run.playerId);
   if (!carrier?.backNumber) return null;
 
@@ -62,7 +79,7 @@ function carriesBall(a: Assignment): boolean {
 }
 
 export function withSuggestion(play: Play, settings: Settings): Play {
-  const s = suggestName(play.players, play.assignments, settings);
+  const s = suggestName(play.players, play.assignments, settings, play.ballCarrierId);
   return {
     ...play,
     suggestedName: s?.name,

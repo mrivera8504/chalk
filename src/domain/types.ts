@@ -1,5 +1,12 @@
 export type Side = 'offense' | 'defense';
 
+/**
+ * Which way a concept runs. Every preset is written to the right and mirrored,
+ * and it lives here rather than beside the presets because an assignment
+ * remembers the hand it was built with so it can be run the other way later.
+ */
+export type Hand = 'right' | 'left';
+
 export type ShapeKind = 'circle' | 'square' | 'triangle' | 'x';
 
 /**
@@ -18,6 +25,12 @@ export interface PlayerSlot {
   onLineLocked: boolean;
   /** 1 = QB, 2 = RB. Used for play name suggestions. */
   backNumber?: number;
+  /**
+   * The shirt of the kid filling this slot, and the link to the roster. A
+   * number nobody on the roster wears still draws: the link is a lookup rather
+   * than a requirement, so a slot can be filled before the team sheet is.
+   */
+  jersey?: number;
   shape: ShapeKind;
 }
 
@@ -70,6 +83,13 @@ export interface PathPoint {
   y: number;
   cx?: number;
   cy?: number;
+  /**
+   * Stroke width in yards, set only when a stroke was drawn with pressure
+   * turned on. It rides on the point rather than on the assignment so that
+   * nothing holding a path had to change shape for it — the annotation layer is
+   * a bare array of point arrays, and the eraser splits those in place.
+   */
+  w?: number;
 }
 
 export interface Assignment {
@@ -81,6 +101,12 @@ export interface Assignment {
   targetPlayerId?: string;
   climbToPlayerId?: string;
   preset?: string;
+  /**
+   * The direction this was generated in. Kept so the run can be flipped:
+   * without it, reversing a sweep would have to guess which way it already
+   * went from the shape of the path.
+   */
+  hand?: Hand;
   /** null means derive from the kind. */
   color?: string;
 }
@@ -118,6 +144,14 @@ export interface Play {
   formationId?: string;
   players: PlayerSlot[];
   assignments: Assignment[];
+  /**
+   * Who is getting the ball, starred on the board.
+   *
+   * On the play and not on the player, so it never travels inside a saved
+   * formation: how a team lines up and who carries out of it are two different
+   * decisions. The namer trusts this over the drawn lines.
+   */
+  ballCarrierId?: string;
   /** Freehand scratch layer, owned by nobody. */
   annotations: PathPoint[][];
   notes: string;
