@@ -68,7 +68,8 @@ A Galaxy S-series Ultra with an S Pen, measured from real traces:
 
 - Contact lasts **3-5ms** unless pressed hard; one press arrives as up to five
   pointerdown/up pairs within 150ms, gaps of 10-25ms.
-- `pressure` reads **0.00 always**. Do not gate on it.
+- `pressure` reads **0.00 on every pointerdown**, and small values (0.02-0.13)
+  on moves while contact is held. Do not gate on it.
 - **Hover is flawless** — hundreds of clean samples at `buttons=0`.
 - A finger works seamlessly and holds contact throughout.
 
@@ -200,6 +201,22 @@ The other half was size: the drawer tab was 34px, and Chrome hit-tests a stylus
 at the exact pixel while giving a finger touch adjustment. Anything floating
 over the board also needs `touch-action: manipulation`, because `.stage` sets
 `none` and it inherits.
+
+## Picking, and why the pen "would not select"
+
+`pickAt()` in `render/geometry.ts` is the one rule for what a tap is asking for.
+**A tap inside a player's mark is that player, even when a line runs under
+him.** Outside every mark, nearest wins, so a line stays pickable everywhere it
+is not underneath somebody.
+
+This was not a pen sensitivity problem at all. A device trace showed five taps
+in a row landing 0.22 to 0.67 yards from a guard — every one of them inside his
+0.72yd mark — and every one selecting the block line drawn beneath him. Nothing
+appeared to happen, because selecting a line does not open the player. Pressing
+hard "worked" only because it landed nearer his exact centre than the line was.
+
+The old comment claimed a mark was safe "because the line stops at its edge".
+It does stop at the *blocker's* edge; it then runs under everybody else.
 
 ## Debugging input
 

@@ -185,6 +185,54 @@ export function distanceToPath(points: PathPoint[], at: Yards): number {
   return best;
 }
 
+export type Picked =
+  | { kind: 'player'; id: string; distance: number }
+  | { kind: 'assignment'; id: string; distance: number }
+  | null;
+
+/**
+ * What a tap on the board is asking for.
+ *
+ * A line and the men at either end of it overlap: a block runs between two
+ * players often less than two yards apart, and a route leaves from under the
+ * mark of whoever runs it. Nearest-wins alone gets this wrong, because a line
+ * passing beneath a player is always nearer to the middle of him than his own
+ * centre is to a tap that landed slightly off.
+ *
+ * Measured on the device: five taps in a row that were 0.22 to 0.67 yards from
+ * a guard — every one of them inside his mark — all selected the block line
+ * instead, which read as the pen failing to select at all.
+ *
+ * So a tap inside a player's mark is that player, full stop. Outside every
+ * mark, nearest wins as before, which keeps a line pickable everywhere it is
+ * not underneath somebody.
+ */
+export function pickAt<
+  P extends { id: string; x: number; y: number },
+  A extends { id: string; path: PathPoint[] },
+>(
+  players: P[],
+  lines: A[],
+  at: Yards,
+  radius: number,
+  markRadius: number,
+): Picked {
+  const player = nearestPlayer(players, at, radius);
+  const toPlayer = player ? Math.hypot(player.x - at.x, player.y - at.y) : Infinity;
+
+  // Inside the mark: his, whatever is drawn under him.
+  if (player && toPlayer <= markRadius) {
+    return { kind: 'player', id: player.id, distance: toPlayer };
+  }
+
+  const line = lines.length ? nearestAssignment(lines, at, radius) : null;
+  const toLine = line ? distanceToPath(line.path, at) : Infinity;
+
+  if (line && toLine < toPlayer) return { kind: 'assignment', id: line.id, distance: toLine };
+  if (player) return { kind: 'player', id: player.id, distance: toPlayer };
+  return null;
+}
+
 /** Nearest assignment to a tap, so block lines are pickable without the DOM. */
 export function nearestAssignment<T extends { path: PathPoint[] }>(
   list: T[],

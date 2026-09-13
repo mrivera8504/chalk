@@ -20,9 +20,9 @@ import { PlayerShape } from '../render/PlayerShape';
 import {
   VIEW,
   clamp,
-  distanceToPath,
   nearestAssignment,
   nearestPlayer,
+  pickAt,
   pickRadius,
   pxToYards,
   snap,
@@ -1006,33 +1006,35 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     }
 
     const radius = pickRadius(svg);
-    const p = nearestPlayer(visible, at, radius);
 
     /*
-     * A block line runs between two men who are often less than two yards
-     * apart, so it lies inside both their pick radii. Checking players first
-     * would make the line unselectable; whichever is genuinely nearer wins.
-     * Tapping a mark still gets the mark, because the line stops at its edge.
+     * One rule for what a tap is asking for, shared by every mode.
+     *
+     * A tap inside a player's mark is that player even when a line runs under
+     * him. Measured on the device: five taps in a row 0.22 to 0.67 yards from a
+     * guard, every one inside his mark, all selected the block line instead,
+     * which is what "the pen will not select unless I press hard" turned out to
+     * be. Pressing hard simply landed nearer his exact centre than the line.
      */
-    const line = tool === 'select' ? nearestAssignment(drawn, at, radius) : null;
-    if (line) {
-      const toLine = distanceToPath(line.path, at);
-      const toPlayer = p ? Math.hypot(p.x - at.x, p.y - at.y) : Infinity;
-      if (toLine < toPlayer) {
-        if (TRACING) {
-          trace(`${describeEvent(e, at)}\n            -> picked a block line at ${toLine.toFixed(2)}yd`);
-        }
-        setPending(null);
-        setSel({ kind: 'assignment', id: line.id });
-        return;
+    const lines = tool === 'select' ? drawn : [];
+    const hit = pickAt(visible, lines, at, radius, PLAYER_R);
+    const p = hit?.kind === 'player' ? byId(hit.id) : null;
+
+    if (hit?.kind === 'assignment') {
+      if (TRACING) {
+        trace(
+          `${describeEvent(e, at)}\n            -> picked a line at ${hit.distance.toFixed(2)}yd`,
+        );
       }
+      setPending(null);
+      setSel({ kind: 'assignment', id: hit.id });
+      return;
     }
 
     if (TRACING) {
-      const d = p ? Math.hypot(p.x - at.x, p.y - at.y) : NaN;
       trace(
         `${describeEvent(e, at)}\n            -> ${
-          p ? `picked ${p.label} at ${d.toFixed(2)}yd` : 'NOTHING'
+          p ? `picked ${p.label} at ${hit!.distance.toFixed(2)}yd` : 'NOTHING'
         } (radius ${radius.toFixed(2)}yd, tool ${tool})`,
       );
     }
