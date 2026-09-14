@@ -7,7 +7,7 @@ export type Side = 'offense' | 'defense';
  */
 export type Hand = 'right' | 'left';
 
-export type ShapeKind = 'circle' | 'square' | 'triangle' | 'x';
+export type ShapeKind = 'circle' | 'square' | 'triangle' | 'x' | 'star';
 
 /**
  * Positions are stored in yards, never pixels.
@@ -111,6 +111,18 @@ export interface Assignment {
   color?: string;
 }
 
+/**
+ * The quarterback, or nobody.
+ *
+ * Back number 1 is what every formation marks him with, and it is already what
+ * the play namer reads. The vision cone hangs off this rather than off a stored
+ * player id, so a formation swapped underneath the play re-anchors the cone on
+ * the new quarterback instead of pointing at a man who no longer exists.
+ */
+export function quarterback(players: PlayerSlot[]): PlayerSlot | null {
+  return players.find((p) => p.side === 'offense' && p.backNumber === 1) ?? null;
+}
+
 /** Kinds the block tool produces: all defined by a blocker and a defender. */
 export const BLOCK_KINDS = ['block', 'pull', 'combo'] as const;
 export type BlockKind = (typeof BLOCK_KINDS)[number];
@@ -125,6 +137,35 @@ export interface Formation {
   side: Side;
   players: PlayerSlot[];
   builtIn: boolean;
+}
+
+/**
+ * Where the quarterback is looking.
+ *
+ * Only the focus is stored. The apex is the quarterback himself, looked up by
+ * back number at render time, for the same reason a block stores who-blocks-whom
+ * rather than a line: drag him and the cone follows without anything being
+ * regenerated. A play whose formation has no quarterback simply draws no cone.
+ */
+export interface Vision {
+  /** The point he is looking at, in yards. Yards, never pixels, as everywhere. */
+  x: number;
+  y: number;
+}
+
+/**
+ * A faint square coming off a man, saying where he is working.
+ *
+ * The vision cone's twin, and built the same way: one edge anchored on the
+ * player, only the far end stored, and that end moved by dragging the wash
+ * itself. How far out it goes is also how wide it is — it is a square — so the
+ * one offset aims it and sizes it at once.
+ */
+export interface Focus {
+  playerId: string;
+  /** The far end, in yards from the man it comes off. */
+  dx: number;
+  dy: number;
 }
 
 export interface Section {
@@ -152,6 +193,17 @@ export interface Play {
    * decisions. The namer trusts this over the drawn lines.
    */
   ballCarrierId?: string;
+  /**
+   * The two highlights, both faint and both laid under everything else.
+   *
+   * On the play beside the star and not on the players: where the quarterback
+   * looks and who is worth looking at are decisions about this play, not about
+   * how the team lines up, so neither may travel inside a formation. Absent, or
+   * empty, means not shown at all.
+   */
+  vision?: Vision;
+  /** The focus squares. Offsets, so each one follows the man it belongs to. */
+  focuses?: Focus[];
   /** Freehand scratch layer, owned by nobody. */
   annotations: PathPoint[][];
   notes: string;

@@ -1,10 +1,12 @@
 import { autoRouteColor } from '../domain/colors';
 import { computeHoles } from '../domain/holes';
-import { UNFILED_SECTION, type Play, type Section } from '../domain/types';
+import { UNFILED_SECTION, quarterback, type Play, type Section } from '../domain/types';
 import { useSettings } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
+import { FocusSquare } from '../render/FocusSquare';
+import { VisionCone } from '../render/VisionCone';
 import { VIEW_BOX, toPathD } from '../render/geometry';
 
 /** Not a section id, just the sentinel the folder menu uses for its last row. */
@@ -32,6 +34,7 @@ export function PlayCard({
 }: Props) {
   const settings = useSettings();
   const holes = computeHoles(play.players, settings);
+  const qb = quarterback(play.players);
   const title = play.name || play.suggestedName || 'Untitled';
 
   // A play filed in a section that has since been deleted reads as unfiled,
@@ -45,6 +48,14 @@ export function PlayCard({
       <button className="thumb" onClick={() => onOpen(play.id)} aria-label={`Open ${title}`}>
         <svg viewBox={VIEW_BOX} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
           <Field holes={holes} showHoles={false} />
+          {/* Under the play, exactly as on the board. */}
+          {(play.focuses ?? []).map((f) => {
+            const man = play.players.find((p) => p.id === f.playerId);
+            return man ? (
+              <FocusSquare key={`focus${f.playerId}`} player={man} focus={f} />
+            ) : null;
+          })}
+          {play.vision && qb && <VisionCone qb={qb} vision={play.vision} />}
           {play.annotations.map((path, i) => (
             <path
               key={`ann${i}`}

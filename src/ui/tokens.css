@@ -47,6 +47,13 @@
   /* A shirt number beside a mark. Quieter than the label inside it: the
      position is what you read at a glance, the kid is what you check. */
   --jersey: rgba(232, 237, 233, 0.72);
+  /*
+   * The two highlights. Each is drawn at a tenth to a half of its own alpha on
+   * top of this, so these are the full-strength hue and never what lands on the
+   * board: a highlight that competed with a route would be hiding the play.
+   */
+  --vision: #ffd97d;
+  --focus: #7fe0c4;
   --ok: #5fd39a;
   --bad: #ff6b5a;
 }

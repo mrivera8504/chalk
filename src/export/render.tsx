@@ -1,11 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { autoRouteColor } from '../domain/colors';
 import { computeHoles } from '../domain/holes';
-import { type Play } from '../domain/types';
+import { quarterback, type Play } from '../domain/types';
 import { getSettings } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
+import { FocusSquare } from '../render/FocusSquare';
 import { PlayerShape } from '../render/PlayerShape';
+import { VisionCone } from '../render/VisionCone';
 import { VIEW, VIEW_BOX, toPathD } from '../render/geometry';
 
 /**
@@ -46,6 +48,8 @@ const TOKENS = [
   '--ball',
   '--ball-line',
   '--jersey',
+  '--vision',
+  '--focus',
 ];
 
 function tokenBlock(): string {
@@ -83,7 +87,11 @@ const PRINT_TOKENS =
   '--ink-carry:#c2410c;--ink-block:#a16207;--ink-motion:#6d28d9;' +
   '--ink-option:#475569;--ball:#000000;--ball-line:#ffffff;--jersey:#334155;' +
   '--route-0:#0369a1;--route-1:#15803d;' +
-  '--route-2:#6d28d9;--route-3:#be185d;--route-4:#4d7c0f;--route-5:#0f766e';
+  '--route-2:#6d28d9;--route-3:#be185d;--route-4:#4d7c0f;--route-5:#0f766e;' +
+  // The highlights go grey on paper. They are laid under the play at a tenth
+  // of their alpha, and a yellow wash that reads on dark turf prints as either
+  // nothing at all or a stain across the routes drawn over it.
+  '--vision:#1f2937;--focus:#1f2937';
 
 /**
  * One play as a standalone SVG document.
@@ -101,6 +109,11 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
    * the editor's stale useMemo arrays made.
    */
   const holes = computeHoles(play.players, getSettings());
+  const qb = quarterback(play.players);
+  const focused = (play.focuses ?? []).flatMap((f) => {
+    const man = play.players.find((p) => p.id === f.playerId);
+    return man ? [{ man, focus: f }] : [];
+  });
   const players = opts.showDefense
     ? play.players
     : play.players.filter((p) => p.side === 'offense');
@@ -108,6 +121,11 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
   const body = renderToStaticMarkup(
     <>
       <Field holes={holes} showHoles={opts.showHoles ?? false} />
+      {/* Under everything, exactly as on the board. */}
+      {focused.map(({ man, focus }) => (
+        <FocusSquare key={`focus${man.id}`} player={man} focus={focus} />
+      ))}
+      {play.vision && qb && <VisionCone qb={qb} vision={play.vision} />}
       {play.annotations.map((path, i) => (
         <path
           key={`ann${i}`}

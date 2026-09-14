@@ -105,10 +105,21 @@ counts.
 
 ## Tools and the board
 
+**The editor opens in Routes.** Opening a play is opening it to say what people
+run, and the formation underneath is usually the one already wanted — a starred
+foundation is what every new play is built on. Move is one tap away when a man
+does need shifting.
+
 **Move** drags players. **Routes** selects a man and leaves him exactly where he
 is, so choosing what he runs never costs the spot a drag just put him on.
 Freehand is not in the mode row at all — it is the pencil over the board,
 because it is reached for mid-play rather than set out in.
+
+Routes is also where a tap on a **line** lands: it used to be given no lines to
+pick at all, so tapping a receiver's own route hit open grass and cleared him,
+and his colour swatches with him. A line now resolves to the man who runs it,
+which opens the picker those swatches are already in. There is still no line
+inspector over the board in Routes.
 
 The board inspector holds the route list and nothing else. Label, the on-line
 toggle and the coordinates moved into the drawer: they are set once when a
@@ -149,8 +160,73 @@ exists.
 The star is what the namer trusts: a starred man's line is the run, even when it
 was drawn as a plain route, so `22` comes out of a route that no preset would
 have marked as a carry. With no star it falls back to the old rule, one carry
-line and no more. `PlayerShape` draws the star as a polygon rather than a glyph,
-because an exported SVG carries no fonts.
+line and no more.
+
+**The carrier is drawn as a star, in the ball colour** — not as a badge pinned
+to the corner of his mark, which was a decoration on a player rather than a
+player you could pick out, and picking him out of eleven marks at a glance is
+the whole job. It is **derived, never stored**: `player.shape` is untouched
+underneath, so handing the ball to somebody else gives him his own mark back
+with nothing to undo. His label switches to `--ball-line`, which is dark on the
+screen's yellow and white on the black that print swaps in. Drawn as a polygon
+rather than typed as a glyph, because an exported SVG carries no fonts.
+
+## The marks, and the two highlights
+
+A player's shape is picked in his route list, beside the star and the
+highlights: circle, square, star, triangle, ✕. The formation still sets it — linemen square, backs circle,
+defense ✕ and triangle — and this only overrides the one man in hand. Triangle
+and ✕ stay in the row because the defense is built out of them; drop them and a
+defender changed once could never be given his own mark back. The star is a fat
+one, nothing like the sharp badge the ball carrier wears: its waist has to hold
+a label, and its points stop short of 0.9yd or two stars on adjacent 1.8yd line
+splits would touch.
+
+The mark lives on the **player**, unlike the ball star, so it travels inside a
+saved formation — how a man is drawn is part of how the team lines up.
+
+**Both highlights are a wash under the play, never over it.** They render
+straight after the turf and before a single mark, and they are the only things
+on the board drawn from a token at a fraction of its own alpha. A highlight that
+competed with a route would be hiding the play it is meant to be pointing at.
+
+- **The vision cone** stores only its focus. The apex is the quarterback,
+  looked up by back number at render time, for the same reason a block stores
+  who-blocks-whom: drag him and the cone follows, and a formation swapped
+  underneath re-anchors on the new quarterback rather than pointing at a man who
+  no longer exists. No quarterback, no cone. **The cone is its own grab
+  handle** — `insideCone` in `VisionCone.tsx` — because a mark at the far end
+  read as another player among the routes, and the wash is a far bigger target
+  for a stylus Chrome hit-tests at the exact pixel.
+- **The focus square** is the cone in square form, deliberately: one edge
+  anchored on the player exactly as the apex is, only the far end stored, same
+  wash, same fade running off him, same drag-the-body-to-move-it. **How far it
+  reaches is also how wide it is**, so one offset (`Play.focuses`, a `dx`/`dy`
+  per man) aims it and sizes it at once — drag it out and it opens up. The cone
+  widens as it goes because a quarterback's read widens downfield; this one
+  stays square, because a man working a spot works a patch of the same width all
+  the way out. Being an offset, it travels with him, and mirroring the play does
+  nothing to it — his square is wherever he is. Any number of men can wear one.
+  It starts six yards in front, which is forward for his side. A formation swap
+  clears the list; the cone survives one, because it is anchored by back number
+  rather than by id.
+
+`grabHighlight` tries the squares before the cone: a square is small and placed
+deliberately, and the cone is a wide wash that would otherwise swallow it.
+
+Both are switched on **from the man's own route list**, next to the star and
+the mark row, not from the drawer: whether he is worth watching and whether the quarterback is
+reading him are decisions about one player, and the route picker exists to stop
+those being a trip to another corner of the screen. The cone can be swung in
+Routes as well as Move — it is aimed where it was switched on, and nothing about
+it moves a player, so the mode's own rule still holds.
+
+Both sit on the **play** beside the ball carrier, so neither travels inside a
+formation, and both go through the same `applyDrag` the players do —
+`DragState.kind` is what tells them apart. That is not tidiness: it is what
+gives it tap-move-tap, contact-bounce resume and one-gesture-one-undo for free.
+Picking runs **after** players and lines, so the wash spread across the
+backfield can never be what a tap on the quarterback picks up.
 
 ## Flipping one run
 

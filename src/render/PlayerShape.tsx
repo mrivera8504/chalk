@@ -17,11 +17,14 @@ interface Props {
  * Drawn rather than typed as a glyph: a text star renders in whatever font the
  * device happens to have, and this same component is serialized into an export
  * that carries no fonts with it at all.
+ *
+ * `inner` is the waist as a fraction of the point. A star used as a mark has to
+ * hold a label, so it is drawn with a much fatter waist than the default.
  */
-function starPoints(r: number): string {
+function starPoints(r: number, inner = 0.42): string {
   const pts: string[] = [];
   for (let i = 0; i < 10; i++) {
-    const rad = i % 2 ? r * 0.42 : r;
+    const rad = i % 2 ? r * inner : r;
     // Start at the top, so the point sits upright rather than on its side.
     const a = -Math.PI / 2 + (i * Math.PI) / 5;
     pts.push(`${(Math.cos(a) * rad).toFixed(3)},${(Math.sin(a) * rad).toFixed(3)}`);
@@ -36,16 +39,32 @@ export function PlayerShape({
   hovered = false,
   ball = false,
 }: Props) {
-  const fill = player.side === 'offense' ? 'var(--off-fill)' : 'var(--def-fill)';
+  /*
+   * The man with the ball is drawn as a star in the ball colour, whatever mark
+   * he would otherwise wear. It used to be a small star pinned to the corner of
+   * his mark, which is a badge on a player rather than a player you can pick out
+   * — and picking the carrier out of eleven marks at a glance is the whole job.
+   *
+   * Derived, never stored: his own shape is untouched underneath, so handing the
+   * ball to somebody else gives him his mark straight back with nothing to undo.
+   */
+  const shape = ball ? 'star' : player.shape;
+  const fill = ball
+    ? 'var(--ball)'
+    : player.side === 'offense'
+      ? 'var(--off-fill)'
+      : 'var(--def-fill)';
   const stroke = selected || pending
     ? 'var(--select)'
-    : player.side === 'offense'
-      ? 'var(--off-line)'
-      : 'var(--def-line)';
+    : ball
+      ? 'var(--ball-line)'
+      : player.side === 'offense'
+        ? 'var(--off-line)'
+        : 'var(--def-line)';
   const sw = selected || pending ? 0.22 : 0.14;
 
   let body: React.ReactNode;
-  switch (player.shape) {
+  switch (shape) {
     case 'square':
       body = (
         <rect x={-R} y={-R} width={R * 2} height={R * 2} rx={0.18} fill={fill} stroke={stroke} strokeWidth={sw} />
@@ -58,6 +77,23 @@ export function PlayerShape({
           fill={fill}
           stroke={stroke}
           strokeWidth={sw}
+        />
+      );
+      break;
+    case 'star':
+      /*
+       * A fat star, and no wider than 1.28R. The waist has to hold the label,
+       * so it is nothing like a sharp star; the points have to stop short of
+       * 0.9yd, or two stars on adjacent line splits — 1.8yd apart — would
+       * touch. This is also what the ball carrier is drawn as.
+       */
+      body = (
+        <polygon
+          points={starPoints(R * 1.28, 0.66)}
+          fill={fill}
+          stroke={stroke}
+          strokeWidth={sw}
+          strokeLinejoin="round"
         />
       );
       break;
@@ -99,13 +135,22 @@ export function PlayerShape({
         />
       )}
       {body}
-      {player.shape !== 'x' && (
+      {shape !== 'x' && (
         <text
           textAnchor="middle"
           y={0.3}
           fontSize={0.82}
           fontWeight={600}
-          fill={player.side === 'offense' ? 'var(--off-text)' : 'var(--def-text)'}
+          /* On the ball star, the mark's own outline colour: it is dark on the
+             screen's yellow and white on the black one print swaps in, so the
+             label reads on paper as well as on the board. */
+          fill={
+            ball
+              ? 'var(--ball-line)'
+              : player.side === 'offense'
+                ? 'var(--off-text)'
+                : 'var(--def-text)'
+          }
           pointerEvents="none"
         >
           {player.label}
@@ -113,22 +158,6 @@ export function PlayerShape({
       )}
       {player.onLineLocked && player.side === 'offense' && (
         <circle cx={R * 0.95} cy={-R * 0.95} r={0.2} fill="var(--locked)" pointerEvents="none" />
-      )}
-      {/*
-        * Who is getting the ball. Outside the mark and opposite the on-line
-        * dot, so it never sits over the label and the two can be told apart at
-        * a glance on a printed sheet.
-        */}
-      {ball && (
-        <polygon
-          points={starPoints(0.42)}
-          transform={`translate(${-R * 1.0} ${-R * 1.0})`}
-          fill="var(--ball)"
-          stroke="var(--ball-line)"
-          strokeWidth={0.08}
-          strokeLinejoin="round"
-          pointerEvents="none"
-        />
       )}
       {/*
         * The shirt of whoever is filling this slot. Outside the mark and below

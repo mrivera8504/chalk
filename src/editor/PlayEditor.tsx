@@ -9,14 +9,20 @@ import {
   type Assignment,
   type Formation,
   type PathPoint,
+  quarterback,
+  type Focus,
   type Play,
   type PlayerSlot,
+  type ShapeKind,
+  type Vision,
 } from '../domain/types';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { LiveInkCanvas, type InkHandle, type InkPoint } from '../render/LiveInkCanvas';
 import { simplify, snapEnd, straighten, toSmoothPath, widthFromPressure } from '../render/smooth';
 import { Field } from '../render/Field';
+import { FocusSquare, defaultFocus, insideFocus } from '../render/FocusSquare';
 import { PlayerShape } from '../render/PlayerShape';
+import { VisionCone, insideCone } from '../render/VisionCone';
 import {
   VIEW,
   clamp,
@@ -157,7 +163,20 @@ function initialPlayers(): PlayerSlot[] {
 
 type Selection = { kind: 'player' | 'assignment'; id: string } | null;
 
+/**
+ * A sentinel id for the cone, which has none of its own — there is at most one
+ * on a play. Player ids are minted with a prefix, so it can never collide, and
+ * `byId` returns null for it without being taught anything. A focus square has
+ * no sentinel: it is one per man, so it is carried by its own player's id.
+ */
+const VISION_ID = '::vision';
+
 interface DragState {
+  /**
+   * What is in hand. `id` is the player for a drag and for a focus square —
+   * the man it belongs to — and the sentinel for the cone.
+   */
+  kind: 'player' | 'vision' | 'focus';
   id: string;
   /** Grab offset, so the mark keeps its position relative to the pen. */
   dx: number;
@@ -175,6 +194,8 @@ interface Snapshot {
   assignments: Assignment[];
   annotations: PathPoint[][];
   ballCarrierId: string | null;
+  vision: Vision | null;
+  focuses: Focus[];
 }
 
 interface EditorProps {
@@ -189,7 +210,13 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   const settings = useSettings();
   const [players, setPlayers] = useState<PlayerSlot[]>(play.players);
   const [assignments, setAssignments] = useState<Assignment[]>(play.assignments);
-  const [tool, setTool] = useState<Tool>('select');
+  /*
+   * Routes, not Move. Opening a play is opening it to say what people run, and
+   * the formation underneath is usually the one already wanted — a starred
+   * foundation is what every new play is built on. Move is a tap away when a
+   * man does need shifting.
+   */
+  const [tool, setTool] = useState<Tool>('routes');
   const [pending, setPending] = useState<Pending | null>(null);
   const [sel, setSel] = useState<Selection>(null);
   const [showHoles, setShowHoles] = useState(() => getSettings().showHoles);
@@ -200,6 +227,13 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   const [ballCarrierId, setBallCarrierId] = useState<string | null>(
     play.ballCarrierId ?? null,
   );
+  /**
+   * The two highlights. Null is off — they are not shown until asked for, and
+   * turning one off is how it is removed, so there is nothing else to delete.
+   */
+  const [vision, setVision] = useState<Vision | null>(play.vision ?? null);
+  /** The focus squares, one per man at most, each an offset from its player. */
+  const [focuses, setFocuses] = useState<Focus[]>(play.focuses ?? []);
   const [name, setName] = useState(play.name);
   const [notes, setNotes] = useState(play.notes);
   const [coachingPoint, setCoachingPoint] = useState(play.coachingPoint);
@@ -239,8 +273,13 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   const lastPenAt = useRef(0);
   const rawBound = useRef(false);
   const idleTimer = useRef<number | null>(null);
-  /** A player lifted off the board, following the pen until it is tapped down. */
-  const carry = useRef<{ id: string; dx: number; dy: number; at: number } | null>(null);
+  /**
+   * A player — or a highlight handle — lifted off the board, following the pen
+   * until it is tapped down.
+   */
+  const carry = useRef<
+    { kind: DragState['kind']; id: string; dx: number; dy: number; at: number } | null
+  >(null);
   const strokeAt = useRef(0);
   const lastRawAt = useRef(0);
   /**
@@ -292,6 +331,8 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   // the even holes run has to renumber the board without touching a player.
   const holes = useMemo(() => computeHoles(players, settings), [players, settings]);
   const issues = useMemo(() => checkFormation(players, settings), [players, settings]);
+  /* Derived, never stored: the cone re-anchors itself when the formation does. */
+  const qb = useMemo(() => quarterback(players), [players]);
   const onLine = countOnLine(players);
   const defenseExists = players.some((p) => p.side === 'defense');
 
@@ -309,6 +350,12 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   );
 
   const hint = useMemo(() => {
+    // Both highlights move in Move and in Routes alike, so this comes before
+    // the per-mode lines rather than inside one of them.
+    if (carrying === VISION_ID) return 'Swinging his look. Tap to set it';
+    if (carrying && focuses.some((f) => f.playerId === carrying)) {
+      return `Aiming ${byId(carrying)?.label}'s square. Tap to set it`;
+    }
     if (tool === 'draw') {
       return drawing
         ? 'Drawing. Move the pen, then tap to finish'
@@ -334,7 +381,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         : `Tap the lineman ${blocker.label} doubles`;
     }
     return `Tap who ${blocker.label} blocks`;
-  }, [tool, pending, players, drawing, carrying, erasing, sel]);
+  }, [tool, pending, players, drawing, carrying, erasing, sel, focuses]);
 
   function toggleDrawer() {
     const next = !drawerOpen;
@@ -352,13 +399,26 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       assignments,
       annotations,
       ballCarrierId: ballCarrierId ?? undefined,
+      vision: vision ?? undefined,
+      focuses: focuses.length ? focuses : undefined,
       notes,
       coachingPoint,
       tags,
     });
     // play and onChange are stable for the life of one editing session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, players, assignments, annotations, ballCarrierId, notes, coachingPoint, tags]);
+  }, [
+    name,
+    players,
+    assignments,
+    annotations,
+    ballCarrierId,
+    vision,
+    focuses,
+    notes,
+    coachingPoint,
+    tags,
+  ]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -432,8 +492,14 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       setShowDefense(true);
       return;
     }
-    // Hiding the defense while blocking would leave nothing to tap.
-    if (showDefense && tool !== 'select') setTool('select');
+    /*
+     * Hiding the defense while blocking would leave nothing to tap, so it drops
+     * back to Routes — which is where the editor opens. Only the block tools
+     * need a front: Routes, the pen and the eraser never touch a defender, and
+     * kicking them out of the tool they are in would be gratuitous.
+     */
+    const blocking = tool !== 'select' && tool !== 'routes' && tool !== 'draw' && tool !== 'erase';
+    if (showDefense && blocking) setTool('routes');
     setShowDefense((v) => !v);
   }
 
@@ -504,7 +570,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
   /** Call before any edit worth stepping back over. */
   function remember() {
-    undo.current.push({ players, assignments, annotations, ballCarrierId });
+    undo.current.push({ players, assignments, annotations, ballCarrierId, vision, focuses });
     syncUndo();
   }
 
@@ -513,6 +579,8 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     setAssignments(snap.assignments);
     setAnnotations(snap.annotations);
     setBallCarrierId(snap.ballCarrierId);
+    setVision(snap.vision);
+    setFocuses(snap.focuses);
     setSel(null);
     setPending(null);
     syncUndo();
@@ -520,14 +588,28 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
   function stepBack() {
     dropCarried('undo');
-    const prev = undo.current.undo({ players, assignments, annotations, ballCarrierId });
+    const prev = undo.current.undo({
+      players,
+      assignments,
+      annotations,
+      ballCarrierId,
+      vision,
+      focuses,
+    });
     if (prev) restore(prev);
     else syncUndo();
   }
 
   function stepForward() {
     dropCarried('redo');
-    const next = undo.current.redo({ players, assignments, annotations, ballCarrierId });
+    const next = undo.current.redo({
+      players,
+      assignments,
+      annotations,
+      ballCarrierId,
+      vision,
+      focuses,
+    });
     if (next) restore(next);
     else syncUndo();
   }
@@ -662,6 +744,10 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     setPlayers((prev) => mirrorPlayers(prev));
     setAssignments((prev) => mirrorAssignments(prev));
     setAnnotations((prev) => mirrorAnnotations(prev));
+    // Only the cone's focus is a field position, so only it flips. Its apex
+    // moves with the quarterback, and a focus square is an id: its man is
+    // already on the other side, and the square is wherever he is.
+    setVision((prev) => (prev ? { ...prev, x: -prev.x } : prev));
     setSel(null);
   }
 
@@ -671,9 +757,12 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       ...applyOnLine(structuredClone(f.players), settings),
       ...prev.filter((p) => p.side === 'defense'),
     ]);
-    // Assignments, and the star, name players that no longer exist.
+    // Assignments, the star and the focus squares all name players that no
+    // longer exist. The cone is the exception: it is anchored by back number,
+    // so it re-finds the new formation's quarterback on its own.
     setAssignments([]);
     setBallCarrierId(null);
+    setFocuses([]);
     setSel(null);
     setPicker(null);
   }
@@ -718,7 +807,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   function moveCarried(svg: SVGSVGElement, at: Yards) {
     const c = carry.current;
     if (!c) return;
-    applyDrag(svg, { id: c.id, dx: c.dx, dy: c.dy, ox: 0, oy: 0, moved: true }, at);
+    applyDrag(svg, { kind: c.kind, id: c.id, dx: c.dx, dy: c.dy, ox: 0, oy: 0, moved: true }, at);
   }
 
   function clearAim() {
@@ -756,16 +845,37 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
      * Only the offense is magnetised to the line. A defender belongs head-up on
      * the ball often enough, and snapping him flush would sit him exactly on top
      * of the lineman he is over, which draws as one mark rather than two.
+     *
+     * Neither highlight is magnetised at all: the line of scrimmage means
+     * nothing to where a quarterback is looking, nor to the patch of grass a
+     * receiver is working into.
      */
-    const onOffense = byId(d.id)?.side === 'offense';
+    const onOffense = d.kind === 'player' && byId(d.id)?.side === 'offense';
     const step = settings.snapStepYards;
     const magnet = onOffense ? settings.losMagnetYards : 0;
     const x = clamp(snap(at.x + d.dx, step), -VIEW.halfWidth + 1, VIEW.halfWidth - 1);
     const y = clamp(
-      snapDepth(at.y + d.dy, magnet, step),
+      snapDepth(at.y + d.dy, d.kind === 'player' ? magnet : 0, step),
       -VIEW.downfield + 1,
       VIEW.behind - 1,
     );
+
+    if (d.kind === 'vision') {
+      setVision({ x, y });
+      return true;
+    }
+    if (d.kind === 'focus') {
+      // The far end, stored as an offset from the man so it stays with him.
+      // Dragging it out both aims the square and opens it up, since how far it
+      // reaches is also how wide it is.
+      const man = byId(d.id);
+      if (man) {
+        setFocuses((prev) =>
+          prev.map((f) => (f.playerId === d.id ? { ...f, dx: x - man.x, dy: y - man.y } : f)),
+        );
+      }
+      return true;
+    }
 
     setPlayers((prev) =>
       applyOnLine(
@@ -858,7 +968,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
      * here as it always did, which is what a finger does; this path is for a
      * pen that cannot hold contact at all.
      */
-    if (!drag.current.moved && tool === 'select') {
+    if (!drag.current.moved && (tool === 'select' || drag.current.kind !== 'player')) {
       carry.current = { ...drag.current, at: performance.now() };
       setCarrying(drag.current.id);
       if (TRACING) trace(`            -> carrying ${byId(drag.current.id)?.label}`);
@@ -1093,8 +1203,8 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       now - bounce.at < CHATTER_MS &&
       Math.hypot(bounce.x - at.x, bounce.y - at.y) < CHATTER_YARDS
     ) {
-      const held = byId(bounce.id);
-      if (held) {
+      const held = bounce.kind === 'player' ? byId(bounce.id) : null;
+      if (held || bounce.kind !== 'player') {
         /*
          * Carry the original grab offset rather than deriving a new one from
          * the player's position. Bounces land 10-25ms apart, inside a single
@@ -1105,6 +1215,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         // Keep the original grab point too, so the slop is measured across the
         // whole gesture rather than restarting at every bounce.
         drag.current = {
+          kind: bounce.kind,
           id: bounce.id,
           dx: bounce.dx,
           dy: bounce.dy,
@@ -1112,7 +1223,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
           oy: bounce.oy,
           moved: bounce.moved,
         };
-        setSel({ kind: 'player', id: held.id });
+        if (held) setSel({ kind: 'player', id: held.id });
         try {
           stageRef.current?.setPointerCapture(e.pointerId);
         } catch {
@@ -1121,7 +1232,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         const moved = applyDrag(svg, drag.current, at);
         if (TRACING) {
           trace(
-            `${describeEvent(e, at)}\n            -> RESUMED ${held.label} ` +
+            `${describeEvent(e, at)}\n            -> RESUMED ${held?.label ?? bounce.kind} ` +
               `(contact bounce, ${(now - bounce.at).toFixed(0)}ms gap)` +
               `${moved ? ' + moved' : ', within slop'}`,
           );
@@ -1141,9 +1252,32 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
      * which is what "the pen will not select unless I press hard" turned out to
      * be. Pressing hard simply landed nearer his exact centre than the line.
      */
-    const lines = tool === 'select' ? drawn : [];
+    /*
+     * Routes mode picks lines too, but it never selects one.
+     *
+     * It used to be given nothing, so a tap on a receiver's own route landed on
+     * open grass and cleared him — and his colour swatches with him. The line
+     * resolves to the man who runs it instead, which opens the picker the
+     * swatches are already in. So tapping a route is another way of tapping its
+     * player, and there is still no line inspector over the board in Routes.
+     */
+    const lines = tool === 'select' || tool === 'routes' ? drawn : [];
     const hit = pickAt(visible, lines, at, radius, PLAYER_R);
     const p = hit?.kind === 'player' ? byId(hit.id) : null;
+
+    if (hit?.kind === 'assignment' && tool === 'routes') {
+      const owner = byId(drawn.find((a) => a.id === hit.id)?.playerId);
+      if (TRACING) {
+        trace(
+          `${describeEvent(e, at)}\n            -> a line at ${hit.distance.toFixed(2)}yd, ` +
+            `opening ${owner?.label ?? 'nobody'}`,
+        );
+      }
+      setSel(owner ? { kind: 'player', id: owner.id } : null);
+      setPending(null);
+      tapGuard.current = performance.now() + CHATTER_MS;
+      return;
+    }
 
     if (hit?.kind === 'assignment') {
       if (TRACING) {
@@ -1170,6 +1304,24 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
      * drag putting him on.
      */
     if (tool === 'routes') {
+      /*
+       * The cone is swung here too, not only in Move. It is switched on from
+       * this man's route list, and sending the coach to another mode to aim it
+       * would be the two-trips problem the route picker exists to end. Nothing
+       * about it moves a player, so the mode's own rule still holds.
+       */
+      const swing = p ? null : grabHighlight(at);
+      if (swing) {
+        drag.current = swing;
+        gestureRemembered.current = false;
+        try {
+          stageRef.current?.setPointerCapture(e.pointerId);
+        } catch {
+          /* not fatal */
+        }
+        if (TRACING) trace(`${describeEvent(e, at)}\n            -> moving the ${swing.kind}`);
+        return;
+      }
       setSel(p ? { kind: 'player', id: p.id } : null);
       setPending(null);
       tapGuard.current = performance.now() + CHATTER_MS;
@@ -1177,6 +1329,24 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     }
 
     if (!p) {
+      /*
+       * Nobody there — so the cone gets its turn. It lies under the board and
+       * covers a lot of grass, which is why this comes after the players and
+       * the lines rather than before them.
+       */
+      const handle = grabHighlight(at);
+      if (handle) {
+        drag.current = handle;
+        gestureRemembered.current = false;
+        setSel(null);
+        try {
+          stageRef.current?.setPointerCapture(e.pointerId);
+        } catch {
+          /* not fatal */
+        }
+        if (TRACING) trace(`${describeEvent(e, at)}\n            -> grabbed the ${handle.kind}`);
+        return;
+      }
       setSel(null);
       setPending(null);
       return;
@@ -1187,7 +1357,15 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       return;
     }
 
-    drag.current = { id: p.id, dx: p.x - at.x, dy: p.y - at.y, ox: at.x, oy: at.y, moved: false };
+    drag.current = {
+      kind: 'player',
+      id: p.id,
+      dx: p.x - at.x,
+      dy: p.y - at.y,
+      ox: at.x,
+      oy: at.y,
+      moved: false,
+    };
     // A bounce resuming a drag deliberately does not reset this: it is the same
     // gesture continuing, and it must not cost a second step of undo.
     gestureRemembered.current = false;
@@ -1199,6 +1377,85 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     } catch {
       /* not fatal */
     }
+  }
+
+  /**
+   * A tap inside one of the highlights, which are their own grab handles.
+   *
+   * Neither has anything to aim at on purpose: a handle out at the far end read
+   * as another player among the routes, and the wash is a far bigger target,
+   * which is what this stylus needs — Chrome hit-tests it at the exact pixel.
+   *
+   * Reached only once the players and the lines have had their turn, so a
+   * highlight spread across the backfield can never be what a tap on the man
+   * standing in it picks up. The squares go first: they are small and placed
+   * deliberately, where the cone is a wide wash that would swallow them.
+   */
+  function grabHighlight(at: Yards): DragState | null {
+    const base = { ox: at.x, oy: at.y, moved: false };
+
+    for (const f of focuses) {
+      const man = byId(f.playerId);
+      if (!man || !insideFocus(man, f, at)) continue;
+      // Drag from the far end, not from where the tap landed, or grabbing the
+      // near edge would collapse the square onto the pen.
+      return {
+        kind: 'focus',
+        id: f.playerId,
+        dx: man.x + f.dx - at.x,
+        dy: man.y + f.dy - at.y,
+        ...base,
+      };
+    }
+
+    // Not drawn without a quarterback, and a cone you cannot see is one you
+    // cannot mean to grab.
+    if (vision && qb && insideCone(qb, vision, at)) {
+      return {
+        kind: 'vision',
+        id: VISION_ID,
+        // Swing it from where the focus is, not from where the tap landed, or
+        // grabbing the wide part of the wash would snap the look sideways.
+        dx: vision.x - at.x,
+        dy: vision.y - at.y,
+        ...base,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Show the quarterback's line of sight, or stop showing it.
+   *
+   * Starts eight yards straight downfield of him, which is a look rather than a
+   * guess: it is on the board and obviously there, where a zero-length cone at
+   * his feet would read as the feature having failed.
+   */
+  function toggleVision() {
+    remember();
+    if (vision) {
+      setVision(null);
+      return;
+    }
+    if (!qb) return;
+    setVision({ x: qb.x, y: clamp(qb.y - 8, -VIEW.downfield + 1, VIEW.behind - 1) });
+  }
+
+  /**
+   * Put a focus square on this man, or take it off. Any number may wear one.
+   *
+   * It starts six yards out in front of him for the same reason the cone starts
+   * eight yards downfield: a square with no reach at all would read as the
+   * feature having failed rather than as something waiting to be dragged.
+   */
+  function toggleFocus(player: PlayerSlot) {
+    remember();
+    setFocuses((prev) =>
+      prev.some((f) => f.playerId === player.id)
+        ? prev.filter((f) => f.playerId !== player.id)
+        : [...prev, defaultFocus(player)],
+    );
   }
 
   /**
@@ -1252,6 +1509,22 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     remember();
     setPlayers((prev) =>
       prev.map((p) => (p.id === playerId ? { ...p, jersey } : p)),
+    );
+  }
+
+  /**
+   * What this man is drawn as.
+   *
+   * The mark is the player's, not the play's, so it travels inside a saved
+   * formation the way his label and his spot do — a team that draws its ends
+   * as stars draws them that way in every play built on that formation.
+   * Undoable like any other edit to a player.
+   */
+  function setShape(shape: ShapeKind) {
+    if (!selectedPlayer) return;
+    remember();
+    setPlayers((prev) =>
+      prev.map((p) => (p.id === selectedPlayer.id ? { ...p, shape } : p)),
     );
   }
 
@@ -1348,9 +1621,11 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     setAssignments([]);
     setAnnotations([]);
     setBallCarrierId(null);
+    setVision(null);
+    setFocuses([]);
     setSel(null);
     setPending(null);
-    setTool('select');
+    setTool('routes');
     setShowDefense(false);
   }
 
@@ -1388,6 +1663,18 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       >
         <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
           <Field holes={holes} showHoles={showHoles} occupied={occupied} />
+
+          {/*
+            * Both highlights, immediately after the turf and before a single
+            * mark. They are a wash under the play, not over it: the routes, the
+            * blocks and the men all have to stay exactly as readable with one
+            * switched on as without.
+            */}
+          {focuses.map((f) => {
+            const man = byId(f.playerId);
+            return man ? <FocusSquare key={`focus${f.playerId}`} player={man} focus={f} /> : null;
+          })}
+          {vision && qb && <VisionCone qb={qb} vision={vision} />}
 
           {annotations.map((path, i) => (
             <path
@@ -1519,6 +1806,11 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
             onFlip={routeOf(selectedPlayer.id) ? () => flipRoute(selectedPlayer) : null}
             hasBall={ballCarrierId === selectedPlayer.id}
             onGiveBall={() => giveBall(selectedPlayer.id)}
+            hasFocus={focuses.some((f) => f.playerId === selectedPlayer.id)}
+            onFocus={() => toggleFocus(selectedPlayer)}
+            hasVision={vision !== null}
+            onVision={selectedPlayer.id === qb?.id ? toggleVision : null}
+            onShape={setShape}
             swatches={SWATCHES}
             color={routeOf(selectedPlayer.id)?.color}
             onColor={
