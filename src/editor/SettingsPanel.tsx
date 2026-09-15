@@ -1,8 +1,13 @@
 import { DEFAULT_APP_SETTINGS, resetSettings, setSettings, type AppSettings } from '../store/settings';
+import { askConfirm } from '../ui/dialog';
 
+/*
+ * No onClose, and no header. The drawer owns the one title and the one way
+ * back: this used to bring its own, so opening Settings stacked two titles and
+ * two dismiss buttons that did different things.
+ */
 interface Props {
   settings: AppSettings;
-  onClose: () => void;
 }
 
 const MAGNETS = [
@@ -99,19 +104,11 @@ function Num({
  * and what counts as a legal formation. A coach looking for the colour of a
  * corner route should not have to know it lives next to the hole numbering.
  */
-export function SettingsPanel({ settings, onClose }: Props) {
+export function SettingsPanel({ settings }: Props) {
   const s = settings;
 
   return (
     <div className="picker settings-panel">
-      <div className="picker-head">
-        <strong>Settings</strong>
-        <span>saved on this device</span>
-        <button className="quiet" onClick={onClose}>
-          Close
-        </button>
-      </div>
-
       <div className="picker-group">
         <h3>Route colours</h3>
         <p className="picker-note">
@@ -296,12 +293,18 @@ export function SettingsPanel({ settings, onClose }: Props) {
       <div className="picker-group">
         <div className="picker-row">
           <button
-            className="quiet"
-            onClick={() => {
-              if (confirm('Put every setting back the way it came?')) resetSettings();
-            }}
+            className="danger"
+            onClick={() =>
+              void askConfirm('Put every setting back the way it came?', {
+                body:
+                  'The colours, the pen, the board and your league rules. ' +
+                  'Your plays, formations and roster are not touched.',
+                confirmLabel: 'Reset settings',
+                danger: true,
+              }).then((ok) => ok && resetSettings())
+            }
           >
-            Reset everything
+            Reset all settings
           </button>
         </div>
       </div>

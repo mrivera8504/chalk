@@ -1,5 +1,5 @@
 import { otherHand, routeById } from './presets/routes';
-import type { Assignment, PathPoint, PlayerSlot } from './types';
+import type { Assignment, PathPoint, PlayerSlot, Zone } from './types';
 
 const flipPoint = (p: PathPoint): PathPoint => ({
   x: -p.x,
@@ -58,4 +58,14 @@ export function mirrorAbout(path: PathPoint[], axisX: number): PathPoint[] {
 
 export function mirrorAnnotations(annotations: PathPoint[][]): PathPoint[][] {
   return annotations.map((path) => path.map(flipPoint));
+}
+
+/**
+ * Zones flip with the field, because that is what they are: a deep third on the
+ * left is the deep third on the right when the play is turned round, and the
+ * man it belongs to has been mirrored with it. Sizes are untouched — a mirrored
+ * third is still a third.
+ */
+export function mirrorZones(zones: Zone[]): Zone[] {
+  return zones.map((z) => ({ ...z, x: -z.x }));
 }

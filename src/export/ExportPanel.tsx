@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { askConfirm } from '../ui/dialog';
 import type { RosterEntry } from '../domain/roster';
 import type { Play, Section } from '../domain/types';
 import { callSheetPdf, playbookPdf, playerCardsPdf, rosterPdf, wristbandPdf } from './pdf';
@@ -46,15 +47,14 @@ export function ExportPanel({ plays, sections, roster, onJson, onRestore, onClos
     setRestored(null);
     try {
       const text = await chosen.text();
-      if (
-        !confirm(
-          `Restore from ${chosen.name}? Everything on this device — plays, folders, ` +
-            'formations, saved routes, the roster and your settings — is replaced by ' +
-            'what is in that file.',
-        )
-      ) {
-        return;
-      }
+      const ok = await askConfirm(`Restore from ${chosen.name}?`, {
+        body:
+          'Everything on this device — plays, folders, formations, saved routes, ' +
+          'the roster and your settings — is replaced by what is in that file.',
+        confirmLabel: 'Replace everything',
+        danger: true,
+      });
+      if (!ok) return;
       onRestore(text);
       setRestored('Restored. Reloading…');
       window.setTimeout(() => window.location.reload(), 600);

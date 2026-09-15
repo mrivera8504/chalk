@@ -7,7 +7,6 @@ interface Props {
   onCoachingPoint: (v: string) => void;
   onNotes: (v: string) => void;
   onTags: (v: string[]) => void;
-  onClose: () => void;
 }
 
 /**
@@ -25,7 +24,6 @@ export function NotesPanel({
   onCoachingPoint,
   onNotes,
   onTags,
-  onClose,
 }: Props) {
   const [draft, setDraft] = useState('');
 
@@ -38,14 +36,6 @@ export function NotesPanel({
 
   return (
     <div className="picker notes-panel">
-      <div className="picker-head">
-        <strong>Notes</strong>
-        <span>printed on the sheet</span>
-        <button className="quiet" onClick={onClose}>
-          Close
-        </button>
-      </div>
-
       <div className="picker-group">
         <div className="setting">
           <div className="setting-label">

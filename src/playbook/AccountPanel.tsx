@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { askConfirm } from '../ui/dialog';
 import {
   explainAuth,
   signInExisting,
@@ -80,18 +81,18 @@ export function AccountPanel({ onSaveNow, onClose }: Props) {
             <button
               className="quiet"
               disabled={busy}
-              onClick={() => {
-                if (
-                  !confirm(
-                    'Sign out? The playbook stays on this device, and will be ' +
-                      'saved to whichever account signs in next.',
-                  )
-                ) {
-                  return;
-                }
-                setBusy(true);
-                void signOutToAnonymous().finally(() => setBusy(false));
-              }}
+              onClick={() =>
+                void askConfirm('Sign out?', {
+                  body:
+                    'The playbook stays on this device, and will be saved to ' +
+                    'whichever account signs in next.',
+                  confirmLabel: 'Sign out',
+                }).then((ok) => {
+                  if (!ok) return;
+                  setBusy(true);
+                  void signOutToAnonymous().finally(() => setBusy(false));
+                })
+              }
             >
               Sign out
             </button>

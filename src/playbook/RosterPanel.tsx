@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useScrollFade } from '../ui/useScrollFade';
+import { askConfirm } from '../ui/dialog';
 import {
   byJersey,
   jerseyTaken,
@@ -27,6 +29,7 @@ interface Props {
  * somebody abandons halfway with the changes lost.
  */
 export function RosterPanel({ roster, onChange, onClose }: Props) {
+  const scroller = useScrollFade<HTMLDivElement>();
   const [clash, setClash] = useState<string | null>(null);
 
   function update(id: string, patch: Partial<RosterEntry>) {
@@ -58,9 +61,14 @@ export function RosterPanel({ roster, onChange, onClose }: Props) {
     writeRoster(next);
   }
 
-  function remove(entry: RosterEntry) {
+  async function remove(entry: RosterEntry) {
     const who = entry.name.trim() || `number ${entry.jersey}`;
-    if (!confirm(`Take ${who} off the roster?`)) return;
+    const ok = await askConfirm(`Take ${who} off the roster?`, {
+      body: 'Any slot wearing that number keeps the number and loses the name.',
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!ok) return;
     const next = roster.filter((e) => e.id !== entry.id);
     onChange(next);
     writeRoster(next);
@@ -69,7 +77,7 @@ export function RosterPanel({ roster, onChange, onClose }: Props) {
   const sorted = byJersey(roster);
 
   return (
-    <div className="picker roster-panel">
+    <div className="picker roster-panel" ref={scroller}>
       <div className="picker-head">
         <strong>Roster</strong>
         <span>
@@ -115,7 +123,7 @@ export function RosterPanel({ roster, onChange, onClose }: Props) {
             <button
               className="quiet"
               aria-label={`Remove number ${entry.jersey}`}
-              onClick={() => remove(entry)}
+              onClick={() => void remove(entry)}
             >
               ×
             </button>

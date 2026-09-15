@@ -1,11 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { computeHoles } from '../domain/holes';
-import { applyOnLine, checkFormation, countOnLine } from '../domain/legality';
-import { describeAssignment, makeBlock, refreshBlocks } from '../domain/presets/blocks';
+import {
+  applyOnLine,
+  checkFormation,
+  countOnLine,
+  eligibleReceivers,
+} from '../domain/legality';
+import { describeAssignment, makeBlock } from '../domain/presets/blocks';
+import { refreshPaths } from '../domain/regenerate';
+import { computeGaps } from '../domain/gaps';
 import { defaultDefense } from '../domain/presets/formations';
+import {
+  defensePresetById,
+  type DefenseContext,
+  type DefensePreset,
+} from '../domain/presets/defense';
+import { freeZone, type ZonePreset } from '../domain/presets/zones';
+import { applyCoverage, type CoveragePreset } from '../domain/presets/coverages';
+import { makeCover, makeStunt, stuntPartner } from '../domain/presets/links';
 import {
   PLAYER_R,
   isBlockKind,
+  isLinkKind,
   type Assignment,
   type Formation,
   type PathPoint,
@@ -14,13 +30,16 @@ import {
   type Play,
   type PlayerSlot,
   type ShapeKind,
+  type Side,
   type Vision,
+  type Zone,
 } from '../domain/types';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { LiveInkCanvas, type InkHandle, type InkPoint } from '../render/LiveInkCanvas';
 import { simplify, snapEnd, straighten, toSmoothPath, widthFromPressure } from '../render/smooth';
 import { Field } from '../render/Field';
 import { FocusSquare, defaultFocus, insideFocus } from '../render/FocusSquare';
+import { ZoneArea, insideZone, onCorner, resizeFrom, zoneCorner } from '../render/Zone';
 import { PlayerShape } from '../render/PlayerShape';
 import { VisionCone, insideCone } from '../render/VisionCone';
 import {
@@ -43,6 +62,7 @@ import {
   mirrorAnnotations,
   mirrorAssignments,
   mirrorPlayers,
+  mirrorZones,
 } from '../domain/mirror';
 import { SWATCHES, autoRouteColor } from '../domain/colors';
 import { byJersey, readRoster, whoIs } from '../domain/roster';
@@ -58,20 +78,31 @@ import {
   type RoutePreset,
 } from '../domain/presets/routes';
 import {
+  foundationDefense,
   foundationOffense,
   readFormations,
   readFoundationId,
   writeFormations,
   writeFoundationId,
 } from '../domain/presets/formations';
+import { askConfirm, askText } from '../ui/dialog';
 import { UndoStack } from '../store/undo';
 import { newId } from '../store/usePlaybook';
-import { BlockTool, tapBlock, type Pending, type Tool } from './BlockTool';
+import {
+  BlockTool,
+  isPairTool,
+  tapBlock,
+  tapCover,
+  tapStunt,
+  type Pending,
+  type Tool,
+} from './BlockTool';
 import { Drawer } from './Drawer';
 import { SettingsPanel } from './SettingsPanel';
 import { NotesPanel } from './NotesPanel';
 import { eraseAt } from '../domain/erase';
 import { useSettings, getSettings } from '../store/settings';
+import { DefensePanel } from './DefensePanel';
 import { FormationPicker } from './FormationPicker';
 import { RoutePicker } from './RoutePicker';
 import { TracePanel } from './TracePanel';
@@ -133,11 +164,30 @@ const INK_OWNER_YARDS = PLAYER_R * 1.6;
  */
 const DRAWER_KEY = 'chalk.drawer.v1';
 
-function readDrawerOpen(): boolean {
+/**
+ * Open on a screen with room for it, shut on one without.
+ *
+ * Only ever the *first* answer: the coach's own tap on the tab is written down
+ * and wins from then on. A phone in portrait gives the panel 58% of the board,
+ * so starting there means the first thing anybody sees is a wall of buttons
+ * over the play they just opened.
+ */
+function drawerDefault(): boolean {
   try {
-    return localStorage.getItem(DRAWER_KEY) !== 'closed';
+    return window.matchMedia('(orientation: landscape), (min-width: 700px)').matches;
   } catch {
     return true;
+  }
+}
+
+function readDrawerOpen(): boolean {
+  try {
+    const saved = localStorage.getItem(DRAWER_KEY);
+    if (saved === 'closed') return false;
+    if (saved === 'open') return true;
+    return drawerDefault();
+  } catch {
+    return drawerDefault();
   }
 }
 
@@ -157,8 +207,14 @@ const inkId = () => `k${Date.now().toString(36)}${(inkCounter++).toString(36)}`;
  * back to the foundation rather than to the built-in set, so it means "start
  * this play over" rather than "throw away how this team lines up".
  */
-function initialPlayers(): PlayerSlot[] {
-  return applyOnLine(foundationOffense(), getSettings());
+function initialPlayers(unit: Side = 'offense'): PlayerSlot[] {
+  const settings = getSettings();
+  // A defensive play starts as a front with a look to line up against: gaps are
+  // computed from whoever is on the offensive line, so a defence with nobody
+  // across from it has no gaps, no blitz aiming points and nothing to cover.
+  return unit === 'defense'
+    ? applyOnLine([...foundationOffense(), ...foundationDefense()], settings)
+    : applyOnLine(foundationOffense(), settings);
 }
 
 type Selection = { kind: 'player' | 'assignment'; id: string } | null;
@@ -173,10 +229,15 @@ const VISION_ID = '::vision';
 
 interface DragState {
   /**
-   * What is in hand. `id` is the player for a drag and for a focus square —
-   * the man it belongs to — and the sentinel for the cone.
+   * What is in hand. `id` is the player for a drag, for a focus square and for
+   * a zone — the man each belongs to — and the sentinel for the cone.
+   *
+   * A zone is the only thing here with two grabs. Its body moves it and its far
+   * corner sizes it, which the cone and the square do not need because for them
+   * aiming and sizing are the same gesture. A coverage has to be aimed and
+   * sized separately: a flat is shallow and wide wherever it is.
    */
-  kind: 'player' | 'vision' | 'focus';
+  kind: 'player' | 'vision' | 'focus' | 'zone' | 'zone-size';
   id: string;
   /** Grab offset, so the mark keeps its position relative to the pen. */
   dx: number;
@@ -196,17 +257,24 @@ interface Snapshot {
   ballCarrierId: string | null;
   vision: Vision | null;
   focuses: Focus[];
+  zones: Zone[];
 }
 
 interface EditorProps {
   play: Play;
+  /**
+   * Every other play in the book, so a defensive play can be set against one.
+   * Passed in rather than read from storage here: the playbook owns the list,
+   * and the editor already takes the play it is editing from the same place.
+   */
+  library: Play[];
   onChange: (play: Play) => void;
   onClose: () => void;
   /** Flush to the cloud now, rather than waiting out the autosave debounce. */
   onSave: () => Promise<void>;
 }
 
-export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
+export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorProps) {
   const settings = useSettings();
   const [players, setPlayers] = useState<PlayerSlot[]>(play.players);
   const [assignments, setAssignments] = useState<Assignment[]>(play.assignments);
@@ -220,7 +288,16 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   const [pending, setPending] = useState<Pending | null>(null);
   const [sel, setSel] = useState<Selection>(null);
   const [showHoles, setShowHoles] = useState(() => getSettings().showHoles);
-  const [showDefense, setShowDefense] = useState(() => getSettings().showDefense);
+  /*
+   * A defensive play draws the defense whatever the setting says. The toggle is
+   * there because most offensive plays are drawn without a front; on this side
+   * of the ball, hiding the defense would hide the play.
+   */
+  const [showDefense, setShowDefense] = useState(
+    () => play.unit === 'defense' || getSettings().showDefense,
+  );
+  /** The gap letters over the line, the defense's half of the hole map. */
+  const [showGaps, setShowGaps] = useState(false);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<PathPoint[][]>(play.annotations);
   /** Who is getting the ball. One man at a time; tapping the star again clears it. */
@@ -234,14 +311,33 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
   const [vision, setVision] = useState<Vision | null>(play.vision ?? null);
   /** The focus squares, one per man at most, each an offset from its player. */
   const [focuses, setFocuses] = useState<Focus[]>(play.focuses ?? []);
+  /** The coverage zones. One per defender at most, like the squares. */
+  const [zones, setZones] = useState<Zone[]>(play.zones ?? []);
+  /**
+   * Which unit this play belongs to, decided when it was created and not
+   * changeable here: every line already drawn on the board was drawn for one of
+   * them, and a switch would leave a defensive play full of pull blocks.
+   */
+  const unit: Side = play.unit ?? 'offense';
+  /** The front, remembered apart from the offense's formation. */
+  const [defenseFormationId, setDefenseFormationId] = useState<string | undefined>(
+    play.defenseFormationId,
+  );
+  /** The offensive play this defense is set against, by id. */
+  const [scoutPlayId, setScoutPlayId] = useState<string | undefined>(play.scoutPlayId);
   const [name, setName] = useState(play.name);
   const [notes, setNotes] = useState(play.notes);
   const [coachingPoint, setCoachingPoint] = useState(play.coachingPoint);
   const [tags, setTags] = useState<string[]>(play.tags);
   const [erasing, setErasing] = useState(false);
-  const [picker, setPicker] = useState<'formation' | 'settings' | 'notes' | null>(null);
+  const [picker, setPicker] = useState<
+    'formation' | 'settings' | 'notes' | 'defense' | null
+  >(null);
   const [formations, setFormations] = useState<Formation[]>(readFormations);
-  const [foundationId, setFoundationId] = useState<string | null>(readFoundationId);
+  /* The starred set for this unit. The two sides star independently. */
+  const [foundationId, setFoundationId] = useState<string | null>(() =>
+    readFoundationId(play.unit ?? 'offense'),
+  );
   const [customRoutes, setCustomRoutes] = useState<CustomRoute[]>(readCustomRoutes);
   /** The team sheet, read once. Edited on the playbook screen, never here. */
   const [roster] = useState(readRoster);
@@ -325,16 +421,36 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
    * Blocks are stored as who-blocks-whom, so the geometry is rebuilt from the
    * current positions rather than cached. Dragging either man redraws the line.
    */
-  const drawn = useMemo(() => refreshBlocks(assignments, players), [assignments, players]);
+  const drawn = useMemo(() => refreshPaths(assignments, players), [assignments, players]);
 
   // settings belongs in both: the rules are live now, and changing which way
   // the even holes run has to renumber the board without touching a player.
   const holes = useMemo(() => computeHoles(players, settings), [players, settings]);
+  /*
+   * The gap map, the defensive twin of the holes and computed from exactly the
+   * same men. Not stored, for the same reason: a blitz aimed at the B gap has
+   * to find the B gap that exists now, after the tight end moved.
+   */
+  const gaps = useMemo(() => computeGaps(players), [players]);
   const issues = useMemo(() => checkFormation(players, settings), [players, settings]);
   /* Derived, never stored: the cone re-anchors itself when the formation does. */
   const qb = useMemo(() => quarterback(players), [players]);
+  /** What a defensive concept is a function of, beside the man himself. */
+  const defenseCtx: DefenseContext = useMemo(() => ({ gaps, qb }), [gaps, qb]);
+  /**
+   * The look this defense is drawn against, resolved by id every render.
+   *
+   * A reference and never a copy: fix the sweep and every defense drawn against
+   * it is fixed too. A play that has since been deleted simply draws nothing,
+   * the same way a formation with no quarterback draws no cone.
+   */
+  const scout = useMemo(
+    () => (scoutPlayId ? (library.find((p) => p.id === scoutPlayId) ?? null) : null),
+    [library, scoutPlayId],
+  );
   const onLine = countOnLine(players);
-  const defenseExists = players.some((p) => p.side === 'defense');
+  const defense = useMemo(() => players.filter((p) => p.side === 'defense'), [players]);
+  const defenseExists = defense.length > 0;
 
   const byId = (id: string | null | undefined) => players.find((p) => p.id === id) ?? null;
   const selectedPlayer = sel?.kind === 'player' ? byId(sel.id) : null;
@@ -353,6 +469,15 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     // Both highlights move in Move and in Routes alike, so this comes before
     // the per-mode lines rather than inside one of them.
     if (carrying === VISION_ID) return 'Swinging his look. Tap to set it';
+    // The kind comes off the carried handle rather than from the id, because a
+    // man can be wearing a square and a zone at once and both are carried by
+    // his own id.
+    if (carrying && carry.current?.kind === 'zone') {
+      return `Moving ${byId(carrying)?.label}'s zone. Tap to set it`;
+    }
+    if (carrying && carry.current?.kind === 'zone-size') {
+      return `Sizing ${byId(carrying)?.label}'s zone. Tap to set it`;
+    }
     if (carrying && focuses.some((f) => f.playerId === carrying)) {
       return `Aiming ${byId(carrying)?.label}'s square. Tap to set it`;
     }
@@ -362,7 +487,8 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         : 'Tap to start a route, move the pen, tap to finish';
     }
     if (tool === 'routes') {
-      return selectedPlayer ? '' : 'Tap a man to see his routes';
+      if (selectedPlayer) return '';
+      return unit === 'defense' ? 'Tap a defender to see his job' : 'Tap a man to see his routes';
     }
     if (tool === 'erase') {
       return erasing
@@ -373,6 +499,12 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       return carrying ? `Carrying ${byId(carrying)?.label}. Tap to place` : '';
     }
     const blocker = byId(pending?.blockerId);
+    if (tool === 'cover') {
+      return blocker ? `Tap the man ${blocker.label} has` : 'Tap a defender';
+    }
+    if (tool === 'stunt') {
+      return blocker ? `Tap who loops behind ${blocker.label}` : 'Tap the man who crashes';
+    }
     if (!blocker) return 'Tap a blocker';
     if (tool === 'pull') return `Tap who ${blocker.label} pulls to`;
     if (tool === 'combo') {
@@ -381,7 +513,17 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         : `Tap the lineman ${blocker.label} doubles`;
     }
     return `Tap who ${blocker.label} blocks`;
-  }, [tool, pending, players, drawing, carrying, erasing, sel, focuses]);
+  }, [tool, pending, players, drawing, carrying, erasing, sel, focuses, zones, unit]);
+
+  /**
+   * Is the pill saying something live, or only naming the mode?
+   *
+   * The live half — whose block you are halfway through, what is in your hand,
+   * that the pen is drawing — has to float over the board whatever else is
+   * open. The other half repeats, word for word, the line under the mode row in
+   * the drawer, so while the drawer is open the board keeps it to itself.
+   */
+  const hintIsLive = Boolean(carrying || pending || drawing || erasing);
 
   function toggleDrawer() {
     const next = !drawerOpen;
@@ -390,6 +532,55 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     // A picker left open behind a closed drawer reappears unasked next time.
     if (!next) setPicker(null);
   }
+
+  /**
+   * Slide the panel away after something has been done with it.
+   *
+   * The drawer is a menu, not a palette: it covers well over half the board on
+   * a phone, and a coach who has just applied a formation wants to see the
+   * formation. Deliberately *not* written to storage — only the coach's own tap
+   * on the tab changes what the drawer does next time, so a tablet left with the
+   * tools out keeps them out.
+   */
+  function closeDrawerAfter() {
+    setPicker(null);
+    setDrawerOpen(false);
+  }
+
+  /*
+   * The inspector takes the edge the drawer is not on, so in landscape the two
+   * can be open at once without either covering the other. In portrait it is a
+   * strip across the downfield end and the class does nothing.
+   */
+  const inspectorSide = settings.drawerSide === 'right' ? 'at-left' : 'at-right';
+
+  /** What the panel's one header says, now that no picker brings its own. */
+  const drawerTitle =
+    picker === 'settings'
+      ? 'Settings'
+      : picker === 'notes'
+        ? 'Notes'
+        : picker === 'formation'
+          ? unit === 'defense'
+            ? 'Fronts'
+            : 'Formations'
+          : picker === 'defense'
+            ? 'The call'
+            : 'Tools';
+
+  const drawerSubtitle = useMemo(() => {
+    if (picker === 'settings') return 'Saved on this device, for every play.';
+    if (picker === 'formation') {
+      const foundation = formations.find((f) => f.id === foundationId);
+      return foundation
+        ? `New ${unit === 'defense' ? 'defenses' : 'plays'} open in ${foundation.name}.`
+        : 'Tap a star to set what new plays open in.';
+    }
+    if (picker === 'defense' && scout) {
+      return `Set against ${scout.name || scout.suggestedName || 'a play'}.`;
+    }
+    return undefined;
+  }, [picker, formations, foundationId, unit, scout]);
 
   useEffect(() => {
     onChange({
@@ -401,6 +592,10 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       ballCarrierId: ballCarrierId ?? undefined,
       vision: vision ?? undefined,
       focuses: focuses.length ? focuses : undefined,
+      zones: zones.length ? zones : undefined,
+      unit: play.unit,
+      defenseFormationId,
+      scoutPlayId,
       notes,
       coachingPoint,
       tags,
@@ -415,6 +610,9 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     ballCarrierId,
     vision,
     focuses,
+    zones,
+    defenseFormationId,
+    scoutPlayId,
     notes,
     coachingPoint,
     tags,
@@ -474,12 +672,11 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     setSel(null);
     setTool(next);
     /*
-     * Only the block tools need a front on the board. This used to fire for
+     * Only the two-man tools need a front on the board. This used to fire for
      * anything that was not Select, so picking up the pen to draw a route
      * dropped a whole defense onto the field uninvited.
      */
-    const needsFront =
-      next !== 'select' && next !== 'routes' && next !== 'draw' && next !== 'erase';
+    const needsFront = isPairTool(next);
     if (needsFront && !defenseExists) {
       setPlayers((prev) => applyOnLine([...prev, ...defaultDefense()], settings));
     }
@@ -494,38 +691,77 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     }
     /*
      * Hiding the defense while blocking would leave nothing to tap, so it drops
-     * back to Routes — which is where the editor opens. Only the block tools
+     * back to Routes — which is where the editor opens. Only the two-man tools
      * need a front: Routes, the pen and the eraser never touch a defender, and
      * kicking them out of the tool they are in would be gratuitous.
+     *
+     * On a defensive play there is nothing to hide: the defense is the play.
      */
-    const blocking = tool !== 'select' && tool !== 'routes' && tool !== 'draw' && tool !== 'erase';
-    if (showDefense && blocking) setTool('routes');
+    if (unit === 'defense') return;
+    if (showDefense && isPairTool(tool)) setTool('routes');
     setShowDefense((v) => !v);
   }
 
-  /** Tap-tap assignment. The tool stays armed so the next man is two taps away. */
-  function handleBlockTap(player: PlayerSlot) {
-    if (tool === 'select' || tool === 'routes' || tool === 'draw' || tool === 'erase') return;
-    const kind = tool;
-    const step = tapBlock(kind, pending, player);
+  /**
+   * Tap-tap assignment, for every tool that draws a line between two men.
+   *
+   * One function for blocks, man coverage and line games, because they are the
+   * same gesture: tap who does it, tap who it is done to, and the tool stays
+   * armed so the next pair is two taps away. What differs is only which side
+   * each tap has to land on, which is the little tap function's business.
+   */
+  function handlePairTap(player: PlayerSlot) {
+    if (!isPairTool(tool)) return;
+
+    const step =
+      tool === 'cover'
+        ? tapCover(pending, player)
+        : tool === 'stunt'
+          ? tapStunt(pending, player)
+          : tapBlock(tool, pending, player);
+
     if (step.type === 'none') return;
     if (step.type === 'pending') {
       setPending(step.pending);
       return;
     }
 
-    const blocker = byId(step.blockerId);
+    const first = byId(step.blockerId);
     const target = byId(step.targetId);
     const climbTo = byId(step.climbToId);
     setPending(null);
     setSel(null);
-    if (!blocker || !target) return;
+    if (!first || !target) return;
 
     remember();
-    const next = makeBlock(kind, blocker, target, climbTo ?? undefined);
+
+    if (tool === 'cover') {
+      setAssignments((prev) => [
+        // One man per defender. Re-tapping him moves the coverage rather than
+        // drawing a second rope off the same player.
+        ...prev.filter((a) => !(a.playerId === first.id && a.kind === 'cover')),
+        makeCover(first, target),
+      ]);
+      return;
+    }
+
+    if (tool === 'stunt') {
+      const pair = makeStunt(first, target);
+      setAssignments((prev) => [
+        // A stunt is two lines, so both men have to be cleared of any stunt they
+        // were already in — otherwise the end loops behind two different people.
+        ...prev.filter(
+          (a) => !(a.kind === 'stunt' && (a.playerId === first.id || a.playerId === target.id)),
+        ),
+        ...pair,
+      ]);
+      return;
+    }
+
+    const next = makeBlock(tool, first, target, climbTo ?? undefined);
     setAssignments((prev) => [
       // One block per man. Re-tapping a blocker corrects him instead of stacking.
-      ...prev.filter((a) => !(a.playerId === blocker.id && isBlockKind(a.kind))),
+      ...prev.filter((a) => !(a.playerId === first.id && isBlockKind(a.kind))),
       next,
     ]);
   }
@@ -570,7 +806,15 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
   /** Call before any edit worth stepping back over. */
   function remember() {
-    undo.current.push({ players, assignments, annotations, ballCarrierId, vision, focuses });
+    undo.current.push({
+      players,
+      assignments,
+      annotations,
+      ballCarrierId,
+      vision,
+      focuses,
+      zones,
+    });
     syncUndo();
   }
 
@@ -581,6 +825,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     setBallCarrierId(snap.ballCarrierId);
     setVision(snap.vision);
     setFocuses(snap.focuses);
+    setZones(snap.zones);
     setSel(null);
     setPending(null);
     syncUndo();
@@ -595,6 +840,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       ballCarrierId,
       vision,
       focuses,
+      zones,
     });
     if (prev) restore(prev);
     else syncUndo();
@@ -609,6 +855,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
       ballCarrierId,
       vision,
       focuses,
+      zones,
     });
     if (next) restore(next);
     else syncUndo();
@@ -635,6 +882,176 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         hand,
       },
     ]);
+  }
+
+  /**
+   * Apply a defensive concept to the selected man.
+   *
+   * The twin of applyRoute, and separate from it rather than folded in, because
+   * a defensive concept is a function of one more thing than a route is: the gap
+   * map. A blitz is aimed at the space between two offensive players, so it has
+   * to be handed the map the same way the namer is handed the holes.
+   */
+  function applyDefensePreset(preset: DefensePreset) {
+    const p = selectedPlayer;
+    if (!p) return;
+    remember();
+    const hand = preset.hand ?? naturalHand(p);
+    setAssignments((prev) => [
+      // One job per defender, the way a man has one route. His coverage of a
+      // receiver is a different fact and survives: a linebacker can blitz and
+      // still have somebody if he does not get there.
+      ...prev.filter((a) => !(a.playerId === p.id && !isBlockKind(a.kind) && !isLinkKind(a.kind))),
+      {
+        id: newId('a'),
+        playerId: p.id,
+        kind: preset.kind,
+        path: preset.shape(p, hand, defenseCtx),
+        preset: preset.id,
+        hand,
+      },
+    ]);
+    /*
+     * A man coming is not a man covering grass. Sending a blitzer who still
+     * wears a deep third would draw a call nobody plays, so the last thing said
+     * about him wins — the same rule that gives him one route or one job.
+     * A drop is left alone: dropping to the box he owns is the box, drawn.
+     */
+    if (preset.group === 'rush') setZones((prev) => prev.filter((z) => z.playerId !== p.id));
+  }
+
+  /**
+   * Give this man a zone, or take it off him. One each, like a focus square.
+   *
+   * A zone switched on with no concept behind it lands out in front of him at a
+   * useful size, for the reason the cone starts eight yards downfield: an empty
+   * box under his own mark reads as the feature having failed rather than as
+   * something waiting to be dragged.
+   */
+  function toggleZone(player: PlayerSlot) {
+    remember();
+    setZones((prev) =>
+      prev.some((z) => z.playerId === player.id)
+        ? prev.filter((z) => z.playerId !== player.id)
+        : [...prev, { playerId: player.id, ...freeZone(player) }],
+    );
+  }
+
+  function applyZonePreset(preset: ZonePreset) {
+    const p = selectedPlayer;
+    if (!p) return;
+    remember();
+    const shape = preset.shape(p, naturalHand(p), VIEW);
+    setZones((prev) => [...prev.filter((z) => z.playerId !== p.id), { playerId: p.id, ...shape }]);
+    // The other half of the same rule: a man given grass to cover is not also
+    // being sent, so the rush he was wearing comes off.
+    setAssignments((prev) =>
+      prev.filter(
+        (a) => !(a.playerId === p.id && (a.kind === 'blitz' || a.kind === 'contain')),
+      ),
+    );
+  }
+
+  /**
+   * Put a whole coverage on the board.
+   *
+   * The one call that is genuinely about seven men at once — who has the deep
+   * third only means anything once you know who else is deep — so it is applied
+   * as a call rather than as seven trips to the picker. Everything it draws is
+   * an ordinary zone and an ordinary cover line afterwards: drag a box, delete a
+   * rope, and the coverage is whatever is on the board, which is also what the
+   * namer reads back.
+   */
+  function applyCoveragePreset(coverage: CoveragePreset) {
+    remember();
+    const result = applyCoverage(coverage, players, VIEW);
+
+    setZones(result.zones);
+    setAssignments((prev) => [
+      // Last call wins. A second coverage laid over the first would leave the
+      // previous one's ropes hanging off men who are now playing zone.
+      ...prev.filter((a) => a.kind !== 'cover'),
+      ...result.man.flatMap((m) => {
+        const d = byId(m.defenderId);
+        const r = byId(m.receiverId);
+        return d && r ? [makeCover(d, r)] : [];
+      }),
+    ]);
+    setSel(null);
+    closeDrawerAfter();
+  }
+
+  /**
+   * The nearest man he could be covering, for the one-tap Man button.
+   *
+   * Eligible receivers only, computed from the board: covering the centre is
+   * not a thing anybody does, and offering it would make the one-tap version of
+   * this tool wrong more often than right.
+   */
+  function nearestReceiver(defender: PlayerSlot): PlayerSlot | null {
+    const eligible = eligibleReceivers(players);
+    if (!eligible.length) return null;
+    return eligible.reduce((best, p) =>
+      Math.hypot(p.x - defender.x, p.y - defender.y) <
+      Math.hypot(best.x - defender.x, best.y - defender.y)
+        ? p
+        : best,
+    );
+  }
+
+  function coverNearest(defender: PlayerSlot) {
+    const man = nearestReceiver(defender);
+    if (!man) return;
+    remember();
+    setAssignments((prev) => [
+      ...prev.filter((a) => !(a.playerId === defender.id && a.kind === 'cover')),
+      makeCover(defender, man),
+    ]);
+  }
+
+  /**
+   * Set this defense against an offensive play.
+   *
+   * The look is copied in rather than drawn from a live reference, and that is
+   * the whole decision. A reference would leave the gap map, every cover line
+   * and every pick on the board naming players that live in another document —
+   * and the gap map is computed from whoever is on the line *here*. So the
+   * offense is replaced by a copy the coach can then nudge, and the id is kept
+   * only to say on the sheet which play it was set against.
+   */
+  function applyScout(source: Play) {
+    remember();
+    const look = structuredClone(source.players.filter((p) => p.side === 'offense'));
+    const theirIds = new Set(look.map((p) => p.id));
+    const theirLines = structuredClone(
+      source.assignments.filter((a) => theirIds.has(a.playerId)),
+    );
+
+    const next = applyOnLine([...look, ...players.filter((p) => p.side === 'defense')], settings);
+    const gone = new Set(players.filter((p) => p.side === 'offense').map((p) => p.id));
+    setPlayers(next);
+    /*
+     * Everything the defense had drawn survives the look changing, except what
+     * was about one of the men who just left: a rope to their tight end means
+     * nothing once a different team is lined up across the ball.
+     *
+     * Dropped explicitly rather than left to refreshPaths, which would keep a
+     * rope whose target id happens to exist in the new look — player ids are
+     * only unique within a play, so an id that came back would silently point
+     * the coverage at whoever inherited it.
+     */
+    setAssignments((prev) =>
+      refreshPaths(
+        [...prev.filter((a) => !a.targetPlayerId || !gone.has(a.targetPlayerId)), ...theirLines],
+        next,
+      ),
+    );
+    setZones((prev) => prev.filter((z) => next.some((p) => p.id === z.playerId)));
+    setFocuses((prev) => prev.filter((f) => next.some((p) => p.id === f.playerId)));
+    setScoutPlayId(source.id);
+    setBallCarrierId(source.ballCarrierId ?? null);
+    setSel(null);
+    closeDrawerAfter();
   }
 
   /**
@@ -670,6 +1087,26 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     remember();
 
     const was = current.hand ?? naturalHand(player);
+
+    /*
+     * A defensive concept flips exactly as an offensive one does: regenerated
+     * with the other hand rather than reflected, so a contain rush turned round
+     * is the contain a left-handed pick would have drawn. It is looked up in its
+     * own table because its shape needs the gap map as well as the man.
+     */
+    const def = current.preset ? defensePresetById(current.preset) : null;
+    if (def) {
+      const hand = otherHand(was);
+      setAssignments((prev) =>
+        prev.map((a) =>
+          a.id === current.id
+            ? { ...a, hand, path: def.shape(player, hand, defenseCtx) }
+            : a,
+        ),
+      );
+      return;
+    }
+
     const preset = current.preset ? presetsById.get(current.preset) : undefined;
     const twin = preset?.flipId ? presetsById.get(preset.flipId) : undefined;
     const next = twin ?? preset;
@@ -709,10 +1146,14 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
    * Stored relative to the man who ran it, so it can be given to anybody
    * afterwards — the same rule every built-in preset follows.
    */
-  function saveDrawnRoute(player: PlayerSlot) {
+  async function saveDrawnRoute(player: PlayerSlot) {
     const current = routeOf(player.id);
     if (!current || current.path.length < 2) return;
-    const label = prompt('Name this route');
+    const label = await askText('Name this route', {
+      body: 'It keeps the shape, not the spot, so you can give it to anyone.',
+      placeholder: 'Skinny post',
+      label: 'Route name',
+    });
     if (!label?.trim()) return;
 
     const route: CustomRoute = {
@@ -744,37 +1185,62 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     setPlayers((prev) => mirrorPlayers(prev));
     setAssignments((prev) => mirrorAssignments(prev));
     setAnnotations((prev) => mirrorAnnotations(prev));
+    /*
+     * A zone is a piece of the field, so it mirrors with the field: the deep
+     * third on the left is the one on the right when the play turns round, and
+     * the man it belongs to has gone with it.
+     */
+    setZones((prev) => mirrorZones(prev));
     // Only the cone's focus is a field position, so only it flips. Its apex
     // moves with the quarterback, and a focus square is an id: its man is
     // already on the other side, and the square is wherever he is.
     setVision((prev) => (prev ? { ...prev, x: -prev.x } : prev));
     setSel(null);
+    closeDrawerAfter();
   }
 
+  /**
+   * Swap in a formation, on whichever side of the ball it belongs to.
+   *
+   * It replaces its own side and leaves the other one standing, so a coach can
+   * try the same front against three different looks — or three fronts against
+   * one — without redrawing the half of the board he is not thinking about.
+   */
   function applyFormation(f: Formation) {
     remember();
-    setPlayers((prev) => [
+    const next = [
       ...applyOnLine(structuredClone(f.players), settings),
-      ...prev.filter((p) => p.side === 'defense'),
-    ]);
-    // Assignments, the star and the focus squares all name players that no
+      ...players.filter((p) => p.side !== f.side),
+    ];
+    setPlayers(next);
+    // Assignments, the star, the squares and the zones all name players that no
     // longer exist. The cone is the exception: it is anchored by back number,
     // so it re-finds the new formation's quarterback on its own.
-    setAssignments([]);
-    setBallCarrierId(null);
-    setFocuses([]);
+    setAssignments((prev) => refreshPaths(prev, next));
+    setZones((prev) => prev.filter((z) => next.some((p) => p.id === z.playerId)));
+    setFocuses((prev) => prev.filter((fc) => next.some((p) => p.id === fc.playerId)));
+    if (!next.some((p) => p.id === ballCarrierId)) setBallCarrierId(null);
+    if (f.side === 'defense') setDefenseFormationId(f.id);
     setSel(null);
-    setPicker(null);
+    closeDrawerAfter();
   }
 
-  function saveFormation() {
-    const label = prompt('Name this formation');
+  /** Saves the unit this play is about: a defensive play saves its front. */
+  async function saveFormation() {
+    const label = await askText(unit === 'defense' ? 'Name this front' : 'Name this formation', {
+      body:
+        unit === 'defense'
+          ? 'Saves where these seven are standing, to drop onto any play.'
+          : 'Saves where these seven are standing, to drop onto any play.',
+      placeholder: unit === 'defense' ? '5-2 Tight' : 'Trips right',
+      label: 'Name',
+    });
     if (!label?.trim()) return;
     const next: Formation = {
       id: newId('f'),
       name: label.trim(),
-      side: 'offense',
-      players: structuredClone(players.filter((p) => p.side === 'offense')),
+      side: unit,
+      players: structuredClone(players.filter((p) => p.side === unit)),
       builtIn: false,
     };
     const all = [...formations, next];
@@ -793,7 +1259,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
   function setFoundation(id: string | null) {
     setFoundationId(id);
-    writeFoundationId(id);
+    writeFoundationId(id, unit);
   }
 
   function dropCarried(reason: string) {
@@ -862,6 +1328,17 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
 
     if (d.kind === 'vision') {
       setVision({ x, y });
+      return true;
+    }
+    if (d.kind === 'zone' || d.kind === 'zone-size') {
+      setZones((prev) =>
+        prev.map((z) => {
+          if (z.playerId !== d.id) return z;
+          // Moving keeps the box the size it is and puts its middle under the
+          // pen; sizing pins the near corner and grows it out of that corner.
+          return d.kind === 'zone' ? { ...z, x, y } : resizeFrom(z, { x, y });
+        }),
+      );
       return true;
     }
     if (d.kind === 'focus') {
@@ -1353,7 +1830,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     }
 
     if (tool !== 'select') {
-      handleBlockTap(p);
+      handlePairTap(p);
       return;
     }
 
@@ -1393,6 +1870,28 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
    */
   function grabHighlight(at: Yards): DragState | null {
     const base = { ox: at.x, oy: at.y, moved: false };
+
+    /*
+     * Corners before bodies, and zones before either highlight.
+     *
+     * A corner is a small deliberate target sitting on top of the box it sizes,
+     * so it has to be asked first or it could never be hit at all. Then the
+     * boxes: a zone is placed where a coach put it, where the cone is a wide
+     * wash across the whole backfield that would otherwise swallow anything
+     * lying inside it. Same argument the squares already won against the cone.
+     */
+    for (const z of zones) {
+      if (!onCorner(z, at)) continue;
+      const c = zoneCorner(z);
+      return { kind: 'zone-size', id: z.playerId, dx: c.x - at.x, dy: c.y - at.y, ...base };
+    }
+
+    for (const z of zones) {
+      if (!insideZone(z, at)) continue;
+      // Grab it by its middle, so the box keeps its position under the pen
+      // instead of jumping its centre to wherever the tap landed.
+      return { kind: 'zone', id: z.playerId, dx: z.x - at.x, dy: z.y - at.y, ...base };
+    }
 
     for (const f of focuses) {
       const man = byId(f.playerId);
@@ -1475,14 +1974,27 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     }
     const line = nearestAssignment(drawn, at, radius);
     if (line) {
-      setAssignments((prev) => prev.filter((a) => a.id !== line.id));
+      // Whole, as Delete does — and a stunt's two halves go together, because
+      // rubbing out one of them would leave a man looping behind nobody.
+      setAssignments((prev) => {
+        const partner = stuntPartner(line, prev);
+        return prev.filter((a) => a.id !== line.id && a.id !== partner?.id);
+      });
       setSel(null);
     }
   }
 
+  /**
+   * A stunt is two lines and one decision, so deleting either end takes both.
+   * Half a line game on a sheet is a man looping behind nobody.
+   */
   function deleteAssignment(id: string) {
     remember();
-    setAssignments((prev) => prev.filter((a) => a.id !== id));
+    setAssignments((prev) => {
+      const going = prev.find((a) => a.id === id);
+      const partner = going ? stuntPartner(going, prev) : null;
+      return prev.filter((a) => a.id !== id && a.id !== partner?.id);
+    });
     setSel(null);
   }
 
@@ -1581,13 +2093,15 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     try {
       if (kind === 'pdf') {
         download(
-          await singlePlayPdf(current, { showHoles }, roster),
+          await singlePlayPdf(current, { showHoles, showGaps }, roster),
           `${slug}-${stamp()}.pdf`,
           'application/pdf',
         );
       } else {
         // 2000px across is a little over 300 DPI at the width this prints.
-        const bytes = await playToPng(current, 2000, { showHoles, showDefense });
+        // What is on the board is what prints: if the gap letters are up while
+        // the play is being drawn, the sheet that comes out has them too.
+        const bytes = await playToPng(current, 2000, { showHoles, showGaps, showDefense });
         download(bytes, `${slug}-${stamp()}.png`, 'image/png');
       }
     } finally {
@@ -1614,19 +2128,32 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
     }
   }
 
-  function reset() {
+  /**
+   * Back to an empty play. It had no confirmation at all, sitting one button
+   * along from Step back in the same grey — now it wears the danger colour and
+   * asks, because it throws away everything drawn since the play was made.
+   */
+  async function reset() {
+    const ok = await askConfirm('Start this play over?', {
+      body: 'Every line, every zone and the formation go back to where a new play starts.',
+      confirmLabel: 'Start over',
+      danger: true,
+    });
+    if (!ok) return;
     dropCarried('reset');
     remember();
-    setPlayers(initialPlayers());
+    setPlayers(initialPlayers(unit));
     setAssignments([]);
     setAnnotations([]);
     setBallCarrierId(null);
     setVision(null);
     setFocuses([]);
+    setZones([]);
     setSel(null);
     setPending(null);
     setTool('routes');
-    setShowDefense(false);
+    setShowDefense(unit === 'defense');
+    closeDrawerAfter();
   }
 
   return (
@@ -1643,7 +2170,14 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
           spellCheck={false}
           aria-label="Play name"
         />
-        <LegalityBadge onLine={onLine} minOnLine={settings.minOnLine} issues={issues} />
+        <LegalityBadge
+          onLine={onLine}
+          minOnLine={settings.minOnLine}
+          issues={issues}
+          unit={unit}
+          defenders={defense.length}
+          onBall={defense.filter((p) => p.y > -2.6).length}
+        />
       </header>
 
       {/*
@@ -1662,7 +2196,13 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         onPointerLeave={clearAim}
       >
         <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
-          <Field holes={holes} showHoles={showHoles} occupied={occupied} />
+          <Field
+            holes={holes}
+            showHoles={showHoles}
+            occupied={occupied}
+            gaps={gaps}
+            showGaps={showGaps}
+          />
 
           {/*
             * Both highlights, immediately after the turf and before a single
@@ -1670,6 +2210,18 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
             * blocks and the men all have to stay exactly as readable with one
             * switched on as without.
             */}
+          {/*
+            * Zones first of the three, because a coverage is the widest wash on
+            * the board and the other two have to stay legible on top of it.
+            */}
+          {zones.map((z) => (
+            <ZoneArea
+              key={`zone${z.playerId}`}
+              zone={z}
+              player={byId(z.playerId)}
+              selected={sel?.kind === 'player' && sel.id === z.playerId}
+            />
+          ))}
           {focuses.map((f) => {
             const man = byId(f.playerId);
             return man ? <FocusSquare key={`focus${f.playerId}`} player={man} focus={f} /> : null;
@@ -1734,7 +2286,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         <LiveInkCanvas ref={ink} />
 
       {selectedBlock && (
-        <div className="inspector">
+        <div className={`inspector ${inspectorSide}`}>
           <div className="row">
             <strong>{describeAssignment(selectedBlock, players)}</strong>
           </div>
@@ -1793,14 +2345,34 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         * a man was picked up.
         */}
       {selectedPlayer && tool !== 'select' && (
-        <div className="inspector">
+        <div className={`inspector ${inspectorSide}`}>
           <RoutePicker
             player={selectedPlayer}
+            /*
+             * The panel turns into the defensive one for a man on that side,
+             * whichever unit the play belongs to: a front dropped onto an
+             * offensive play to block against is still a front, and giving one
+             * of those defenders a zone is how you say what you expect him to
+             * do about the route you just drew.
+             */
+            defense={
+              selectedPlayer.side === 'defense'
+                ? {
+                    onPick: applyDefensePreset,
+                    onZone: applyZonePreset,
+                    hasZone: zones.some((z) => z.playerId === selectedPlayer.id),
+                    onToggleZone: () => toggleZone(selectedPlayer),
+                    onCoverNearest: nearestReceiver(selectedPlayer)
+                      ? () => coverNearest(selectedPlayer)
+                      : null,
+                  }
+                : undefined
+            }
             custom={customRoutes.map(toPreset)}
             onPick={applyRoute}
             onDeleteCustom={deleteCustomRoute}
             onSaveDrawn={
-              routeOf(selectedPlayer.id) ? () => saveDrawnRoute(selectedPlayer) : null
+              routeOf(selectedPlayer.id) ? () => void saveDrawnRoute(selectedPlayer) : null
             }
             onClear={routeOf(selectedPlayer.id) ? () => clearRoute(selectedPlayer.id) : null}
             onFlip={routeOf(selectedPlayer.id) ? () => flipRoute(selectedPlayer) : null}
@@ -1826,7 +2398,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         * panel so it survives the drawer being shut. Inert, and only there when
         * there is something to say.
         */}
-      {hint && <div className="hint-pill">{hint}</div>}
+      {hint && (hintIsLive || !drawerOpen) && <div className="hint-pill">{hint}</div>}
 
       {/*
         * The handful of actions worth reaching without opening anything, each
@@ -1890,18 +2462,18 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
         </div>
       </div>
 
-      <Drawer open={drawerOpen} onToggle={toggleDrawer} side={settings.drawerSide}>
-        <div className="drawer-head">
-          <strong>
-            {picker === 'settings' ? 'Settings' : picker === 'notes' ? 'Notes' : 'Tools'}
-          </strong>
-          <button className="quiet" onClick={toggleDrawer}>
-            Hide
-          </button>
-        </div>
-
+      <Drawer
+        open={drawerOpen}
+        onToggle={toggleDrawer}
+        side={settings.drawerSide}
+        title={drawerTitle}
+        subtitle={drawerSubtitle}
+        onBack={picker ? () => setPicker(null) : undefined}
+        /* A form rather than a palette: give it the width to be read. */
+        wide={picker === 'settings' || picker === 'notes'}
+      >
         {picker === 'settings' ? (
-          <SettingsPanel settings={settings} onClose={() => setPicker(null)} />
+          <SettingsPanel settings={settings} />
         ) : picker === 'notes' ? (
           <NotesPanel
             coachingPoint={coachingPoint}
@@ -1910,19 +2482,27 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
             onCoachingPoint={setCoachingPoint}
             onNotes={setNotes}
             onTags={setTags}
-            onClose={() => setPicker(null)}
           />
         ) : (
           <>
+            {picker === 'defense' && (
+              <DefensePanel
+                library={library}
+                scoutPlayId={scoutPlayId}
+                onCoverage={applyCoveragePreset}
+                onScout={applyScout}
+              />
+            )}
+
             {picker === 'formation' && (
               <FormationPicker
                 formations={formations}
+                unit={unit}
                 foundationId={foundationId}
                 onApply={applyFormation}
-                onSave={saveFormation}
+                onSave={() => void saveFormation()}
                 onDelete={deleteFormation}
                 onSetFoundation={setFoundation}
-                onClose={() => setPicker(null)}
               />
             )}
 
@@ -1933,7 +2513,7 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
               */}
             <section className="tool-group">
               <h4>Mode</h4>
-              <BlockTool tool={tool} onTool={handleTool} />
+              <BlockTool tool={tool} unit={unit} onTool={handleTool} />
               <p className="tool-note">
                 {tool === 'select'
                   ? 'Tap a man to pick him up, tap again to set him down.'
@@ -1941,9 +2521,15 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                     ? 'Tap to start, move the pen, tap to finish. It does not have to stay down.'
                     : tool === 'erase'
                       ? 'Tap to start, sweep over the ink, tap to stop. Freehand rubs out in parts; a route or block goes whole.'
-                      : tool === 'routes'
-                        ? 'Tap a man to see what he can run, which way he runs it, and whether he gets the ball.'
-                        : 'Tap the blocker, then tap who he goes to.'}
+                      : tool === 'cover'
+                        ? 'Tap the defender, then tap the man he has.'
+                        : tool === 'stunt'
+                          ? 'Tap the man who crashes, then the man who loops behind him.'
+                          : tool === 'routes'
+                            ? unit === 'defense'
+                              ? 'Tap a defender for his job, his zone and the man he has.'
+                              : 'Tap a man to see what he can run, which way he runs it, and whether he gets the ball.'
+                            : 'Tap the blocker, then tap who he goes to.'}
               </p>
             </section>
 
@@ -1961,14 +2547,17 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                     />
                   </label>
                 </div>
-                <div className="tools">
-                  <button
-                    aria-pressed={ballCarrierId === selectedPlayer.id}
-                    onClick={() => giveBall(selectedPlayer.id)}
-                  >
-                    ★ Gets the ball
-                  </button>
-                </div>
+                {/* Nobody hands a defender the ball, so he is not offered it. */}
+                {selectedPlayer.side === 'offense' && (
+                  <div className="tools">
+                    <button
+                      aria-pressed={ballCarrierId === selectedPlayer.id}
+                      onClick={() => giveBall(selectedPlayer.id)}
+                    >
+                      ★ Ball
+                    </button>
+                  </div>
+                )}
                 {/*
                   * Who is in this slot. Only offered once there is a team sheet
                   * to pick from — an empty dropdown asking a question the app
@@ -2027,25 +2616,46 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                   onClick={() => setPicker((v) => (v === 'formation' ? null : 'formation'))}
                   aria-pressed={picker === 'formation'}
                 >
-                  Formation
+                  {unit === 'defense' ? 'Front' : 'Formation'}
                 </button>
+                {/*
+                  * The two decisions that are about the whole board rather than
+                  * one man, and the only defensive controls in the drawer: the
+                  * coverage, and which play this is drawn against.
+                  */}
+                {unit === 'defense' && (
+                  <button
+                    onClick={() => setPicker((v) => (v === 'defense' ? null : 'defense'))}
+                    aria-pressed={picker === 'defense'}
+                  >
+                    Call
+                  </button>
+                )}
                 <button onClick={mirror}>Flip sides</button>
                 <button
                   className="quiet"
-                  disabled={drawn.length + annotations.length === 0}
+                  disabled={drawn.length + annotations.length + zones.length === 0}
                   onClick={() => {
                     remember();
                     setAssignments([]);
                     setAnnotations([]);
+                    // The zones go with the lines: they are drawn work too, and
+                    // a Clear that left seven boxes on the board would read as
+                    // having failed.
+                    setZones([]);
                     setSel(null);
                     setPending(null);
                   }}
                 >
-                  Clear {drawn.length + annotations.length || ''}
+                  Clear {drawn.length + annotations.length + zones.length || ''}
                 </button>
               </div>
               <p className="tool-note">
-                Routes mode: tap a man on the board and pick what he runs.
+                {unit === 'defense'
+                  ? scout
+                    ? `Set against ${scout.name || scout.suggestedName || 'a play'}. Tap a defender for his job.`
+                    : 'Jobs mode: tap a defender and pick what he does.'
+                  : 'Routes mode: tap a man on the board and pick what he runs.'}
               </p>
             </section>
 
@@ -2058,9 +2668,6 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                 <button disabled={!canRedo} onClick={stepForward}>
                   Step forward
                 </button>
-                <button className="quiet" onClick={reset}>
-                  Start over
-                </button>
               </div>
             </section>
 
@@ -2070,9 +2677,19 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                 <button aria-pressed={showHoles} onClick={() => setShowHoles((v) => !v)}>
                   Hole numbers
                 </button>
-                <button aria-pressed={showDefense} onClick={handleDefense}>
-                  {defenseExists ? 'Defense' : 'Add defense'}
+                {/*
+                  * The gap letters: the same spaces as the holes, read from the
+                  * other side of the ball. Above the line, where the numbers are
+                  * below it, so both can be up at once.
+                  */}
+                <button aria-pressed={showGaps} onClick={() => setShowGaps((v) => !v)}>
+                  Gap letters
                 </button>
+                {unit === 'offense' && (
+                  <button aria-pressed={showDefense} onClick={handleDefense}>
+                    {defenseExists ? 'Defense' : '+ Defense'}
+                  </button>
+                )}
               </div>
             </section>
 
@@ -2082,15 +2699,8 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                 <button onClick={() => void saveNow()} disabled={saving}>
                   {saving ? 'Saving…' : 'Save'}
                 </button>
-                <button
-                  onClick={() => setPicker('notes')}
-                >
+                <button onClick={() => setPicker('notes')}>
                   Notes{tags.length ? ` · ${tags.length}` : ''}
-                </button>
-                <button
-                  onClick={() => setPicker('settings')}
-                >
-                  Settings
                 </button>
                 <button disabled={exporting} onClick={() => void exportPlay('pdf')}>
                   {exporting ? 'Working…' : 'Print sheet'}
@@ -2104,6 +2714,32 @@ export function PlayEditor({ play, onChange, onClose, onSave }: EditorProps) {
                   ? 'Saved to the cloud.'
                   : 'Every change is already kept on this phone. Save pushes it to the cloud now.'}
               </p>
+            </section>
+
+            {/*
+              * The app, not the play. Settings sat in the group above, between
+              * Notes and Print sheet, which said it was something about this
+              * play — it is the colours, the pen and the league rules, and it
+              * is the same on every play in the book.
+              */}
+            <section className="tool-group">
+              <h4>App</h4>
+              <div className="tools">
+                <button onClick={() => setPicker('settings')}>Settings</button>
+              </div>
+            </section>
+
+            {/*
+              * On its own at the bottom and wearing the one colour that means
+              * "this throws work away". It used to sit in the Undo group, in
+              * the same grey, one button along from Step back.
+              */}
+            <section className="tool-group">
+              <div className="tools full">
+                <button className="danger" onClick={() => void reset()}>
+                  Start this play over
+                </button>
+              </div>
             </section>
           </>
         )}

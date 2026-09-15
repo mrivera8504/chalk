@@ -4,8 +4,9 @@ import { AccountPanel } from './AccountPanel';
 import { RosterPanel } from './RosterPanel';
 import { readRoster, type RosterEntry } from '../domain/roster';
 import { useInstallPrompt } from '../store/install';
-import { UNFILED_SECTION, type Play, type Section } from '../domain/types';
+import { UNFILED_SECTION, type Play, type Section, type Side } from '../domain/types';
 import type { SyncState } from '../store/sync';
+import { askConfirm, askText } from '../ui/dialog';
 import { PlayCard } from './PlayCard';
 
 interface Props {
@@ -13,7 +14,7 @@ interface Props {
   sections: Section[];
   sync: SyncState;
   onOpen: (id: string) => void;
-  onNew: () => void;
+  onNew: (unit?: Side) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onAddSection: (name: string) => Section;
@@ -59,26 +60,36 @@ export function PlaybookList({
   onSaveNow,
 }: Props) {
   const [query, setQuery] = useState('');
+  /**
+   * Which unit is on show. Not a folder: a coach files by concept — goal line,
+   * first down — and every one of those folders can hold both sides of the ball.
+   * The unit is a fact about the play, so it filters across the folders rather
+   * than sorting the plays into two of them.
+   */
+  const [unit, setUnit] = useState<Side | 'all'>('all');
   const [dragging, setDragging] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [account, setAccount] = useState(false);
   const [rostering, setRostering] = useState(false);
+  /** The once-a-season controls, folded away behind one button. */
+  const [more, setMore] = useState(false);
   const [roster, setRoster] = useState<RosterEntry[]>(readRoster);
   const install = useInstallPrompt();
 
   /** Name, suggested name, tags and notes all match, because coaches search by feel. */
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return plays;
-    return plays.filter((p) =>
+    const ofUnit = unit === 'all' ? plays : plays.filter((p) => (p.unit ?? 'offense') === unit);
+    if (!q) return ofUnit;
+    return ofUnit.filter((p) =>
       [p.name, p.suggestedName ?? '', p.notes, p.coachingPoint, ...p.tags]
         .join(' ')
         .toLowerCase()
         .includes(q),
     );
-  }, [plays, query]);
+  }, [plays, query, unit]);
 
-  const searching = query.trim().length > 0;
+  const searching = query.trim().length > 0 || unit !== 'all';
 
   const grouped = useMemo(() => {
     const known = [...sections].sort((a, b) => a.order - b.order);
@@ -104,30 +115,40 @@ export function PlaybookList({
     return searching ? buckets.filter((b) => b.plays.length > 0) : buckets;
   }, [matches, sections, searching]);
 
-  function addSection() {
-    const name = prompt('Folder name');
-    if (name?.trim()) onAddSection(name.trim());
+  async function addSection() {
+    const name = await askText('New folder', {
+      placeholder: 'Goal line',
+      label: 'Folder name',
+      confirmLabel: 'Add folder',
+    });
+    if (name) onAddSection(name);
   }
 
-  /** Make a folder and drop this play straight into it, in one prompt. */
-  function fileInNew(playId: string) {
-    const name = prompt('New folder name');
-    if (!name?.trim()) return;
-    onSetSection(playId, onAddSection(name.trim()).id);
+  /** Make a folder and drop this play straight into it, in one question. */
+  async function fileInNew(playId: string) {
+    const name = await askText('New folder', {
+      body: 'The play goes straight into it.',
+      placeholder: 'Goal line',
+      label: 'Folder name',
+      confirmLabel: 'Add folder',
+    });
+    if (name) onSetSection(playId, onAddSection(name).id);
   }
 
-  function renameSection(s: Section) {
-    const name = prompt('Rename folder', s.name);
-    if (name?.trim()) onRenameSection(s.id, name.trim());
+  async function renameSection(s: Section) {
+    const name = await askText('Rename folder', { value: s.name, label: 'Folder name' });
+    if (name) onRenameSection(s.id, name);
   }
 
-  function deleteSection(s: Section, count: number) {
-    const warning = count
-      ? `Delete the folder "${s.name}"? The ${count} ${
-          count === 1 ? 'play goes' : 'plays go'
-        } back to Unfiled.`
-      : `Delete the empty folder "${s.name}"?`;
-    if (confirm(warning)) onDeleteSection(s.id);
+  async function deleteSection(s: Section, count: number) {
+    const ok = await askConfirm(`Delete the folder “${s.name}”?`, {
+      body: count
+        ? `The ${count} ${count === 1 ? 'play goes' : 'plays go'} back to Unfiled. Nothing is lost.`
+        : 'It is empty, so nothing goes with it.',
+      confirmLabel: 'Delete folder',
+      danger: true,
+    });
+    if (ok) onDeleteSection(s.id);
   }
 
   return (
@@ -138,57 +159,105 @@ export function PlaybookList({
       </header>
 
       <div className="book-tools">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search plays, tags, notes"
-          spellCheck={false}
-          aria-label="Search"
-        />
-        <button onClick={onNew}>New play</button>
-        <button className="quiet" onClick={addSection}>
-          Add folder
-        </button>
-        <button
-          className="quiet"
-          onClick={() => {
-            setExporting(false);
-            setAccount(false);
-            setRostering((v) => !v);
-          }}
-          aria-pressed={rostering}
-        >
-          Roster{roster.length ? ` · ${roster.length}` : ''}
-        </button>
-        <button
-          className="quiet"
-          onClick={() => {
-            setAccount(false);
-            setRostering(false);
-            setExporting((v) => !v);
-          }}
-          aria-pressed={exporting}
-        >
-          Export
-        </button>
-        <button
-          className="quiet"
-          onClick={() => {
-            setExporting(false);
-            setRostering(false);
-            setAccount((v) => !v);
-          }}
-          aria-pressed={account}
-        >
-          Account
-        </button>
-        {/* Only there when the browser has actually offered; see useInstallPrompt. */}
-        {install && (
-          <button className="quiet" onClick={install}>
-            Install
+        {/* Finding a play. */}
+        <div className="book-row">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search plays, tags, notes"
+            spellCheck={false}
+            aria-label="Search"
+          />
+          {/*
+            * Only there once there is something to filter. One unit's playbook
+            * showing an Offense/Defense switch is two buttons that do nothing.
+            */}
+          {plays.some((p) => p.unit === 'defense') && (
+            <div className="unit-filter">
+              {(['all', 'offense', 'defense'] as const).map((u) => (
+                <button key={u} aria-pressed={unit === u} onClick={() => setUnit(u)}>
+                  {u === 'all' ? 'All' : u === 'offense' ? 'Offense' : 'Defense'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Starting one, and then everything else. */}
+        <div className="book-row">
+          <button className="primary" onClick={() => onNew('offense')}>
+            New play
           </button>
-        )}
+          {/*
+            * Its own button rather than a choice inside the editor: a play is one
+            * unit or the other from the moment it exists, because every line
+            * drawn on it was drawn for one of them.
+            */}
+          <button onClick={() => onNew('defense')}>New defense</button>
+          <span className="spacer" />
+          <button className="quiet" onClick={() => void addSection()}>
+            Add folder
+          </button>
+          {/*
+            * The roster, the sheets, the account and the install prompt live
+            * behind this. Every one of them is something a coach does once a
+            * season, and all four sitting in the same row as New play is what
+            * made this screen a wall of identical grey.
+            */}
+          <button
+            className="quiet"
+            aria-expanded={more}
+            aria-label={more ? 'Fewer options' : 'More options'}
+            onClick={() => setMore((v) => !v)}
+          >
+            ⋯
+          </button>
+        </div>
       </div>
+
+      {more && (
+        <div className="book-more">
+          <button
+            className="quiet"
+            onClick={() => {
+              setExporting(false);
+              setAccount(false);
+              setRostering((v) => !v);
+            }}
+            aria-pressed={rostering}
+          >
+            Roster{roster.length ? ` · ${roster.length}` : ''}
+          </button>
+          <button
+            className="quiet"
+            onClick={() => {
+              setAccount(false);
+              setRostering(false);
+              setExporting((v) => !v);
+            }}
+            aria-pressed={exporting}
+          >
+            Export &amp; backup
+          </button>
+          <button
+            className="quiet"
+            onClick={() => {
+              setExporting(false);
+              setRostering(false);
+              setAccount((v) => !v);
+            }}
+            aria-pressed={account}
+          >
+            Account
+          </button>
+          {/* Only there when the browser has actually offered; see useInstallPrompt. */}
+          {install && (
+            <button className="quiet" onClick={install}>
+              Install
+            </button>
+          )}
+        </div>
+      )}
 
       {account && <AccountPanel onSaveNow={onSaveNow} onClose={() => setAccount(false)} />}
 
@@ -225,12 +294,12 @@ export function PlaybookList({
               {/* Unfiled is not a real folder, so it has nothing to rename. */}
               {section.id !== UNFILED_SECTION && (
                 <span className="section-tools">
-                  <button className="quiet" onClick={() => renameSection(section)}>
+                  <button className="quiet" onClick={() => void renameSection(section)}>
                     Rename
                   </button>
                   <button
-                    className="quiet"
-                    onClick={() => deleteSection(section, inSection.length)}
+                    className="quiet danger"
+                    onClick={() => void deleteSection(section, inSection.length)}
                   >
                     Delete
                   </button>

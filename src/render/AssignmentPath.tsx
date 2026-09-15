@@ -27,6 +27,18 @@ const STYLE: Record<AssignmentKind, Style> = {
   motion: { cap: 'arrow', dash: '0.55 0.38', color: 'var(--ink-motion)' },
   option: { cap: 'arrow', dash: '0.12 0.34', color: 'var(--ink-option)' },
   stay: { cap: 'none', color: 'var(--ink-block)' },
+  /*
+   * The defensive half, and the one place line style is doing real work: a
+   * defensive sheet is read in two seconds on a sideline and is mostly arrows.
+   * Going and getting it is solid and hot-coloured; giving up ground is dashed
+   * in the cover colour; a man you have is a dashed tether with no head at all,
+   * because it is not a path anybody runs — it is a rope between two players.
+   */
+  blitz: { cap: 'arrow', color: 'var(--ink-blitz)' },
+  contain: { cap: 'arrow', color: 'var(--ink-blitz)' },
+  stunt: { cap: 'arrow', color: 'var(--ink-blitz)' },
+  drop: { cap: 'arrow', dash: '0.5 0.32', color: 'var(--ink-cover)' },
+  cover: { cap: 'none', dash: '0.3 0.28', color: 'var(--ink-cover)' },
 };
 
 function Cap({

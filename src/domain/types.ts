@@ -75,7 +75,16 @@ export type AssignmentKind =
   | 'carry' // wavy, ball carrier
   | 'motion' // dashed, pre-snap
   | 'option' // dotted
-  | 'stay'; // nothing drawn
+  | 'stay' // nothing drawn
+  // The defensive half. Kept in the one union rather than given their own,
+  // because everything that handles an assignment — the eraser, delete, the
+  // colour swatches, the selection halo, the exporter — then handles these
+  // without being taught anything.
+  | 'blitz' // arrow into a gap, the rush colour
+  | 'contain' // arrow that turns out at the edge and squeezes back
+  | 'drop' // arrow to the spot he covers from, dashed
+  | 'cover' // defender to the man he has, regenerated from both
+  | 'stunt'; // two of them exchanging gaps, regenerated from both
 
 /** A quadratic control point turns the segment leading into this point into a curve. */
 export interface PathPoint {
@@ -168,6 +177,52 @@ export interface Focus {
   dy: number;
 }
 
+/**
+ * A patch of grass a defender is responsible for.
+ *
+ * Deliberately NOT the focus square's shape. A square hangs off the man and
+ * grows as it is aimed, which is right for "this receiver works this patch" and
+ * wrong for a coverage: a deep third is a wide shallow box sitting where it
+ * sits, a flat is beside its man, a hook is behind him. Aiming and sizing have
+ * to come apart, so the zone keeps its own centre and its own size in yards on
+ * the field, and a thin leader line back to the defender says whose it is.
+ *
+ * Stored on the field and not as an offset for the same reason: dragging the
+ * defender must NOT drag his zone. Where he lines up and where he has to get to
+ * are two different facts, and the gap between them is what a coach is reading.
+ */
+export interface Zone {
+  playerId: string;
+  /** The middle of it, in yards, origin at the middle of the LOS as ever. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** The concept it was built from, so the namer can read the coverage back. */
+  preset?: string;
+  /** 'Flat', 'Deep ⅓'. Drawn in the corner of the wash; blank draws nothing. */
+  label?: string;
+}
+
+/**
+ * Kinds stored as who-does-what-to-whom rather than as geometry, exactly as the
+ * block family is: the path is thrown away and rebuilt from both men on every
+ * render, so dragging either end redraws the line.
+ */
+export const LINK_KINDS = ['cover', 'stunt'] as const;
+export type LinkKind = (typeof LINK_KINDS)[number];
+
+export function isLinkKind(kind: AssignmentKind): kind is LinkKind {
+  return (LINK_KINDS as readonly string[]).includes(kind);
+}
+
+/** Every kind the defense draws, for the tool row and the picker groups. */
+export const DEFENSE_KINDS: AssignmentKind[] = ['blitz', 'contain', 'drop', 'cover', 'stunt'];
+
+export function isDefenseKind(kind: AssignmentKind): boolean {
+  return DEFENSE_KINDS.includes(kind);
+}
+
 export interface Section {
   id: string;
   name: string;
@@ -177,12 +232,37 @@ export interface Section {
 export interface Play {
   id: string;
   name: string;
+  /**
+   * Which unit this play belongs to.
+   *
+   * Optional, and absent means offense: every play drawn before the defense
+   * existed is an offensive play, and a migration that rewrote them all would
+   * be touching a hundred saved documents to say what their absence already
+   * says. It decides which side the editor opens pointed at, which formations
+   * the picker offers, and which rules the namer runs.
+   */
+  unit?: Side;
   /** '26 Sweep', computed. Only a suggestion; name always wins if set. */
   suggestedName?: string;
   backNumber?: number;
   hole?: number;
   sectionId: string;
   formationId?: string;
+  /**
+   * The front, kept apart from `formationId` rather than sharing it. A defensive
+   * play has an offense on the board too — the look it is set against — so one
+   * play can be wearing two formations at once and each has to remember its own.
+   */
+  defenseFormationId?: string;
+  /**
+   * The offensive play this defense is drawn against, by id, and nothing more.
+   *
+   * A reference and never a copy: the look is whatever that play says it is
+   * today, so fixing the sweep fixes every defense drawn against it. A play
+   * that has since been deleted simply draws no scout look, the same way a
+   * formation with no quarterback draws no cone.
+   */
+  scoutPlayId?: string;
   players: PlayerSlot[];
   assignments: Assignment[];
   /**
@@ -204,6 +284,12 @@ export interface Play {
   vision?: Vision;
   /** The focus squares. Offsets, so each one follows the man it belongs to. */
   focuses?: Focus[];
+  /**
+   * Coverage zones, beside the other two washes and on the play for the same
+   * reason: who has the flat is a call, not part of how the front lines up, so
+   * it must never travel inside a saved formation.
+   */
+  zones?: Zone[];
   /** Freehand scratch layer, owned by nobody. */
   annotations: PathPoint[][];
   notes: string;

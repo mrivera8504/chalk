@@ -23,6 +23,27 @@ export function countOnLine(players: PlayerSlot[]): number {
 }
 
 /**
+ * Who can catch a pass, and so who a defender can be given in man coverage.
+ *
+ * Computed off the board rather than stored on the player, for the same reason
+ * the holes are: it is a fact about where everybody is standing, and it changes
+ * the moment a tight end walks off the line. The rule is the real one — the two
+ * men on the ends of the line, plus everybody behind it — which means a wing
+ * who steps up onto the line covers the end beside him and both facts fall out
+ * of the same walk.
+ *
+ * The quarterback is left out. He is the man being read, not a man being
+ * covered, and a coverage rope drawn to him would be the one line on a
+ * defensive board that means something else entirely.
+ */
+export function eligibleReceivers(players: PlayerSlot[]): PlayerSlot[] {
+  const offense = players.filter((p) => p.side === 'offense' && p.backNumber !== 1);
+  const line = offense.filter((p) => p.onLine).sort((a, b) => a.x - b.x);
+  const ends = line.length > 1 ? [line[0], line[line.length - 1]] : line;
+  return offense.filter((p) => !p.onLine || ends.some((e) => e.id === p.id));
+}
+
+/**
  * Never blocks saving. Coaches draw illegal formations on purpose, to show a
  * team what not to do or to sketch something mid-thought.
  */

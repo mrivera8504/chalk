@@ -1,7 +1,10 @@
 import { useCallback, useState } from 'react';
 import { PlayEditor } from './editor/PlayEditor';
+import { UNFILED_SECTION, type Side } from './domain/types';
 import { PlaybookList } from './playbook/PlaybookList';
 import { blankPlay, usePlaybook } from './store/usePlaybook';
+import { DialogHost } from './ui/DialogHost';
+import { askConfirm } from './ui/dialog';
 
 export function App() {
   const book = usePlaybook();
@@ -9,11 +12,14 @@ export function App() {
 
   const open = book.plays.find((p) => p.id === openId) ?? null;
 
-  const startNew = useCallback(() => {
-    const play = blankPlay();
-    book.savePlay(play);
-    setOpenId(play.id);
-  }, [book]);
+  const startNew = useCallback(
+    (unit: Side = 'offense') => {
+      const play = blankPlay(UNFILED_SECTION, unit);
+      book.savePlay(play);
+      setOpenId(play.id);
+    },
+    [book],
+  );
 
   /**
    * Backup writes a file rather than a share sheet, because the point of it is
@@ -32,35 +38,53 @@ export function App() {
 
   if (open) {
     return (
-      <PlayEditor
-        key={open.id}
-        play={open}
-        onChange={book.savePlay}
-        onSave={book.saveNow}
-        onClose={() => setOpenId(null)}
-      />
+      <>
+        <DialogHost />
+        <PlayEditor
+          key={open.id}
+          play={open}
+          /* The rest of the book, so a defensive play can be set against one. */
+          library={book.plays}
+          onChange={book.savePlay}
+          onSave={book.saveNow}
+          onClose={() => setOpenId(null)}
+        />
+      </>
     );
   }
 
   return (
-    <PlaybookList
-      plays={book.plays}
-      sections={book.sections}
-      sync={book.sync}
-      onOpen={setOpenId}
-      onNew={startNew}
-      onDuplicate={book.duplicatePlay}
-      onDelete={(id) => {
-        if (confirm('Delete this play?')) book.deletePlay(id);
-      }}
-      onAddSection={book.addSection}
-      onRenameSection={book.renameSection}
-      onDeleteSection={book.deleteSection}
-      onSetSection={book.setPlaySection}
-      onMovePlay={book.movePlay}
-      onExport={exportBook}
-      onRestore={book.importJson}
-      onSaveNow={book.saveNow}
-    />
+    <>
+      <DialogHost />
+      <PlaybookList
+        plays={book.plays}
+        sections={book.sections}
+        sync={book.sync}
+        onOpen={setOpenId}
+        onNew={startNew}
+        onDuplicate={book.duplicatePlay}
+        onDelete={async (id) => {
+          const play = book.plays.find((p) => p.id === id);
+          const name = play?.name || play?.suggestedName || 'this play';
+          if (
+            await askConfirm(`Delete ${name}?`, {
+              body: 'It goes for good. A backup file is the only way back.',
+              confirmLabel: 'Delete',
+              danger: true,
+            })
+          ) {
+            book.deletePlay(id);
+          }
+        }}
+        onAddSection={book.addSection}
+        onRenameSection={book.renameSection}
+        onDeleteSection={book.deleteSection}
+        onSetSection={book.setPlaySection}
+        onMovePlay={book.movePlay}
+        onExport={exportBook}
+        onRestore={book.importJson}
+        onSaveNow={book.saveNow}
+      />
+    </>
   );
 }

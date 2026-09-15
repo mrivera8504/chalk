@@ -411,17 +411,20 @@ Single play PNG and PDF. Call sheet at 4, 6, or 9 per page. Wristband strips. Bi
 **Stage 7 — Polish**
 Service worker and offline shell. Install prompt. Portrait and landscape layouts. Undo depth. Dark mode.
 
+**Stage 8 — The defense**
+A play is offense or defense from the moment it is made. Coverage zones with presets, a corner to size them and a leader line to the man who owns them. Man coverage and line-game stunts, both stored as who-does-what-to-whom. Blitzes aimed at computed A/B/C gaps, plus contain and spill. Gap letters over the line, the defensive twin of the hole numbers. Saveable fronts. Whole coverages in one tap. A defensive play set against any offensive play in the book. Defensive play naming: front, coverage, pressure.
+
 ---
 
 ## 11. Deferred
 
-Play animation. Defensive scheme library. Film integration. Stat and play-call tracking. Sharing with other coaches or players. Multi-team support.
+Play animation. Film integration. Stat and play-call tracking. Sharing with other coaches or players. Multi-team support.
 
 ---
 
 ## 12. Settled since drafting
 
-- Defense is opt-in. A new play opens with offense only.
+- Defense is opt-in **on an offensive play**: one opens with offense only, and a front is added when a block tool or the Show toggle asks for one. A defensive play is the other way round — it opens with a front and a look to line it up against, because the gap map is computed from whoever is on the offensive line.
 - Field length is stored as 70 but unused. The play view shows roughly 40 yards around the LOS regardless, so length only matters if a full-field or red zone view gets added later.
 
 ## 13. Still open

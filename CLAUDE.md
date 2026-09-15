@@ -10,6 +10,16 @@ formations and auto play-naming, freehand ink, a playbook that saves, and
 export, and an offline shell. The app installs to the home screen and opens
 with no signal.
 
+**The defense is a full unit now.** A play is offense or defense from the moment
+it is made; a defensive play carries coverage zones, man-coverage ropes, blitzes
+aimed at computed gaps, contain and spill, line-game stunts, saveable fronts,
+one-tap coverages, and a look copied over from any offensive play in the book.
+
+**The chrome has had a pass.** Every control is a pen-sized target, the drawer
+behaves like a menu rather than a palette, the inspector takes a side in
+landscape, and the twelve browser `prompt()` and `confirm()` boxes are gone. See
+*Chrome, controls and dialogs*.
+
 **Service workers need HTTPS.** The LAN dev server cannot register one, so
 offline and the install prompt are only testable on the deployed site.
 
@@ -61,6 +71,71 @@ taps fall through to the board everywhere the panel is not, and
 `handleStageDown` ignores anything inside `.inspector, .drawer`. The hint lives
 on `.hint-pill`, floating over the board and inert, so the line telling you
 whose block you are halfway through outlives the drawer being shut.
+
+## Chrome, controls and dialogs
+
+**One control size, and it is the pen's.** 40px is the floor and 44px anywhere a
+pen works through a list — the drawer, the route picker, the dialog. This is the
+same fact as the drawer tab needing 52px: Chrome gives a finger touch adjustment
+and hit-tests a stylus at the exact pixel. Every pill in the app was 33px, which
+was that bug spread across a hundred buttons. The genuinely secondary controls —
+a card's Copy, a folder's Rename, the trace bar — opt down to 32px by name.
+
+**The drawer is a menu, not a palette.** It covers 58% of the board on a phone,
+so it opens closed in portrait and slides itself away after a one-shot action:
+applying a formation or a coverage, setting the look, flipping sides, starting
+over. Toggles and the mode row leave it open. The auto-close is deliberately
+**not** written to storage — only the coach's own tap on the tab changes what the
+drawer does next time, so a tablet left with the tools out keeps them out.
+`drawerDefault()` decides the first answer from the screen; after that the
+stored one wins.
+
+**One header belongs to the drawer.** Every picker used to bring its own, so
+opening Settings stacked two titles and two dismiss buttons that did different
+things — one went back to the tools, the other slid the panel away. Those are
+the back arrow and Hide. `SettingsPanel`, `NotesPanel`, `FormationPicker` and
+`DefensePanel` draw no head at all now; their subtitles come through
+`Drawer`'s `subtitle`. Switching panels resets the scroll, or Settings opened
+halfway down itself.
+
+**Settings and Notes widen the panel.** They are long forms with number fields
+and paragraphs, read while not drawing, and 300px is a column not a page.
+
+**In landscape the inspector takes a side, not the top.** Turning the phone makes
+the board height-constrained and leaves room at the edges — which is why the
+drawer lives there. A strip across the top took 45% of a 360px-tall viewport. It
+takes the edge the drawer is *not* on, and the quick bar steps across to the
+board when it opens so it stops covering the route list.
+
+**A capped panel says so at its edge.** Every one of them was cutting a row of
+buttons exactly in half, which reads as a broken render rather than as "there is
+more below". `useScrollFade` puts the mask on only when the box really does
+overflow — a fade on a panel whose content fits just dims its last row, and CSS
+alone cannot tell the two apart.
+
+**One primary per screen, and destructive things look it.** `button.primary` is
+filled; `button.danger` carries the bad colour. Start over moved out of the Undo
+group, where it sat one button along from Step back in the same grey.
+
+**Everything the app asks is asked in the app.** `ui/dialog.ts` is a tiny
+external store shaped like `store/settings.ts` — `askText()` and `askConfirm()`
+return promises, `DialogHost` is mounted once in `App` — because the twelve
+`prompt()` and `confirm()` calls it replaced arrived as browser chrome in an
+installed PWA: another typeface, mouse-sized buttons, the origin across the top,
+and `prompt()` is the one browsers are least willing to show at all. Verified
+that a five-pair contact-bounce burst on a button opens exactly one dialog, and
+that a burst on Cancel closes it and changes nothing.
+
+**A glyph on a button only when the same mark lands on the board.** ★ Ball keeps
+its star because the carrier is drawn as one. Zone, Focus, Vision, Flip and Man
+up lost theirs — a ▢ in front of two different buttons said they were the same
+kind of thing.
+
+**The header badge counts the unit the play belongs to.** It was reporting the
+*offense's* legality on a defensive play — "4 on line, legal" — which is a fact
+about the scout look, in the most prominent place on the screen, answering a
+question nobody asked. A defense reports its shape instead: how many are up on
+the ball, out of how many are on the field.
 
 ## The target device
 
@@ -170,6 +245,92 @@ underneath, so handing the ball to somebody else gives him his own mark back
 with nothing to undo. His label switches to `--ball-line`, which is dark on the
 screen's yellow and white on the black that print swaps in. Drawn as a polygon
 rather than typed as a glyph, because an exported SVG carries no fonts.
+
+## The defense
+
+A play knows which unit it is: `Play.unit`, written at creation and never
+changed here, because every line already drawn on it was drawn for one of them.
+Absent means offense — every play drawn before this existed is an offensive
+play, and a migration rewriting a hundred documents to say what their absence
+already says would be work for nothing.
+
+A defensive play opens with **a look already across from it**. That is not a
+convenience: the gap map is computed from whoever is on the offensive line, so a
+front with nobody across the ball has no gaps, nothing to aim a blitz at and
+nobody to cover.
+
+**Gaps are computed, never stored** — `domain/gaps.ts`, the twin of
+`domain/holes.ts` and the same walk over whoever is on the line. Letters out
+from the ball on both sides, so shifting a tight end re-letters the front for
+free and mirroring a play sends a C-gap blitz into the other C gap. Holes and
+gaps cannot share one map: a hole is odd one way and even the other because the
+offense calls the direction with the number, and a gap is lettered the same both
+ways because the defense calls the direction separately. So the space between
+the centre and the right guard is the 2 hole and the A gap, and both are right.
+They draw on opposite sides of the LOS — numbers below, letters above — so each
+unit reads its own map off its own side and the two can be up at once.
+
+**Zones are a patch of grass, not a focus square.** `Zone` keeps its own centre
+and its own size, in yards on the field, and a leader line back to its defender.
+The square hangs off its man and grows as it is aimed, which is right for "this
+receiver works this patch" and wrong for a coverage: a deep third is a wide
+shallow box sitting where it sits, a flat is beside its man, a hook is behind
+him. Aiming and sizing had to come apart, so the body moves it and the far
+corner sizes it — two `DragState` kinds, both through `applyDrag`, which is what
+buys tap-move-tap, contact-bounce resume and one-gesture-one-undo for free.
+
+Dragging the **defender** deliberately does not drag his zone. Where he lines up
+and where he has to get to are two different facts, and the gap between them is
+what a coach is reading.
+
+Unlike the cone and the square, a zone **keeps an edge**. Those two fade out
+because where a look ends is a soft question; a zone's boundary is the whole
+point of a zone.
+
+**Man coverage and stunts store who-does-what-to-whom**, exactly as blocks do,
+and `refreshPaths` in `domain/regenerate.ts` rebuilds all three families every
+render. One function because three places draw a play — the board, the thumbnail
+and the exporter — and a fourth kind of regenerated line added to only two of
+them would draw a play three different ways.
+
+A stunt is **two assignments**, each naming the other, the roles kept in
+`preset` (`stunt-crash`, `stunt-loop`). They are two men's jobs, either end can
+be erased, and each has to follow its own player. Deleting or rubbing out one
+takes the pair: half a line game is a man looping behind nobody.
+
+**A rush and a zone are not both a man's job.** Sending a blitzer clears his
+zone and giving a man grass clears his rush — the last thing said about him
+wins, like his one route.
+
+**A coverage is the one call about seven men at once**, so it is applied as a
+call (`domain/presets/coverages.ts`) rather than as seven trips to the picker.
+It splits the deep field by **what the call asks for, not by the head count**:
+Cover 3 with two deep men is three thirds with one of them nobody's, and that
+vacated third is exactly what a coach needs to see. Everything it lays down is
+an ordinary zone and an ordinary rope afterwards.
+
+Man coverage pairs with **eligible receivers only** (`eligibleReceivers` in
+`domain/legality.ts`, computed off the board like everything else): pairing by
+raw distance put a linebacker in man coverage on the centre.
+
+**The look is copied, not referenced.** `Play.scoutPlayId` records which play a
+defense was set against and nothing more. A live reference would leave the gap
+map, every rope and every pick naming players in another document, and the gap
+map is computed from whoever is on the line *here*. Ropes pointing at men who
+just left are dropped explicitly rather than by `refreshPaths`, because player
+ids are only unique within a play: an id that came back would silently point the
+coverage at whoever inherited it.
+
+**The defensive name is read off the board** — front, coverage, pressure:
+`5-2 Cover 3 W A Fire`. The coverage comes from the zones' own presets rather
+than only their count, and the blitz is named by **the gap its path crosses the
+line in**, not the space the man lines up in: reading his alignment called an
+A-gap blitz from a linebacker shaded outside the guard a B fire.
+
+Fronts are real formations with `side: 'defense'`, saved in the same store and
+starred independently of the offense's foundation. Applying a formation replaces
+**its own side only**, so one front can be tried against three looks without
+redrawing the half of the board you are not thinking about.
 
 ## The marks, and the two highlights
 
@@ -348,7 +509,10 @@ canvas. A serialized SVG carries no stylesheet, so every custom property is
 written into the file's own `<style>`; `TOKENS` lists them and must be kept in
 step with what the renderers reference. `PRINT_TOKENS` then overrides the lot
 for paper — white turf, black marks, and saturated ink, because the screen
-palette is pastel for dark turf and vanishes on white. Verified in-browser that
+palette is pastel for dark turf and vanishes on white. The rush ink stays red on
+paper and the zone keeps a hue of its own, unlike the two washes that go grey:
+a zone is drawn with an edge and a label rather than as a fade, and grey boxes
+over grey routes would not be tellable apart on a photocopy. Verified in-browser that
 custom properties do resolve inside a rasterized SVG.
 
 `export/pdf.ts` composes the sheets with `pdf-lib`: single play, call sheet at

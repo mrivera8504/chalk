@@ -183,6 +183,18 @@ export function describeAssignment(a: Assignment, players: PlayerSlot[]): string
       return `${who} goes in motion`;
     case 'option':
       return `${who} options`;
+    case 'cover':
+      return `${who} has ${name(a.targetPlayerId)}`;
+    case 'stunt':
+      return `${who} ${a.preset === 'stunt-loop' ? 'loops behind' : 'crashes across'} ${name(
+        a.targetPlayerId,
+      )}`;
+    case 'blitz':
+      return `${who} blitzes`;
+    case 'contain':
+      return `${who} has contain`;
+    case 'drop':
+      return `${who} drops`;
     default:
       return `${who} stays`;
   }

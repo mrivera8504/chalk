@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { applyOnLine } from '../domain/legality';
 import { withSuggestion } from '../domain/naming';
-import { foundationOffense } from '../domain/presets/formations';
-import { UNFILED_SECTION, type Play, type Section } from '../domain/types';
+import {
+  foundationDefense,
+  foundationOffense,
+  readFoundationId,
+} from '../domain/presets/formations';
+import { UNFILED_SECTION, type Play, type Section, type Side } from '../domain/types';
 import { getSettings } from './settings';
 import { makeBackup, readBackup } from './backup';
 import { EMPTY, pullFromCloud, pushToCloud, readLocal, writeLocal, type SyncState } from './sync';
@@ -12,13 +16,35 @@ const AUTOSAVE_MS = 800;
 let counter = 0;
 export const newId = (p: string) => `${p}${Date.now().toString(36)}${(counter++).toString(36)}`;
 
-export function blankPlay(sectionId = UNFILED_SECTION): Play {
+/**
+ * A new play, on one side of the ball or the other.
+ *
+ * A defensive play opens with a look already across from it, and that is not a
+ * convenience: the gap map is computed from whoever is on the offensive line,
+ * so a front with nobody across from it has no gaps, nothing to aim a blitz at
+ * and nobody to cover. The unit is written down at creation and never changed
+ * afterwards — every line on the board was drawn for one of them.
+ */
+export function blankPlay(sectionId = UNFILED_SECTION, unit: Side = 'offense'): Play {
   const now = Date.now();
   return {
     id: newId('p'),
     name: '',
+    unit,
+    /*
+     * The front it opened in, so the sheet can say "5-2 Cover 3" from the
+     * first tap rather than only after somebody has been through the picker.
+     * The starred one if there is one, and the built-in base if not — which is
+     * exactly what foundationDefense() just put on the board.
+     */
+    ...(unit === 'defense'
+      ? { defenseFormationId: readFoundationId('defense') ?? 'builtin-5-2' }
+      : {}),
     sectionId,
-    players: applyOnLine(foundationOffense(), getSettings()),
+    players: applyOnLine(
+      unit === 'defense' ? [...foundationOffense(), ...foundationDefense()] : foundationOffense(),
+      getSettings(),
+    ),
     assignments: [],
     annotations: [],
     notes: '',

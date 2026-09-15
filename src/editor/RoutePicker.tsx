@@ -1,5 +1,16 @@
+import { useScrollFade } from '../ui/useScrollFade';
+import { DEFENSE_PRESETS, type DefensePreset } from '../domain/presets/defense';
 import { ROUTES, type RoutePreset } from '../domain/presets/routes';
+import { ZONE_PRESETS, type ZonePreset } from '../domain/presets/zones';
 import type { PlayerSlot, ShapeKind } from '../domain/types';
+
+/*
+ * One rule for symbols in this panel: a button wears one only when the same
+ * mark is what lands on the board. The star does — it is drawn on the carrier —
+ * so ★ Ball keeps it. Zone, Focus, Vision, Flip and Man up draw no glyph
+ * anywhere, and the ▢ in front of two different buttons was saying they were
+ * the same kind of thing when they are not.
+ */
 
 /**
  * The marks a man can be drawn as, in the order they are offered.
@@ -18,8 +29,30 @@ const SHAPES: { kind: ShapeKind; name: string }[] = [
   { kind: 'x', name: '✕' },
 ];
 
+/**
+ * Everything the picker offers a defender, which is a different list and not a
+ * relabelled one.
+ *
+ * Present only for a man on the defensive side, so one panel serves both units
+ * without either of them being shown a row that does nothing. A defender has no
+ * star — nobody hands him the ball — and no focus square: the zone is the same
+ * idea done properly for coverage, and offering both would be two washes saying
+ * almost the same thing off one man.
+ */
+export interface DefenseTools {
+  onPick: (preset: DefensePreset) => void;
+  onZone: (preset: ZonePreset) => void;
+  /** A zone with no concept behind it, to be dragged into shape. */
+  hasZone: boolean;
+  onToggleZone: () => void;
+  /** Man up on the nearest receiver, without a trip through the Man tool. */
+  onCoverNearest: (() => void) | null;
+}
+
 interface Props {
   player: PlayerSlot;
+  /** Set for a defender, and that is what switches the panel to his side. */
+  defense?: DefenseTools;
   /** The user's own, already wearing the preset face. */
   custom: RoutePreset[];
   /** Set when this player has a drawn route there is any point saving. */
@@ -47,21 +80,30 @@ interface Props {
   onColor: ((color: string | undefined) => void) | null;
 }
 
-function Group({
+/**
+ * A row of named concepts. Typed on the name and the id alone, so the same row
+ * serves routes, defensive jobs and zones: they are three libraries of the same
+ * shape — a name a coach says, and a function that draws it.
+ */
+function Group<T extends { id: string; name: string }>({
   title,
+  note,
   routes,
   onPick,
   onDeleteCustom,
 }: {
   title: string;
-  routes: RoutePreset[];
-  onPick: (p: RoutePreset) => void;
+  /** A line under the heading, for a row whose name is not the whole story. */
+  note?: string;
+  routes: T[];
+  onPick: (p: T) => void;
   onDeleteCustom?: (id: string) => void;
 }) {
   if (!routes.length) return null;
   return (
     <div className="picker-group">
       <h3>{title}</h3>
+      {note && <p className="picker-note">{note}</p>}
       <div className="picker-row">
         {routes.map((r) =>
           onDeleteCustom ? (
@@ -99,6 +141,7 @@ function Group({
  */
 export function RoutePicker({
   player,
+  defense,
   custom,
   onSaveDrawn,
   onPick,
@@ -116,8 +159,10 @@ export function RoutePicker({
   color,
   onColor,
 }: Props) {
+  const scroller = useScrollFade<HTMLDivElement>();
+
   return (
-    <div className="route-picker">
+    <div className="route-picker" ref={scroller}>
       {/*
         * Everything about this man that is decided while looking at him: what
         * he runs, which way he runs it, whether he is the one getting the ball
@@ -126,31 +171,57 @@ export function RoutePicker({
         */}
       <div className="picker-head">
         <strong>{player.label}</strong>
-        <span>runs</span>
-        <button
-          className={hasBall ? 'ball on' : 'ball'}
-          aria-pressed={hasBall}
-          aria-label={hasBall ? `${player.label} is not getting the ball` : `${player.label} gets the ball`}
-          onClick={onGiveBall}
-        >
-          ★ Ball
-        </button>
+        <span>{defense ? 'plays' : 'runs'}</span>
+        {!defense && (
+          <button
+            className={hasBall ? 'ball on' : 'ball'}
+            aria-pressed={hasBall}
+            aria-label={
+              hasBall ? `${player.label} is not getting the ball` : `${player.label} gets the ball`
+            }
+            onClick={onGiveBall}
+          >
+            ★ Ball
+          </button>
+        )}
         {/*
           * The two highlights, on the man rather than in the drawer. Both are
           * decisions about one player — this one is worth watching, and this
           * one is the quarterback reading him — so they belong where he is,
           * next to the star, and not three taps away behind a tab.
           */}
-        <button
-          className={hasFocus ? 'ball on' : 'ball'}
-          aria-pressed={hasFocus}
-          aria-label={
-            hasFocus ? `Take the focus square off ${player.label}` : `Focus on ${player.label}`
-          }
-          onClick={onFocus}
-        >
-          ▢ Focus
-        </button>
+        {defense ? (
+          <>
+            <button
+              className={defense.hasZone ? 'ball on' : 'ball'}
+              aria-pressed={defense.hasZone}
+              aria-label={
+                defense.hasZone
+                  ? `Take ${player.label}'s zone off`
+                  : `Give ${player.label} a zone`
+              }
+              onClick={defense.onToggleZone}
+            >
+              Zone
+            </button>
+            {defense.onCoverNearest && (
+              <button onClick={defense.onCoverNearest} aria-label={`${player.label} takes a man`}>
+                Man up
+              </button>
+            )}
+          </>
+        ) : (
+          <button
+            className={hasFocus ? 'ball on' : 'ball'}
+            aria-pressed={hasFocus}
+            aria-label={
+              hasFocus ? `Take the focus square off ${player.label}` : `Focus on ${player.label}`
+            }
+            onClick={onFocus}
+          >
+            Focus
+          </button>
+        )}
         {onVision && (
           <button
             className={hasVision ? 'ball on' : 'ball'}
@@ -158,12 +229,12 @@ export function RoutePicker({
             aria-label={hasVision ? 'Hide where he is looking' : 'Show where he is looking'}
             onClick={onVision}
           >
-            ◭ Vision
+            Vision
           </button>
         )}
         {onFlip && (
           <button onClick={onFlip} aria-label="Run it to the other side">
-            ⇄ Flip
+            Flip
           </button>
         )}
         {onClear && (
@@ -202,6 +273,10 @@ export function RoutePicker({
         */}
       {onColor && (
         <div className="picker-group">
+          {/* Labelled like every other row in here. It was the one group with no
+              heading, which left a line of coloured circles under the marks
+              with nothing saying what they would paint. */}
+          <h3>Line colour</h3>
           <div className="picker-row swatches">
             {swatches.map((c) => (
               <button
@@ -226,11 +301,62 @@ export function RoutePicker({
         <p className="picker-note">Drag the cone on the board to swing where he looks.</p>
       )}
 
-      <Group title="Pass" routes={ROUTES.filter((r) => r.group === 'pass')} onPick={onPick} />
-      <Group title="Run" routes={ROUTES.filter((r) => r.group === 'run')} onPick={onPick} />
-      <Group title="Yours" routes={custom} onPick={onPick} onDeleteCustom={onDeleteCustom} />
+      {defense ? (
+        <>
+          {/*
+            * Rush before drop, because that is the order a defensive call is
+            * made in: you decide who is coming first, and everybody else is
+            * covering behind it.
+            */}
+          <Group
+            title="Rush"
+            routes={DEFENSE_PRESETS.filter((d) => d.group === 'rush')}
+            onPick={(p) => defense.onPick(p as DefensePreset)}
+          />
+          {/*
+            * Hook and Flat appear here and again below, and that is not a
+            * duplicate: this row draws the arrow he runs, and the rows below
+            * hand him the grass he owns. Most calls want one or the other, so
+            * the difference is said out loud rather than left to be worked out.
+            */}
+          <Group
+            title="Drop"
+            note="An arrow showing where he goes."
+            routes={DEFENSE_PRESETS.filter((d) => d.group === 'drop')}
+            onPick={(p) => defense.onPick(p as DefensePreset)}
+          />
+          {/*
+            * The spaces themselves, beside the drops rather than in the drawer.
+            * Which man has the flat is a decision about this man, and the whole
+            * reason the route picker exists is that those were two trips.
+            */}
+          <Group
+            title="Zone"
+            note="The grass he owns, drawn as a box."
+            routes={ZONE_PRESETS.filter((z) => z.group === 'under')}
+            onPick={(p) => defense.onZone(p as ZonePreset)}
+          />
+          <Group
+            title="Deep zone"
+            routes={ZONE_PRESETS.filter((z) => z.group === 'deep')}
+            onPick={(p) => defense.onZone(p as ZonePreset)}
+          />
+          {defense.hasZone && (
+            <p className="picker-note">
+              Drag the box to move it, or its far corner to change how much grass
+              he has.
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <Group title="Pass" routes={ROUTES.filter((r) => r.group === 'pass')} onPick={onPick} />
+          <Group title="Run" routes={ROUTES.filter((r) => r.group === 'run')} onPick={onPick} />
+          <Group title="Yours" routes={custom} onPick={onPick} onDeleteCustom={onDeleteCustom} />
+        </>
+      )}
 
-      {onSaveDrawn ? (
+      {defense ? null : onSaveDrawn ? (
         <div className="picker-group">
           <div className="picker-row">
             <button onClick={onSaveDrawn}>Save {player.label}'s route</button>

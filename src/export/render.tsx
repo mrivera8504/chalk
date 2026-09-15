@@ -1,11 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { autoRouteColor } from '../domain/colors';
+import { computeGaps } from '../domain/gaps';
 import { computeHoles } from '../domain/holes';
+import { refreshPaths } from '../domain/regenerate';
 import { quarterback, type Play } from '../domain/types';
 import { getSettings } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
 import { FocusSquare } from '../render/FocusSquare';
+import { ZoneArea } from '../render/Zone';
 import { PlayerShape } from '../render/PlayerShape';
 import { VisionCone } from '../render/VisionCone';
 import { VIEW, VIEW_BOX, toPathD } from '../render/geometry';
@@ -41,6 +44,8 @@ const TOKENS = [
   '--ink-carry',
   '--ink-motion',
   '--ink-option',
+  '--ink-blitz',
+  '--ink-cover',
   '--chalk',
   '--select',
   '--hover',
@@ -50,6 +55,7 @@ const TOKENS = [
   '--jersey',
   '--vision',
   '--focus',
+  '--zone',
 ];
 
 function tokenBlock(): string {
@@ -61,8 +67,10 @@ function tokenBlock(): string {
 export interface SheetOptions {
   /** Hole numbers are for install; a call sheet reads better without them. */
   showHoles?: boolean;
-  /** The scout look. Off by default: most plays are drawn offense-only. */
+  /** The front. Off by default: most offensive plays are drawn without one. */
   showDefense?: boolean;
+  /** The gap letters, the defensive half of the hole map. */
+  showGaps?: boolean;
   /** Paper is white, so the turf goes pale and the marks go dark. */
   forPrint?: boolean;
 }
@@ -85,13 +93,23 @@ const PRINT_TOKENS =
   // receiver you could tell apart by colour on the board is the same colour,
   // still distinguishable, on the sheet.
   '--ink-carry:#c2410c;--ink-block:#a16207;--ink-motion:#6d28d9;' +
+  // The rush stays red on paper because it is the line a coach counts first;
+  // the cover ink goes near-black, since the pale grey that reads on dark turf
+  // is invisible on white and a coverage rope is mostly what a defensive sheet
+  // is made of.
+  '--ink-blitz:#b91c1c;--ink-cover:#334155;' +
   '--ink-option:#475569;--ball:#000000;--ball-line:#ffffff;--jersey:#334155;' +
   '--route-0:#0369a1;--route-1:#15803d;' +
   '--route-2:#6d28d9;--route-3:#be185d;--route-4:#4d7c0f;--route-5:#0f766e;' +
   // The highlights go grey on paper. They are laid under the play at a tenth
   // of their alpha, and a yellow wash that reads on dark turf prints as either
   // nothing at all or a stain across the routes drawn over it.
-  '--vision:#1f2937;--focus:#1f2937';
+  '--vision:#1f2937;--focus:#1f2937;' +
+  // The zone keeps a hue of its own, unlike the other two washes. It is drawn
+  // with an edge and a label rather than as a fade, so it survives being printed
+  // at a tenth of its alpha, and grey boxes over grey routes would not be
+  // tellable apart on a photocopy.
+  '--zone:#1d4ed8';
 
 /**
  * One play as a standalone SVG document.
@@ -109,19 +127,38 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
    * the editor's stale useMemo arrays made.
    */
   const holes = computeHoles(play.players, getSettings());
+  const gaps = computeGaps(play.players);
   const qb = quarterback(play.players);
   const focused = (play.focuses ?? []).flatMap((f) => {
     const man = play.players.find((p) => p.id === f.playerId);
     return man ? [{ man, focus: f }] : [];
   });
-  const players = opts.showDefense
-    ? play.players
-    : play.players.filter((p) => p.side === 'offense');
+  /*
+   * A defensive play always draws both sides, whatever the sheet was asked for:
+   * the front is the play, and a front printed with nothing across from it is a
+   * picture of seven men standing in a field.
+   */
+  const players =
+    opts.showDefense || play.unit === 'defense'
+      ? play.players
+      : play.players.filter((p) => p.side === 'offense');
 
   const body = renderToStaticMarkup(
     <>
-      <Field holes={holes} showHoles={opts.showHoles ?? false} />
+      <Field
+        holes={holes}
+        showHoles={opts.showHoles ?? false}
+        gaps={gaps}
+        showGaps={opts.showGaps ?? false}
+      />
       {/* Under everything, exactly as on the board. */}
+      {(play.zones ?? []).map((z) => (
+        <ZoneArea
+          key={`zone${z.playerId}`}
+          zone={z}
+          player={play.players.find((p) => p.id === z.playerId) ?? null}
+        />
+      ))}
       {focused.map(({ man, focus }) => (
         <FocusSquare key={`focus${man.id}`} player={man} focus={focus} />
       ))}
@@ -138,7 +175,9 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
           opacity={0.75}
         />
       ))}
-      {play.assignments.map((a) => (
+      {/* Regenerated from the players, as the board draws them: a block, a
+          cover rope and a stunt are stored as relationships, never as lines. */}
+      {refreshPaths(play.assignments, play.players).map((a) => (
         <AssignmentPath key={a.id} assignment={a} autoColor={autoRouteColor(a, play.players)} />
       ))}
       {players.map((p) => (

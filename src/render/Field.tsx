@@ -1,3 +1,4 @@
+import type { Gap } from '../domain/gaps';
 import type { Hole } from '../domain/types';
 import { VIEW } from './geometry';
 
@@ -9,9 +10,12 @@ interface Props {
   showHoles: boolean;
   /** x positions of players near the LOS, so hole numbers do not hide behind them. */
   occupied?: number[];
+  /** The same spaces, lettered, for the defense. */
+  gaps?: Gap[];
+  showGaps?: boolean;
 }
 
-export function Field({ holes, showHoles, occupied = [] }: Props) {
+export function Field({ holes, showHoles, occupied = [], gaps = [], showGaps = false }: Props) {
   const lines: number[] = [];
   for (let y = -VIEW.downfield; y <= VIEW.behind; y += 5) {
     if (y !== 0) lines.push(y);
@@ -78,6 +82,29 @@ export function Field({ holes, showHoles, occupied = [] }: Props) {
             {h.number}
           </text>
         ))}
+
+      {/*
+        * The same spaces, read from the other side of the ball. Letters go
+        * above the line and numbers below it, which is not decoration: each
+        * unit reads its own map off its own side of the LOS, and the two can
+        * be up together without a 2 and a B sitting on top of each other.
+        */}
+      {showGaps &&
+        gaps
+          .filter((g) => !occupied.some((x) => Math.abs(x - g.x) < 1.15))
+          .map((g) => (
+            <text
+              key={`gap${g.side}${g.letter}-${g.x.toFixed(2)}`}
+              x={g.x}
+              y={-0.45}
+              textAnchor="middle"
+              fontSize={0.95}
+              fontWeight={600}
+              fill="var(--hole)"
+            >
+              {g.letter}
+            </text>
+          ))}
     </g>
   );
 }
