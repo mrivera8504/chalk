@@ -233,6 +233,17 @@ export interface Play {
   id: string;
   name: string;
   /**
+   * When this play was thrown away, if it was.
+   *
+   * Deleting used to drop the play out of the array, which is the one loss the
+   * app could cause all by itself with nobody's bug involved — a mis-tap on the
+   * wrong card, and the only copy gone. A deleted play stays in the book, sorted
+   * to the end of it and filtered out of every list, until the coach empties the
+   * trash on purpose. Absent means live, so nothing already saved has to be
+   * rewritten to say so.
+   */
+  deletedAt?: number;
+  /**
    * Which unit this play belongs to.
    *
    * Optional, and absent means offense: every play drawn before the defense

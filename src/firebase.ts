@@ -32,14 +32,62 @@ export const db = initializeFirestore(app, {
 /**
  * Silent sign-in. The app still works with no account at all: an anonymous
  * user owns the playbook until someone puts an email on it.
+ *
+ * The listener is unsubscribed the moment it answers, and concurrent callers
+ * share one attempt. Both matter more than they look: this used to leave a
+ * listener behind on every call, and every one of them called
+ * signInAnonymously() again the next time auth went null. A project two days
+ * old had 78 anonymous accounts, created in bursts of five within the same
+ * second, and the app kept whichever one won the race — which is how a
+ * playbook ends up stranded under a uid nobody can sign into again.
  */
+let pending: Promise<string> | null = null;
+
 export function ensureSignedIn(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    onAuthStateChanged(auth, (user) => {
-      if (user) return resolve(user.uid);
-      signInAnonymously(auth).catch(reject);
-    });
+  if (auth.currentUser) return Promise.resolve(auth.currentUser.uid);
+  if (pending) return pending;
+
+  pending = new Promise<string>((resolve, reject) => {
+    let asked = false;
+    const stop = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (user) {
+          stop();
+          resolve(user.uid);
+          return;
+        }
+        // Exactly one anonymous sign-in per attempt. The listener stays only
+        // until it fires again with the user that sign-in creates.
+        if (asked) return;
+        asked = true;
+        signInAnonymously(auth).catch((err) => {
+          stop();
+          reject(err);
+        });
+      },
+      (err) => {
+        stop();
+        reject(err);
+      },
+    );
   });
+
+  return pending.finally(() => {
+    pending = null;
+  });
+}
+
+/**
+ * Who is signed in, as a uid, for as long as the caller keeps the subscription.
+ *
+ * The playbook has to follow this rather than read it once at boot: a uid
+ * change is the moment a different account's book has to come down, and
+ * reading it only on mount is what let a sign-in overwrite the account it had
+ * just signed into.
+ */
+export function watchUid(fn: (uid: string | null) => void): () => void {
+  return onAuthStateChanged(auth, (user) => fn(user?.uid ?? null));
 }
 
 export interface Account {

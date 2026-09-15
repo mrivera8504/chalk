@@ -58,8 +58,12 @@ export function App() {
       <DialogHost />
       <PlaybookList
         plays={book.plays}
+        trashed={book.trashed}
         sections={book.sections}
         sync={book.sync}
+        lastBackupAt={book.lastBackupAt}
+        onRestorePlay={book.restorePlay}
+        onEmptyTrash={book.emptyTrash}
         onOpen={setOpenId}
         onNew={startNew}
         onDuplicate={book.duplicatePlay}
@@ -68,7 +72,9 @@ export function App() {
           const name = play?.name || play?.suggestedName || 'this play';
           if (
             await askConfirm(`Delete ${name}?`, {
-              body: 'It goes for good. A backup file is the only way back.',
+              // No longer the truth it used to tell: the play goes to the trash
+              // at the foot of the playbook and stays there until it is emptied.
+              body: 'It moves to Deleted, at the bottom of the playbook.',
               confirmLabel: 'Delete',
               danger: true,
             })

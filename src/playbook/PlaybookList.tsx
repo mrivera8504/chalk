@@ -13,8 +13,14 @@ import { PlayCard } from './PlayCard';
 
 interface Props {
   plays: Play[];
+  /** Thrown away, newest first. Still in the book until the trash is emptied. */
+  trashed: Play[];
   sections: Section[];
   sync: SyncState;
+  /** When a backup file was last written, or null if one never has been. */
+  lastBackupAt: number | null;
+  onRestorePlay: (id: string) => void;
+  onEmptyTrash: () => void;
   onOpen: (id: string) => void;
   onNew: (unit?: Side) => void;
   onDuplicate: (id: string) => void;
@@ -40,14 +46,30 @@ const SYNC_LABEL: Record<SyncState, string> = {
   local: 'on this device',
   syncing: 'saving',
   synced: 'saved',
+  large: 'saved — this playbook is getting large',
   offline: 'this device only, offline',
   denied: 'this device only, cloud refused',
+  blocked: 'not saved — this would delete most of your plays',
+  toobig: 'this device only — too big for the cloud, empty the trash',
+  failed: 'this device only — the cloud save failed',
 };
+
+/*
+ * The states a coach has to do something about, as against the ones that pass
+ * on their own. Offline is not one of them — a field with no signal is the
+ * normal condition this app was built for, and colouring it red would teach
+ * everybody to ignore the colour by the second practice.
+ */
+const NEEDS_ACTION = new Set<SyncState>(['denied', 'blocked', 'toobig', 'failed']);
 
 export function PlaybookList({
   plays,
+  trashed,
   sections,
   sync,
+  lastBackupAt,
+  onRestorePlay,
+  onEmptyTrash,
   onOpen,
   onNew,
   onDuplicate,
@@ -62,6 +84,21 @@ export function PlaybookList({
   onSaveNow,
 }: Props) {
   const [query, setQuery] = useState('');
+  const [showTrash, setShowTrash] = useState(false);
+
+  /**
+   * Days since the last backup, or null when there is nothing worth saying.
+   *
+   * Silent under a week, because a line that is always there is a line nobody
+   * reads — and this one has to still register the day it matters.
+   */
+  const backupAge = useMemo(() => {
+    if (!plays.length) return null;
+    if (!lastBackupAt) return Infinity;
+    const days = Math.floor((Date.now() - lastBackupAt) / 86_400_000);
+    return days >= 7 ? days : null;
+  }, [plays.length, lastBackupAt]);
+
   /**
    * Which unit is on show. Not a folder: a coach files by concept — goal line,
    * first down — and every one of those folders can hold both sides of the ball.
@@ -165,7 +202,17 @@ export function PlaybookList({
     <div className="playbook">
       <header>
         <h1>Playbook</h1>
-        <span className="sync">{SYNC_LABEL[sync]}</span>
+        <span className={`sync${NEEDS_ACTION.has(sync) ? ' bad' : ''}`}>{SYNC_LABEL[sync]}</span>
+        {/*
+          * Only once it is worth saying. A book with nothing in it has nothing
+          * to back up, and a file written this morning is not news — the line
+          * is here for the gap, not for the reassurance.
+          */}
+        {backupAge !== null && (
+          <span className={`backup-age${backupAge >= 14 ? ' stale' : ''}`}>
+            {backupAge === Infinity ? 'never backed up' : `last backup ${backupAge}d ago`}
+          </span>
+        )}
       </header>
 
       <div className="book-tools">
@@ -378,6 +425,51 @@ export function PlaybookList({
             )}
           </section>
         ))
+      )}
+
+      {/*
+        * The trash, and only when there is one.
+        *
+        * Deleting has to keep feeling final — the play leaves every list the
+        * moment it goes — so this is a closed row at the bottom rather than a
+        * folder among the folders. It is the door that makes the delete
+        * recoverable, not a place anybody is meant to work in.
+        */}
+      {trashed.length > 0 && (
+        <section className="trash">
+          <button className="trash-head quiet" onClick={() => setShowTrash((s) => !s)}>
+            Deleted ({trashed.length})
+          </button>
+
+          {showTrash && (
+            <div className="trash-body">
+              {trashed.map((play) => (
+                <div key={play.id} className="trash-row">
+                  <span className="trash-name">
+                    {play.name || play.suggestedName || 'Untitled play'}
+                  </span>
+                  <button onClick={() => onRestorePlay(play.id)}>Put back</button>
+                </div>
+              ))}
+              <div className="trash-foot">
+                <button
+                  className="danger"
+                  onClick={() =>
+                    void askConfirm(`Delete ${trashed.length} for good?`, {
+                      body:
+                        'These are still in your backups, but they leave this playbook ' +
+                        'and the cloud copy for good.',
+                      confirmLabel: 'Delete for good',
+                      danger: true,
+                    }).then((ok) => ok && onEmptyTrash())
+                  }
+                >
+                  Empty
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

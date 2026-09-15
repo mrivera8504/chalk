@@ -49,9 +49,19 @@ export function AccountPanel({ onSaveNow, onClose }: Props) {
           : await signInExisting(email.trim(), password);
       setAccount(next);
       setPassword('');
-      // Whatever is on this device goes up under the account now signed in.
+      /*
+       * Creating an account links the email to the uid this device already has,
+       * so the plays on screen stay and go up. Signing into an existing one
+       * changes uid, and the playbook that comes down is that account's — which
+       * is the opposite direction, and used to be the bug: this pushed the
+       * device's book over the account it had just signed into.
+       */
       await onSaveNow();
-      setNote('Signed in. Your playbook is saved to this account.');
+      setNote(
+        mode === 'up'
+          ? 'Signed in. Your playbook is saved to this account.'
+          : 'Signed in. Loading that account’s playbook…',
+      );
     } catch (err) {
       setError(explainAuth(err));
     } finally {

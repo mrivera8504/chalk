@@ -20,6 +20,14 @@ behaves like a menu rather than a palette, the inspector takes a side in
 landscape, and the twelve browser `prompt()` and `confirm()` boxes are gone. See
 *Chrome, controls and dialogs*.
 
+**The sync lost a playbook, and has been rebuilt.** A coach's book went missing
+and turned up stranded under an abandoned anonymous uid. Four separate bugs put
+it there; all four are fixed, and the cloud now keeps twenty past copies, refuses
+a write that drops most of a book, and holds deleted plays in a trash rather than
+dropping them. Read *The playbook, and how it syncs* before touching
+`store/sync.ts`, `store/usePlaybook.ts` or `firebase.ts` — every rule in it is
+one way a playbook was actually lost.
+
 **Service workers need HTTPS.** The LAN dev server cannot register one, so
 offline and the install prompt are only testable on the deployed site.
 
@@ -529,6 +537,112 @@ draws: the link is a lookup, never a requirement. Edited on the playbook screen;
 the editor only reads it. Two kids in one shirt is refused out loud rather than
 silently reassigned, because the number is what makes a slot unambiguous.
 
+## The playbook, and how it syncs
+
+`store/sync.ts` and `store/usePlaybook.ts`. One document holds the whole book at
+`/users/{uid}/playbook/main`, and local storage holds it too. **Local storage is
+the floor, not the cache** — written synchronously on every change, before
+anything that can fail, because the tablet is on a field with no signal and an
+account is the one thing this app has always worked without.
+
+Every rule below was written after a coach's playbook went missing and four
+plays were found stranded under an abandoned anonymous uid. Each one is a way
+that happened.
+
+**Local storage records whose book it is.** One key held one book no matter who
+was signed in, so an anonymous device's plays were still sitting there when
+somebody signed into a real account — and the autosave pushed them straight over
+it. A stored book carrying a uid that is not the current one is never treated as
+this account's.
+
+**The book follows the account; auth is watched, not read once.** The pull ran
+on mount, which meant signing in never downloaded the account you signed into —
+the debounce pushed this device's copy over it 800ms later. It reconciles on
+every uid change now, through `watchUid` in `firebase.ts`.
+
+**Reaching the cloud and finding nothing there are different answers.**
+`pullFromCloud` returns `{ ok }` rather than a nullable book. Collapsing the two
+into `null` is what emptied accounts: a pull that failed read as "no cloud copy
+yet", and the app pushed its own empty book over a real one. A boot with no
+signal now pushes nothing at all.
+
+**`loadedFor` names the account whose book is on screen** — not "a pull
+finished". Those were one flag, and the gap between them is the bug above.
+Nothing is ever pushed for a uid it does not name.
+
+**Two copies of one account's book merge play by play.** The old rule compared
+the single newest `updatedAt` on each side and took the whole winner, so one
+play touched locally five minutes ago discarded forty from the cloud. Nothing
+about a playbook is atomic: a play is the unit that changes, so it is the unit
+that reconciles. A book from a *different* uid is replaced rather than merged,
+which is what the account screen already promised in words.
+
+**One anonymous sign-in per attempt, and the listener goes away.**
+`ensureSignedIn` left an `onAuthStateChanged` listener behind on every call, and
+every one of them called `signInAnonymously` again the next time auth went null.
+Two days of use produced **78 anonymous accounts, created in bursts of five
+inside the same second**, and the app kept whichever won the race — which is how
+a playbook ends up under a uid nobody can sign into again. Concurrent callers
+share one attempt now.
+
+**A write that drops most of a book is refused.** Every failure this app has
+actually had wore one shape: a small or empty copy landing on a large one. The
+guard refuses that shape even when the cause is a bug nobody has found yet, and
+says so on the playbook screen rather than in the console. `force` exists for
+the one place it is a deliberate answer — a restore, which the coach has just
+confirmed in as many words.
+
+**Anything a push replaces is kept first.** Twenty copies at
+`/users/{uid}/playbook/main/versions/{timestamp}` — always when the write loses
+plays, otherwise on a ten-minute throttle so a book that only grows still has
+history. Under `main` rather than beside it, so the existing recursive rule
+covers it with nothing to publish. Archiving is wrapped in its own try: failing
+to keep history can never stop the save, because insurance is not the policy.
+There is no rollback screen yet; `listVersions()` is the API waiting for one.
+
+**Deleting is recoverable.** `Play.deletedAt` — the play leaves every list
+immediately, which is all a delete has to feel like, and stays in the book,
+sorted to the end, until the trash is emptied on purpose. The hook holds every
+play and hands out only the live ones, so the board, the exporter and the
+editor's scout library never had to learn about any of this. `movePlay` clamps
+to the live run for the same reason: the trash sits at the end so a visible
+index is an array index.
+
+There is **no timed sweep**. A sweep big enough to matter is indistinguishable
+from the bug the shrink guard exists to catch, so it would either jam the sync
+or need an exemption — and an exemption that deletes plays on a schedule is the
+one thing not to build here.
+
+**The playbook screen says how old the last backup is**, past a week, in the bad
+colour past two. Silent under that: a line which is always there is a line
+nobody reads.
+
+**One Firestore document holds 1 MiB, and the whole book is one document.**
+Measured: a play with no freehand is about 1.3KB, one covered in it about 10KB —
+`smooth` gives every point a control point, so a drawn point is four numbers.
+That puts the ceiling near a hundred heavily drawn plays, which is far off but
+not imaginary, and the trash only pushes toward it. The size is checked *before*
+the round trip, because the app knows the cap as well as the server does, and
+saying so itself beats a write that quietly never lands.
+
+**"Offline" used to mean "something went wrong".** Anything that was not a
+permission error was reported as offline, so a document over the cap showed a
+connectivity message for a write no amount of signal would ever complete.
+`explain()` now separates denied, too big, offline and simply failed, and the
+label is red only for the states a coach has to act on — **offline is not one of
+them**, because a field with no signal is the condition this app was built for
+and colouring it red teaches everybody to ignore the colour by the second
+practice.
+
+**Recovering a stranded playbook.** The Admin SDK authenticates as the project
+rather than as a user, so a document under an abandoned anonymous uid can be
+read without signing in as anybody — which matters because nobody ever can. Every
+uid is reachable through `listDocuments()` on `users`: it returns refs for uid
+documents that do not themselves exist but carry a subcollection, which is
+exactly the shape this app writes. Firestore's console has no per-document JSON
+export, and `gcloud firestore export` writes LevelDB to a bucket, so a script is
+the way out.
+
 ## Backup, and what a backup has to carry
 
 `store/backup.ts`. The old JSON export wrote plays and sections only, and there
@@ -542,6 +656,21 @@ afterwards. The reload is not laziness: every one of those stores is read into
 React state when its screen mounts, and a restore that left half the app showing
 the old copy would be its own kind of data loss. Bad files are refused with a
 sentence a coach can act on, and the playbook is left alone.
+
+**A restore writes only what the file actually carries.** The four local stores
+were written unconditionally, so a file with no formations in it did not leave
+them alone — it emptied them. That turned every partial file, and every book
+rebuilt from the cloud (which holds plays and sections and nothing else), into a
+quiet way to lose the saved fronts, the hand-drawn routes and the team sheet. A
+restore replaces what the backup contains and has nothing to say about what it
+does not.
+
+**Both foundations go in the file.** `readFoundationId()` defaults to offense,
+so the starred *front* was never in a backup at all — they are two independent
+stars and carrying one of them looked exactly like carrying both.
+
+The trash goes in too. A backup that quietly dropped what the coach had not
+finished deciding about would be the loss this exists to prevent.
 
 ## Finishing a freehand stroke
 
@@ -580,6 +709,12 @@ everything drawn beforehand under an id nobody could sign back into.
 
 Email/password has to be enabled in the Firebase console; `explainAuth` says so
 in words when it is not.
+
+Signing into an account that already exists is the other direction entirely: the
+uid changes, and that account's playbook comes *down* over what is on screen.
+The account screen has always said so, and for a while the code did the
+opposite — see *The playbook, and how it syncs*, which is also where the
+`ensureSignedIn` listener leak that minted 78 anonymous accounts is written up.
 
 ## Settings
 

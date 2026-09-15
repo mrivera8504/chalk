@@ -34,6 +34,12 @@ export interface Backup {
   roster: RosterEntry[];
   settings: AppSettings;
   foundationId: string | null;
+  /*
+   * The starred front, which the offense's key knows nothing about — they are
+   * two independent stars. A backup that carried only one of them quietly lost
+   * which front every new defensive play opens in.
+   */
+  foundationDefenseId: string | null;
 }
 
 export function makeBackup(book: Playbook): Backup {
@@ -50,6 +56,7 @@ export function makeBackup(book: Playbook): Backup {
     roster: readRoster(),
     settings: getSettings(),
     foundationId: readFoundationId(),
+    foundationDefenseId: readFoundationId('defense'),
   };
 }
 
@@ -91,10 +98,28 @@ export function readBackup(text: string): Restored {
   const routes = Array.isArray(parsed.routes) ? (parsed.routes as CustomRoute[]) : [];
   const roster = Array.isArray(parsed.roster) ? (parsed.roster as RosterEntry[]) : [];
 
-  writeFormations(formations);
-  writeCustomRoutes(routes);
-  writeRoster(roster);
-  writeFoundationId(typeof parsed.foundationId === 'string' ? parsed.foundationId : null);
+  /*
+   * Only what the file actually carries.
+   *
+   * These were written unconditionally, so a file with no formations in it
+   * restored as no formations — it did not leave them alone, it emptied them.
+   * That turned every partial file, and every book rebuilt from the cloud
+   * (which holds plays and sections and nothing else), into a quiet way to lose
+   * the team's saved fronts, hand-drawn routes and roster. A restore replaces
+   * what the backup contains; it has nothing to say about what it does not.
+   */
+  if (Array.isArray(parsed.formations)) writeFormations(formations);
+  if (Array.isArray(parsed.routes)) writeCustomRoutes(routes);
+  if (Array.isArray(parsed.roster)) writeRoster(roster);
+  if ('foundationId' in parsed) {
+    writeFoundationId(typeof parsed.foundationId === 'string' ? parsed.foundationId : null);
+  }
+  if ('foundationDefenseId' in parsed) {
+    writeFoundationId(
+      typeof parsed.foundationDefenseId === 'string' ? parsed.foundationDefenseId : null,
+      'defense',
+    );
+  }
   // Merged over the defaults, so a backup written before a setting existed
   // restores with that setting at its default rather than undefined.
   if (parsed.settings && typeof parsed.settings === 'object') {
