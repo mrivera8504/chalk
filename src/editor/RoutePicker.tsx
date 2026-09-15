@@ -193,7 +193,7 @@ export function RoutePicker({
         {defense ? (
           <>
             <button
-              className={defense.hasZone ? 'ball on' : 'ball'}
+              className={defense.hasZone ? 'zone-toggle on' : 'zone-toggle'}
               aria-pressed={defense.hasZone}
               aria-label={
                 defense.hasZone

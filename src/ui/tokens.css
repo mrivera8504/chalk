@@ -534,6 +534,21 @@ body,
   color: var(--ball);
 }
 
+/*
+ * And the same idea for the zone, in the zone's own colour. It borrowed the
+ * star's class to get the shape and came out the ball yellow, which said the
+ * defender was carrying something.
+ */
+.route-picker .picker-head .zone-toggle {
+  color: var(--zone);
+}
+
+.route-picker .picker-head .zone-toggle[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--zone) 20%, var(--panel));
+  border-color: var(--zone);
+  color: var(--zone);
+}
+
 .route-picker .picker-group {
   padding: 0 0 6px;
 }
@@ -1365,6 +1380,27 @@ button:focus-visible {
   max-height: none;
   border-top: 1px solid var(--line);
   background: none;
+}
+
+/*
+ * Except on the playbook, where nothing else scrolls it and the page below is
+ * the plays. Capped and scrollable there, like every other panel on that
+ * screen, with the same fade at the edge.
+ */
+.settings-panel.standalone {
+  margin: 0 14px 12px;
+  max-height: 62vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.settings-panel.standalone .picker-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
 }
 
 .setting {

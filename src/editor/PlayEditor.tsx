@@ -1319,11 +1319,21 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     const onOffense = d.kind === 'player' && byId(d.id)?.side === 'offense';
     const step = settings.snapStepYards;
     const magnet = onOffense ? settings.losMagnetYards : 0;
-    const x = clamp(snap(at.x + d.dx, step), -VIEW.halfWidth + 1, VIEW.halfWidth - 1);
+
+    /*
+     * A man is kept a yard inside the board so his mark and his number stay on
+     * it. A zone's corner is not a man: a deep third is a third of the field,
+     * and stopping its corner a yard short of the sideline meant the widest
+     * zone the coverage tool draws could not be redrawn at the width it was
+     * given. The corner may go to the edge; the middle of a box still may not,
+     * or the box would slide off the board entirely.
+     */
+    const edge = d.kind === 'zone-size' ? 0 : 1;
+    const x = clamp(snap(at.x + d.dx, step), -VIEW.halfWidth + edge, VIEW.halfWidth - edge);
     const y = clamp(
       snapDepth(at.y + d.dy, d.kind === 'player' ? magnet : 0, step),
-      -VIEW.downfield + 1,
-      VIEW.behind - 1,
+      -VIEW.downfield + edge,
+      VIEW.behind - edge,
     );
 
     if (d.kind === 'vision') {

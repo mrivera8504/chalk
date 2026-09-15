@@ -1,13 +1,19 @@
 import { DEFAULT_APP_SETTINGS, resetSettings, setSettings, type AppSettings } from '../store/settings';
 import { askConfirm } from '../ui/dialog';
+import { useScrollFade } from '../ui/useScrollFade';
 
-/*
- * No onClose, and no header. The drawer owns the one title and the one way
- * back: this used to bring its own, so opening Settings stacked two titles and
- * two dismiss buttons that did different things.
- */
 interface Props {
   settings: AppSettings;
+  /**
+   * A way out, for the screen that has no drawer to supply one.
+   *
+   * In the editor this draws no header at all: the drawer owns the one title
+   * and the one way back, and this used to bring its own, so opening Settings
+   * stacked two titles and two dismiss buttons that did different things. On
+   * the playbook there is no drawer, so it wears a head like the roster and
+   * the export panel beside it.
+   */
+  onClose?: () => void;
 }
 
 const MAGNETS = [
@@ -104,11 +110,30 @@ function Num({
  * and what counts as a legal formation. A coach looking for the colour of a
  * corner route should not have to know it lives next to the hole numbering.
  */
-export function SettingsPanel({ settings }: Props) {
+export function SettingsPanel({ settings, onClose }: Props) {
   const s = settings;
+  const scroller = useScrollFade<HTMLDivElement>();
 
+  /*
+   * In the drawer the panel runs its full length and the drawer scrolls. On the
+   * playbook there is nothing around it to scroll, and settings is a long page:
+   * left to run it pushed the plays a screen and a half down the view.
+   */
   return (
-    <div className="picker settings-panel">
+    <div
+      className={`picker settings-panel${onClose ? ' standalone' : ''}`}
+      ref={onClose ? scroller : undefined}
+    >
+      {onClose && (
+        <div className="picker-head">
+          <strong>Settings</strong>
+          <span>saved on this device, for every play</span>
+          <button className="quiet" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      )}
+
       <div className="picker-group">
         <h3>Route colours</h3>
         <p className="picker-note">

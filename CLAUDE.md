@@ -101,6 +101,13 @@ halfway down itself.
 **Settings and Notes widen the panel.** They are long forms with number fields
 and paragraphs, read while not drawing, and 300px is a column not a page.
 
+**Settings is reachable from the playbook too.** Every one of them — the
+colours, the pen, the board, the league rules — is the same on every play in
+the book, so reaching them meant opening a play you did not want to change.
+`SettingsPanel` draws its own header only when it is given an `onClose`, which
+is exactly the screen that has no drawer to supply one; there it is capped and
+scrollable like the roster and export panels beside it.
+
 **In landscape the inspector takes a side, not the top.** Turning the phone makes
 the board height-constrained and leaves room at the edges — which is why the
 drawer lives there. A strip across the top took 45% of a 360px-tall viewport. It
@@ -269,6 +276,18 @@ ways because the defense calls the direction separately. So the space between
 the centre and the right guard is the 2 hole and the A gap, and both are right.
 They draw on opposite sides of the LOS — numbers below, letters above — so each
 unit reads its own map off its own side and the two can be up at once.
+
+**A zone's corner grip is drawn, and set inside the corner.** It was invisible
+— the cone and the square are their own handles, so the zone borrowed that and
+gave its corner nothing to see — and on a preset deep zone it was unusable as
+well: a deep third is a third of the field, so its far corner lands exactly on
+the edge of the board, half the target off-screen and past the point a drag is
+allowed to reach. Every zone a coverage laid down could not, in practice, be
+resized. The grip is drawn on every zone, inset far enough to clear the edge,
+and the drag still works from the true corner so taking hold of it does not jog
+the box. `zone-size` is also the one drag allowed to reach the board edge: a man
+is kept a yard inside so his mark and number stay on, but a zone's corner is not
+a man. The label takes whichever top corner the grip did not.
 
 **Zones are a patch of grass, not a focus square.** `Zone` keeps its own centre
 and its own size, in yards on the field, and a leader line back to its defender.

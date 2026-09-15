@@ -7,6 +7,8 @@ import { useInstallPrompt } from '../store/install';
 import { UNFILED_SECTION, type Play, type Section, type Side } from '../domain/types';
 import type { SyncState } from '../store/sync';
 import { askConfirm, askText } from '../ui/dialog';
+import { SettingsPanel } from '../editor/SettingsPanel';
+import { useSettings } from '../store/settings';
 import { PlayCard } from './PlayCard';
 
 interface Props {
@@ -73,6 +75,14 @@ export function PlaybookList({
   const [rostering, setRostering] = useState(false);
   /** The once-a-season controls, folded away behind one button. */
   const [more, setMore] = useState(false);
+  /*
+   * Settings from here as well as from inside a play. Every one of them — the
+   * colours, the pen, the board, the league rules — is the same on every play
+   * in the book, so having to open a play to reach them was asking a coach to
+   * go through a thing he did not want to change to get at a thing he did.
+   */
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settings = useSettings();
   const [roster, setRoster] = useState<RosterEntry[]>(readRoster);
   const install = useInstallPrompt();
 
@@ -222,6 +232,7 @@ export function PlaybookList({
             onClick={() => {
               setExporting(false);
               setAccount(false);
+              setSettingsOpen(false);
               setRostering((v) => !v);
             }}
             aria-pressed={rostering}
@@ -233,6 +244,7 @@ export function PlaybookList({
             onClick={() => {
               setAccount(false);
               setRostering(false);
+              setSettingsOpen(false);
               setExporting((v) => !v);
             }}
             aria-pressed={exporting}
@@ -244,11 +256,24 @@ export function PlaybookList({
             onClick={() => {
               setExporting(false);
               setRostering(false);
+              setSettingsOpen(false);
               setAccount((v) => !v);
             }}
             aria-pressed={account}
           >
             Account
+          </button>
+          <button
+            className="quiet"
+            onClick={() => {
+              setExporting(false);
+              setRostering(false);
+              setAccount(false);
+              setSettingsOpen((v) => !v);
+            }}
+            aria-pressed={settingsOpen}
+          >
+            Settings
           </button>
           {/* Only there when the browser has actually offered; see useInstallPrompt. */}
           {install && (
@@ -260,6 +285,10 @@ export function PlaybookList({
       )}
 
       {account && <AccountPanel onSaveNow={onSaveNow} onClose={() => setAccount(false)} />}
+
+      {settingsOpen && (
+        <SettingsPanel settings={settings} onClose={() => setSettingsOpen(false)} />
+      )}
 
       {rostering && (
         <RosterPanel
