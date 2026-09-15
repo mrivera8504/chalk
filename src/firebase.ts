@@ -25,8 +25,16 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
 // Local cache is the source of truth for reads. The field has no signal.
+//
+// Undefined fields are dropped rather than refused. The editor clears a field
+// by setting it to undefined — no ball carrier, no zones, a jersey unassigned —
+// and Firestore rejects the whole write for one of those. Local storage never
+// saw it, because JSON drops them, so a reload cleared the jam and the next
+// edit brought it back: the book reached the cloud once per launch and never
+// again after the first change.
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentSingleTabManager({}) }),
+  ignoreUndefinedProperties: true,
 });
 
 /**
