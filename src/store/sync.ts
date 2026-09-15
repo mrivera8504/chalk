@@ -1,4 +1,4 @@
-import type { Play, Section } from '../domain/types';
+import type { PathPoint, Play, Section } from '../domain/types';
 
 /**
  * Local storage is the floor, not the cache.
@@ -79,6 +79,43 @@ export function mergeBooks(mine: Playbook, theirs: Playbook): Playbook {
   for (const s of [...mine.sections, ...theirs.sections]) if (s?.id) sections.set(s.id, s);
 
   return { plays: [...plays.values()], sections: [...sections.values()] };
+}
+
+/**
+ * The book as Firestore will hold it, and back.
+ *
+ * Firestore refuses an array directly inside an array, and `annotations` is
+ * exactly that — a list of strokes, each a list of points. So every play with
+ * freehand ink failed its write with `invalid-argument`, which read as "too
+ * big", and no inked play ever reached the cloud: signing in on a second device
+ * merged the ink into the book and jammed the sync for good. Each stroke is
+ * wrapped in an object on the way up and unwrapped on the way down. Local
+ * storage and backup files keep the plain shape; only the cloud sees this one.
+ */
+type CloudStroke = { points: PathPoint[] };
+
+function toCloud(plays: Play[]): unknown[] {
+  return plays.map((p) =>
+    Array.isArray(p.annotations)
+      ? { ...p, annotations: p.annotations.map((points): CloudStroke => ({ points })) }
+      : p,
+  );
+}
+
+function fromCloud(plays: unknown): Play[] {
+  if (!Array.isArray(plays)) return [];
+  return plays.map((p: Play) =>
+    Array.isArray(p?.annotations)
+      ? {
+          ...p,
+          // Accepts a bare array too, which is what a hand-written document or
+          // the rescue script would put there.
+          annotations: (p.annotations as unknown[]).map((s) =>
+            Array.isArray(s) ? s : Array.isArray((s as CloudStroke)?.points) ? (s as CloudStroke).points : [],
+          ),
+        }
+      : p,
+  );
 }
 
 export type SyncState =
@@ -166,10 +203,13 @@ function explain(err: unknown): SyncState {
   const code = (err as { code?: string })?.code ?? '';
   const text = String((err as { message?: string })?.message ?? err);
 
+  // Only a size complaint is 'toobig'. `invalid-argument` alone also covers a
+  // malformed value, and calling that "too big, empty the trash" sent a coach
+  // after a fix that could never work.
   const state: SyncState =
     code === 'permission-denied' || /permission/i.test(text)
       ? 'denied'
-      : code === 'invalid-argument' || /maximum|too large|exceeds/i.test(text)
+      : !/invalid data/i.test(text) && /maximum allowed size|too large|exceeds the maximum/i.test(text)
         ? 'toobig'
         : code === 'unavailable' || code === 'deadline-exceeded' || code === 'cancelled'
           ? 'offline'
@@ -215,7 +255,7 @@ async function keepVersion(ref: BookRef, fs: Fs, book: Playbook, why: string): P
   const id = String(Date.now());
 
   await setDoc(doc(versions, id), {
-    plays: book.plays,
+    plays: toCloud(book.plays),
     sections: book.sections,
     savedAt: Date.now(),
     why,
@@ -282,7 +322,7 @@ export async function pushToCloud(
     const snap = await getDoc(ref);
     const remote = snap.exists() ? (snap.data() as Partial<Playbook>) : null;
     const before: Playbook = {
-      plays: Array.isArray(remote?.plays) ? remote.plays : [],
+      plays: fromCloud(remote?.plays),
       sections: Array.isArray(remote?.sections) ? remote.sections : [],
     };
 
@@ -312,7 +352,7 @@ export async function pushToCloud(
     }
 
     await setDoc(ref, {
-      plays: book.plays,
+      plays: toCloud(book.plays),
       sections: book.sections,
       updatedAt: Date.now(),
     });
@@ -343,7 +383,7 @@ export async function listVersions(uid: string): Promise<Version[]> {
       .map((d) => {
         const data = d.data() as Partial<Playbook> & { savedAt?: number; why?: string };
         const book: Playbook = {
-          plays: Array.isArray(data.plays) ? data.plays : [],
+          plays: fromCloud(data.plays),
           sections: Array.isArray(data.sections) ? data.sections : [],
         };
         return {
@@ -369,7 +409,7 @@ export async function pullFromCloud(uid: string): Promise<PullResult> {
     return {
       ok: true,
       book: {
-        plays: Array.isArray(data.plays) ? data.plays : [],
+        plays: fromCloud(data.plays),
         sections: Array.isArray(data.sections) ? data.sections : [],
       },
     };
