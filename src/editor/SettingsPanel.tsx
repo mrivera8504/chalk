@@ -194,6 +194,49 @@ export function SettingsPanel({ settings, onClose }: Props) {
       </div>
 
       <div className="picker-group">
+        <h3>Route depths</h3>
+        <p className="picker-note">
+          How far a receiver runs before he breaks on a short, medium or deep in
+          or out. Routes already on the board keep the depth they were drawn at.
+        </p>
+        <Num
+          label="Short"
+          hint="yards"
+          value={s.routeDepths.short}
+          min={1}
+          max={25}
+          step={0.5}
+          onSet={(n) => setSettings({ routeDepths: { ...s.routeDepths, short: n } })}
+        />
+        <Num
+          label="Medium"
+          hint="yards"
+          value={s.routeDepths.medium}
+          min={1}
+          max={25}
+          step={0.5}
+          onSet={(n) => setSettings({ routeDepths: { ...s.routeDepths, medium: n } })}
+        />
+        <Num
+          label="Deep"
+          hint="yards"
+          value={s.routeDepths.deep}
+          min={1}
+          max={25}
+          step={0.5}
+          onSet={(n) => setSettings({ routeDepths: { ...s.routeDepths, deep: n } })}
+        />
+        <div className="picker-row">
+          <button
+            className="quiet"
+            onClick={() => setSettings({ routeDepths: DEFAULT_APP_SETTINGS.routeDepths })}
+          >
+            Reset depths
+          </button>
+        </div>
+      </div>
+
+      <div className="picker-group">
         <h3>The pen</h3>
         <Choice
           label="Tools on the"

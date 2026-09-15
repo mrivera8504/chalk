@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { DEFAULT_SETTINGS, type Settings } from '../domain/types';
+import { DEFAULT_ROUTE_DEPTHS, setRouteDepths, type RouteDepths } from '../domain/presets/routes';
 
 /**
  * Everything adjustable, in one place.
@@ -51,6 +52,8 @@ export interface AppSettings extends Settings {
    * presets do not have the shape you mean.
    */
   squareUpStrokes: boolean;
+  /** Yards of stem on a short, medium and deep in or out. */
+  routeDepths: RouteDepths;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -66,6 +69,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   penOnly: false,
   pressureWidth: false,
   squareUpStrokes: false,
+  routeDepths: DEFAULT_ROUTE_DEPTHS,
 };
 
 const KEY = 'chalk.settings.v1';
@@ -81,6 +85,13 @@ function load(): AppSettings {
     if (!Array.isArray(merged.routeColors) || merged.routeColors.length !== 6) {
       merged.routeColors = DEFAULT_APP_SETTINGS.routeColors;
     }
+    // Per key, so one bad number costs that depth and not all three.
+    const d = (merged.routeDepths ?? {}) as Partial<RouteDepths>;
+    merged.routeDepths = {
+      short: Number.isFinite(d.short) ? d.short! : DEFAULT_ROUTE_DEPTHS.short,
+      medium: Number.isFinite(d.medium) ? d.medium! : DEFAULT_ROUTE_DEPTHS.medium,
+      deep: Number.isFinite(d.deep) ? d.deep! : DEFAULT_ROUTE_DEPTHS.deep,
+    };
     return merged;
   } catch {
     return DEFAULT_APP_SETTINGS;
@@ -106,6 +117,7 @@ function applyColors(s: AppSettings): void {
 }
 
 applyColors(current);
+setRouteDepths(current.routeDepths);
 
 /** For code outside a component, where a stale read is harmless. */
 export function getSettings(): AppSettings {
@@ -120,6 +132,7 @@ export function setSettings(patch: Partial<AppSettings>): void {
     /* storage blocked; the session keeps working */
   }
   applyColors(current);
+  setRouteDepths(current.routeDepths);
   listeners.forEach((l) => l());
 }
 

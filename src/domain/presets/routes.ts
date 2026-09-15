@@ -149,9 +149,9 @@ export const ROUTES: RoutePreset[] = [
    * 'in' and 'out' keep their old ids so plays saved before this still name the
    * preset they were built from.
    */
-  ...breakRoutes('short', 'Short', 4),
-  ...breakRoutes('', 'Medium', 7),
-  ...breakRoutes('deep', 'Deep', 13),
+  ...breakRoutes('short', 'Short', 'short'),
+  ...breakRoutes('', 'Medium', 'medium'),
+  ...breakRoutes('deep', 'Deep', 'deep'),
   {
     id: 'hitch',
     name: 'Hitch',
@@ -206,33 +206,46 @@ export const ROUTES: RoutePreset[] = [
 ];
 
 /**
+ * How deep short, medium and deep are, in yards of stem.
+ *
+ * A setting, not a constant: what counts as a deep in for ten-year-olds is a
+ * coach's call, and it changes with the arm at quarterback. The settings store
+ * pushes it in here the way it pushes colours onto the root, so the domain
+ * never reaches up into the store. Read when a route is drawn, so a change
+ * applies to the next route given out and leaves every drawn one alone.
+ */
+export interface RouteDepths {
+  short: number;
+  medium: number;
+  deep: number;
+}
+
+export const DEFAULT_ROUTE_DEPTHS: RouteDepths = { short: 4, medium: 7, deep: 13 };
+
+let depths: RouteDepths = DEFAULT_ROUTE_DEPTHS;
+
+export function setRouteDepths(next: RouteDepths): void {
+  depths = next;
+}
+
+/**
  * The in/out pair at one depth: straight up the stem, then square off.
  * An out breaks toward the sideline, an in breaks back toward the ball, which
  * is why one takes `side(h)` and the other takes its negative.
  */
-function breakRoutes(prefix: string, label: string, depth: number): RoutePreset[] {
+function breakRoutes(prefix: string, label: string, depth: keyof RouteDepths): RoutePreset[] {
   const id = (kind: string) => (prefix ? `${prefix}-${kind}` : kind);
+  const pair = (dir: 1 | -1): RoutePreset['shape'] => (s, h) => {
+    const d = depths[depth];
+    return [
+      { x: s.x, y: s.y },
+      { x: s.x, y: up(s, s.y + d) },
+      { x: s.x + dir * side(h) * 4.5, y: up(s, s.y + d + 0.4) },
+    ];
+  };
   return [
-    {
-      id: id('in'),
-      name: `${label} in`,
-      group: 'pass',
-      shape: (s, h) => [
-        { x: s.x, y: s.y },
-        { x: s.x, y: up(s, s.y + depth) },
-        { x: s.x - side(h) * 4.5, y: up(s, s.y + depth + 0.4) },
-      ],
-    },
-    {
-      id: id('out'),
-      name: `${label} out`,
-      group: 'pass',
-      shape: (s, h) => [
-        { x: s.x, y: s.y },
-        { x: s.x, y: up(s, s.y + depth) },
-        { x: s.x + side(h) * 4.5, y: up(s, s.y + depth + 0.4) },
-      ],
-    },
+    { id: id('in'), name: `${label} in`, group: 'pass', shape: pair(-1) },
+    { id: id('out'), name: `${label} out`, group: 'pass', shape: pair(1) },
   ];
 }
 
