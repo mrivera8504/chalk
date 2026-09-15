@@ -645,6 +645,40 @@ body,
 }
 
 /*
+ * Who he is, folded away under Details.
+ *
+ * Every other group in this panel is a flex row with a 44px label column, which
+ * is what closes the buttons up behind their heading. This one has no heading
+ * and stacks a form, so it opts out of that and rules itself off instead.
+ */
+.route-picker .picker-group.details {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  margin: 2px 0 6px;
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--line);
+}
+
+.route-picker .picker-group.details .player-row label {
+  padding: 0 0 8px;
+}
+
+/* One of the controls named as secondary, so it may sit under the 40px floor. */
+.route-picker .picker-head .details-toggle {
+  min-height: 34px;
+  margin-left: auto;
+}
+
+/* Where he is standing. A fact about the play, not an instruction. */
+.player-where {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--dim);
+}
+
+/*
  * 40px, the floor this whole app sits on, rather than the 44 a list used to
  * take. Well clear of the 33px that had a stylus missing every pill; the four
  * it gives back are four on every row of a panel that has six of them.

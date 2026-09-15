@@ -65,7 +65,7 @@ import {
   mirrorZones,
 } from '../domain/mirror';
 import { SWATCHES, autoRouteColor } from '../domain/colors';
-import { byJersey, readRoster, whoIs } from '../domain/roster';
+import { readRoster } from '../domain/roster';
 import {
   ROUTES,
   naturalHand,
@@ -2558,6 +2558,12 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                 ? (c) => recolor(routeOf(selectedPlayer.id)!.id, c)
                 : null
             }
+            onRename={rename}
+            roster={roster}
+            onAssignJersey={(jersey) => assignJersey(selectedPlayer.id, jersey)}
+            /* Only the offense has a line to be on. */
+            onToggleOnLine={selectedPlayer.side === 'offense' ? toggleOnLine : null}
+            onReleaseLock={selectedPlayer.onLineLocked ? releaseLock : null}
           />
         </div>
       )}
@@ -2698,82 +2704,15 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               <BlockTool tool={tool} unit={unit} onTool={handleTool} />
             </section>
 
-            {selectedPlayer && (
-              <section className="tool-group">
-                <h4>{selectedPlayer.label}</h4>
-                <div className="player-row">
-                  <label>
-                    <span>Label</span>
-                    <input
-                      value={selectedPlayer.label}
-                      onChange={(e) => rename(e.target.value)}
-                      maxLength={3}
-                      spellCheck={false}
-                    />
-                  </label>
-                </div>
-                {/* Nobody hands a defender the ball, so he is not offered it. */}
-                {selectedPlayer.side === 'offense' && (
-                  <div className="tools">
-                    <button
-                      aria-pressed={ballCarrierId === selectedPlayer.id}
-                      onClick={() => giveBall(selectedPlayer.id)}
-                    >
-                      ★ Ball
-                    </button>
-                  </div>
-                )}
-                {/*
-                  * Who is in this slot. Only offered once there is a team sheet
-                  * to pick from — an empty dropdown asking a question the app
-                  * has given you no way to answer is worse than no dropdown.
-                  */}
-                {roster.length > 0 && (
-                  <div className="player-row">
-                    <label>
-                      <span>Who</span>
-                      <select
-                        value={selectedPlayer.jersey ?? ''}
-                        onChange={(e) =>
-                          assignJersey(
-                            selectedPlayer.id,
-                            e.target.value === '' ? undefined : Number(e.target.value),
-                          )
-                        }
-                      >
-                        <option value="">Nobody yet</option>
-                        {byJersey(roster).map((entry) => (
-                          <option key={entry.id} value={entry.jersey}>
-                            {entry.jersey} {entry.name || '—'}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                )}
-                {selectedPlayer.side === 'offense' && (
-                  <div className="tools">
-                    <button aria-pressed={selectedPlayer.onLine} onClick={toggleOnLine}>
-                      {selectedPlayer.onLine ? 'On the line' : 'In the backfield'}
-                    </button>
-                    {selectedPlayer.onLineLocked && (
-                      <button className="quiet" onClick={releaseLock}>
-                        Back to auto
-                      </button>
-                    )}
-                  </div>
-                )}
-                <p className="tool-note">
-                  {selectedPlayer.x.toFixed(2)} yd across, {selectedPlayer.y.toFixed(2)} yd from
-                  the line
-                  {selectedPlayer.backNumber ? ` · back ${selectedPlayer.backNumber}` : ''}
-                  {whoIs(roster, selectedPlayer)?.name
-                    ? ` · ${whoIs(roster, selectedPlayer)!.name}`
-                    : ''}
-                </p>
-              </section>
-            )}
-
+            {/*
+              * No player section here any more. Everything about the man in
+              * hand — his label, who is in the slot, whether he is on the ball,
+              * where he is standing — is on the board with him, behind Details
+              * in the route picker. It sat in the drawer on the reasoning that a
+              * formation is built once and never touched again; true of a
+              * formation, but a man gets renamed and handed to a different kid
+              * all season, and doing either meant leaving him to do it.
+              */}
             <section className="tool-group">
               <h4>Assign</h4>
               <div className="tools">

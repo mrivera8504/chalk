@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useScrollFade } from '../ui/useScrollFade';
+import { byJersey, whoIs, type RosterEntry } from '../domain/roster';
 import { DEFENSE_PRESETS, type DefensePreset } from '../domain/presets/defense';
 import { ROUTES, type RoutePreset } from '../domain/presets/routes';
 import { ZONE_PRESETS, type ZonePreset } from '../domain/presets/zones';
@@ -91,6 +93,23 @@ interface Props {
   color?: string;
   /** Null until he has a route: there is nothing to paint before that. */
   onColor: ((color: string | undefined) => void) | null;
+
+  /*
+   * The rest of him — what he is called, who is in the slot, whether he is on
+   * the ball, where he is standing. These lived in the drawer on the reasoning
+   * that a formation is built once and then never touched again. True of a
+   * formation; not true of a man, who gets renamed and handed to a different
+   * kid all season. They are folded behind Details so the route list is still
+   * the first thing the panel shows.
+   */
+  onRename: (label: string) => void;
+  /** The team sheet, for the Who row. Empty means no dropdown at all. */
+  roster: RosterEntry[];
+  onAssignJersey: (jersey: number | undefined) => void;
+  /** Null for a defender: only the offense has a line to be on. */
+  onToggleOnLine: (() => void) | null;
+  /** Set only while he is pinned by hand, which is the only time it can undo. */
+  onReleaseLock: (() => void) | null;
 }
 
 /**
@@ -173,8 +192,20 @@ export function RoutePicker({
   swatches,
   color,
   onColor,
+  onRename,
+  roster,
+  onAssignJersey,
+  onToggleOnLine,
+  onReleaseLock,
 }: Props) {
   const scroller = useScrollFade<HTMLDivElement>();
+  /*
+   * Deliberately not reset when the selection changes. Naming a formation is
+   * done one man after another, and a panel that folded itself shut between
+   * each of them would be a tap per player for nothing.
+   */
+  const [details, setDetails] = useState(false);
+  const who = whoIs(roster, player);
 
   return (
     <div className="route-picker" ref={scroller}>
@@ -267,7 +298,84 @@ export function RoutePicker({
             No route
           </button>
         )}
+        <button
+          className="quiet details-toggle"
+          aria-pressed={details}
+          aria-expanded={details}
+          onClick={() => setDetails((d) => !d)}
+        >
+          Details {details ? '▴' : '▾'}
+        </button>
       </div>
+
+      {/*
+        * Who he is, as against what he runs. Folded away because it is the
+        * rarer of the two by a long way — but on the board rather than in the
+        * drawer, because renaming a man while looking at him should not mean
+        * leaving him.
+        */}
+      {details && (
+        <div className="picker-group details">
+          <div className="player-row">
+            <label>
+              <span>Label</span>
+              <input
+                value={player.label}
+                onChange={(e) => onRename(e.target.value)}
+                maxLength={3}
+                spellCheck={false}
+              />
+            </label>
+          </div>
+
+          {/*
+            * Only once there is a team sheet to pick from. An empty dropdown
+            * asking a question the app has given you no way to answer is worse
+            * than no dropdown.
+            */}
+          {roster.length > 0 && (
+            <div className="player-row">
+              <label>
+                <span>Who</span>
+                <select
+                  value={player.jersey ?? ''}
+                  onChange={(e) =>
+                    onAssignJersey(e.target.value === '' ? undefined : Number(e.target.value))
+                  }
+                >
+                  <option value="">Nobody yet</option>
+                  {byJersey(roster).map((entry) => (
+                    <option key={entry.id} value={entry.jersey}>
+                      {entry.jersey} {entry.name || '—'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {onToggleOnLine && (
+            <div className="picker-row">
+              <button aria-pressed={player.onLine} onClick={onToggleOnLine}>
+                {player.onLine ? 'On the line' : 'In the backfield'}
+              </button>
+              {onReleaseLock && (
+                <button className="quiet" onClick={onReleaseLock}>
+                  Back to auto
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Not an instruction, so it survives the no-tips rule: it is where
+              this man is standing, which is a fact about the play. */}
+          <p className="player-where">
+            {player.x.toFixed(2)} yd across, {player.y.toFixed(2)} yd from the line
+            {player.backNumber ? ` · back ${player.backNumber}` : ''}
+            {who?.name ? ` · ${who.name}` : ''}
+          </p>
+        </div>
+      )}
 
       {/*
         * His mark, beside what he runs and who he is. It used to be in the

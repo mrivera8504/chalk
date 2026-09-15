@@ -256,10 +256,23 @@ and his colour swatches with him. A line now resolves to the man who runs it,
 which opens the picker those swatches are already in. There is still no line
 inspector over the board in Routes.
 
-The board inspector holds the route list and nothing else. Label, the on-line
-toggle and the coordinates moved into the drawer: they are set once when a
-formation is built and then never again, and they sat over the board every time
-a man was picked up.
+**Everything about the man in hand is on the board with him.** The label, who is
+in the slot, the on-line toggle and the coordinates went to the drawer once, on
+the reasoning that they are set when a formation is built and then never again.
+That is true of a formation and not true of a man: he gets renamed, and handed
+to a different kid, all season — and doing either meant leaving him to do it.
+They are back in the route picker, **folded behind `Details`**, which is the
+part that makes both answers true at once: the route list is still the first
+thing the panel shows, and nothing about a player is a trip to another corner
+of the screen. The drawer has no player section at all now.
+
+`Details` is deliberately **not** reset when the selection changes. Labelling a
+formation is done one man after another, and a panel that folded itself shut
+between each of them would be a tap per player for nothing.
+
+`.picker-group.details` opts out of the flex row with the 44px label column that
+every other group in the panel uses — it has no heading and stacks a form, so it
+rules itself off instead.
 
 Zoom rewrites the `viewBox`, still in yards. Nothing else had to change:
 `toYards()` reads the SVG's own matrix, which already accounts for whatever box
