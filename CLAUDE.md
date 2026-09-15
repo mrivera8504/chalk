@@ -74,12 +74,24 @@ whose block you are halfway through outlives the drawer being shut.
 
 ## Chrome, controls and dialogs
 
-**One control size, and it is the pen's.** 40px is the floor and 44px anywhere a
-pen works through a list — the drawer, the route picker, the dialog. This is the
-same fact as the drawer tab needing 52px: Chrome gives a finger touch adjustment
-and hit-tests a stylus at the exact pixel. Every pill in the app was 33px, which
-was that bug spread across a hundred buttons. The genuinely secondary controls —
-a card's Copy, a folder's Rename, the trace bar — opt down to 32px by name.
+**One control size, and it is the pen's.** 40px is the floor, everywhere,
+including the lists that used to take 44 — the drawer's tool rows and the route
+picker came down to the floor when the panel had to fit in a third of the board.
+This is the same fact as the drawer tab needing 52px: Chrome gives a finger touch
+adjustment and hit-tests a stylus at the exact pixel. Every pill in the app was
+33px, which was that bug spread across a hundred buttons, and **40 is the number
+that is not 33** — do not go under it to win space. The genuinely secondary
+controls — a card's Copy, a folder's Rename, the drawer's own head, the trace bar
+— opt down to 32-34px by name.
+
+**Space came out of the gaps, not the targets.** The panel that only gets a third
+of the board got there by losing padding: the drawer is 264px wide rather than
+300, group and row padding roughly halved, and in the route picker **the group
+heading moved beside its row instead of above it** — six groups each spending a
+whole line on a nine-character word in 10px grey was 140-odd pixels. Nothing
+moved horizontally that was not already wrapping; a row of pills wraps at the
+same count either way. `.route-picker .picker-group` is a flex row with a 44px
+label column, which is why its buttons close up behind the label.
 
 **The drawer is a menu, not a palette.** It covers 58% of the board on a phone,
 so it opens closed in portrait and slides itself away after a one-shot action:
@@ -113,6 +125,39 @@ the board height-constrained and leaves room at the edges — which is why the
 drawer lives there. A strip across the top took 45% of a 360px-tall viewport. It
 takes the edge the drawer is *not* on, and the quick bar steps across to the
 board when it opens so it stops covering the route list.
+
+**In portrait it takes the end the selected man is not at.** It always went
+downfield, on the reasoning that the backfield is at the bottom so a panel there
+covers the backs you just picked up. That was half the board's story: the
+defense stands downfield, so the same fixed end laid the panel straight over the
+men whose jobs it had been opened to set. `inspectorEnd()` gives it `at-top` for
+an offensive player and `at-bottom` for a defender, and the quick bar swaps to
+the top when the panel takes the bottom — the same step-aside it already does
+sideways in landscape.
+
+**At the bottom it gets a third of the board, and that number is the
+backfield.** The board is 30 yards tall — 20 downfield, 10 behind — so the line
+of scrimmage sits two thirds of the way *down* the screen and a defender stands
+below the middle of it even though he is downfield of the ball. A panel given
+the old 62% from the bottom cleared the deep zones and then covered the front,
+which is the same bug one end along. The bottom ten yards are the one strip
+nothing defensive is ever drawn in, so that is its share: it stops on the LOS,
+and the list scrolls inside it instead of the box growing to fit. At the top it
+still takes what it needs, because the offense has no equivalent clear strip —
+its routes run into the space a top panel wants.
+
+**No tips, anywhere in the editor.** The hint pill floated at the bottom of the
+board naming the mode and narrating the gesture, which is where the quick bar
+sits and where the inspector now goes for a defender — half of what it said was
+under something. The grey lines under the tool rows and inside the route picker
+went with it: a capped panel cuts its last row in half, and the row it was
+cutting was always the explanation. What survives is what is *not* an
+instruction — the selected man's coordinates, which play a defense is set
+against, "Saved to the cloud.", errors, and the empty states that say a list is
+empty rather than how to use it. The tap-move-tap grammar is still shown, but on
+the board: the men in a half-finished block are drawn `pending`, and the aim ring
+follows the pen. `drawing` state went too — the pill was the only thing reading
+it, so it was a setState per stroke re-rendering the board for nobody.
 
 **A capped panel says so at its edge.** Every one of them was cutting a row of
 buttons exactly in half, which reads as a broken render rather than as "there is
@@ -212,11 +257,44 @@ Zoom rewrites the `viewBox`, still in yards. Nothing else had to change:
 `toYards()` reads the SVG's own matrix, which already accounts for whatever box
 is set.
 
+**The board slides, and that is the ✥ beside the zoom pair.** Magnifying a board
+you cannot slide only buys a bigger view of the part that was already covered,
+which is what zoom alone was once the route panel took the bottom third. It is a
+toggle rather than a mode in the row: sliding the window is not a thing you draw,
+and while it is out a tap on the field picks nothing up. Tap, move the pen, tap —
+free, because it goes through `applyDrag` like every other grab, so the carry,
+the contact-bounce resume and the finger drag all come with it. `Centre` puts
+both back.
+
+**A pan is not an edit.** No snapshot — a step back over one would undo nothing
+anybody could see — and no grid or magnet, which tidy a man onto a yard line and
+have nothing to say about a window. It is never saved and never exported: the
+thumbnail and `export/render.tsx` both draw from the constant `VIEW_BOX`, so what
+prints is the whole field however the editor happens to be looking at it.
+
+**The one drag measured in pixels.** Every other one reads its target off the
+live matrix — but a pan *is* a change to that matrix, so yards taken from it are
+yards in a box that has already moved and the reading chases its own tail. Pen
+travel across the glass is the quantity that stays still underneath the gesture,
+and the scale is fixed for its whole length because zoom cannot change mid-drag.
+The offset is set **absolutely** from where the grab began and never accumulated,
+which is also what makes a bounce free: any fresh grab re-anchors on the current
+state, so there is nothing to resume. Clamped so the middle of the view stays
+over the field — a board you can slide off the screen is a board you can lose.
+
 ## Routes
 
 Tapping a man opens his route list in the inspector — picking a player and
 choosing what he runs is one thought, and it used to be two taps in two
 corners of the screen.
+
+**Every concept in the picker is an on/off button.** Tapping the one he is
+already running takes it back off; tapping a different one still overrides,
+because that is the same rule said once — the last thing said about him wins.
+It covers routes, the defensive rush and drop rows, the zones and Man up, and
+the active one is drawn pressed, or the rule is invisible. The toggle-off runs
+*before* `remember()` where it delegates to something that snapshots for itself,
+or one tap would cost two identical steps back.
 
 Presets stay functions of where a player is standing, never stored shapes, so
 one concept serves any position. Two things extend that:

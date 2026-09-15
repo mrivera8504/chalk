@@ -227,6 +227,13 @@ type Selection = { kind: 'player' | 'assignment'; id: string } | null;
  */
 const VISION_ID = '::vision';
 
+/**
+ * The same trick for the board itself, which is not a thing on the play at all.
+ * Panning goes through `applyDrag` like everything else that moves, so it needs
+ * an id to be carried by, and this one belongs to no player either.
+ */
+const PAN_ID = '::pan';
+
 interface DragState {
   /**
    * What is in hand. `id` is the player for a drag, for a focus square and for
@@ -237,7 +244,7 @@ interface DragState {
    * aiming and sizing are the same gesture. A coverage has to be aimed and
    * sized separately: a flat is shallow and wide wherever it is.
    */
-  kind: 'player' | 'vision' | 'focus' | 'zone' | 'zone-size';
+  kind: 'player' | 'vision' | 'focus' | 'zone' | 'zone-size' | 'pan';
   id: string;
   /** Grab offset, so the mark keeps its position relative to the pen. */
   dx: number;
@@ -341,7 +348,12 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   const [customRoutes, setCustomRoutes] = useState<CustomRoute[]>(readCustomRoutes);
   /** The team sheet, read once. Edited on the playbook screen, never here. */
   const [roster] = useState(readRoster);
-  const [drawing, setDrawing] = useState(false);
+  /*
+   * There is no `drawing` flag any more. The hint pill was the only thing that
+   * ever read it — `stroke.current` is what the input code itself goes by —
+   * so it was a setState on every stroke start and finish, re-rendering the
+   * whole board to say something nobody is shown.
+   */
   const [carrying, setCarrying] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(readDrawerOpen);
   const [exporting, setExporting] = useState(false);
@@ -351,6 +363,28 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * accounts for whatever box is set here.
    */
   const [zoom, setZoom] = useState(1);
+  /**
+   * Where the window is looking, in yards, as an offset from the default centre.
+   *
+   * A view control and not a fact about the play: it is never saved, never
+   * exported and never undone. Zoom alone was not enough once the route panel
+   * took the bottom third — magnifying a board you cannot slide only buys you a
+   * bigger view of the part that was already covered.
+   */
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  /** Whether a tap on the board slides it instead of picking anything up. */
+  const [panning, setPanning] = useState(false);
+  /**
+   * Where a pan began: the pen in client pixels, and the offset at that moment.
+   *
+   * Pixels, deliberately, where every other drag works in yards. A pan changes
+   * the very mapping that yards are measured through, so yards taken from the
+   * live matrix are yards in a box that is already moving — the reading chases
+   * its own tail. The pen's travel across the glass is the one quantity that
+   * does not move underneath it, and the scale is fixed for the whole gesture
+   * because zoom cannot change in the middle of one.
+   */
+  const panFrom = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(0);
 
@@ -400,17 +434,25 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
 
-  /** The default box, centred and scaled. Yards throughout, as ever. */
+  /** The box, scaled and slid. Yards throughout, as ever. */
   const viewBox = useMemo(() => {
     const w = VIEW.halfWidth * 2;
     const h = VIEW.downfield + VIEW.behind;
     // Centre of the default box: the middle of the field, a little downfield.
-    const cx = 0;
-    const cy = (-VIEW.downfield + VIEW.behind) / 2;
+    const cx = pan.x;
+    const cy = (-VIEW.downfield + VIEW.behind) / 2 + pan.y;
     const zw = w / zoom;
     const zh = h / zoom;
     return `${cx - zw / 2} ${cy - zh / 2} ${zw} ${zh}`;
-  }, [zoom]);
+  }, [zoom, pan]);
+
+  /** True when the window is anywhere but where it starts. */
+  const viewMoved = zoom !== 1 || pan.x !== 0 || pan.y !== 0;
+
+  function resetView() {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }
 
   const visible = useMemo(
     () => (showDefense ? players : players.filter((p) => p.side === 'offense')),
@@ -465,65 +507,16 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     [players],
   );
 
-  const hint = useMemo(() => {
-    // Both highlights move in Move and in Routes alike, so this comes before
-    // the per-mode lines rather than inside one of them.
-    if (carrying === VISION_ID) return 'Swinging his look. Tap to set it';
-    // The kind comes off the carried handle rather than from the id, because a
-    // man can be wearing a square and a zone at once and both are carried by
-    // his own id.
-    if (carrying && carry.current?.kind === 'zone') {
-      return `Moving ${byId(carrying)?.label}'s zone. Tap to set it`;
-    }
-    if (carrying && carry.current?.kind === 'zone-size') {
-      return `Sizing ${byId(carrying)?.label}'s zone. Tap to set it`;
-    }
-    if (carrying && focuses.some((f) => f.playerId === carrying)) {
-      return `Aiming ${byId(carrying)?.label}'s square. Tap to set it`;
-    }
-    if (tool === 'draw') {
-      return drawing
-        ? 'Drawing. Move the pen, then tap to finish'
-        : 'Tap to start a route, move the pen, tap to finish';
-    }
-    if (tool === 'routes') {
-      if (selectedPlayer) return '';
-      return unit === 'defense' ? 'Tap a defender to see his job' : 'Tap a man to see his routes';
-    }
-    if (tool === 'erase') {
-      return erasing
-        ? 'Rubbing out. Move the pen over the ink, tap to stop'
-        : 'Tap to start rubbing out, move the pen, tap to stop';
-    }
-    if (tool === 'select') {
-      return carrying ? `Carrying ${byId(carrying)?.label}. Tap to place` : '';
-    }
-    const blocker = byId(pending?.blockerId);
-    if (tool === 'cover') {
-      return blocker ? `Tap the man ${blocker.label} has` : 'Tap a defender';
-    }
-    if (tool === 'stunt') {
-      return blocker ? `Tap who loops behind ${blocker.label}` : 'Tap the man who crashes';
-    }
-    if (!blocker) return 'Tap a blocker';
-    if (tool === 'pull') return `Tap who ${blocker.label} pulls to`;
-    if (tool === 'combo') {
-      return pending?.targetId
-        ? `Tap who ${blocker.label} climbs to`
-        : `Tap the lineman ${blocker.label} doubles`;
-    }
-    return `Tap who ${blocker.label} blocks`;
-  }, [tool, pending, players, drawing, carrying, erasing, sel, focuses, zones, unit]);
-
-  /**
-   * Is the pill saying something live, or only naming the mode?
+  /*
+   * There is no hint pill any more.
    *
-   * The live half — whose block you are halfway through, what is in your hand,
-   * that the pen is drawing — has to float over the board whatever else is
-   * open. The other half repeats, word for word, the line under the mode row in
-   * the drawer, so while the drawer is open the board keeps it to itself.
+   * It floated at the bottom of the board naming the mode and narrating the
+   * gesture — and the bottom of the board is where the quick bar sits and where
+   * the inspector now goes for a defensive play, so half of what it said was
+   * under something. The tap-move-tap grammar is still shown, but on the board
+   * itself: the men in a half-finished block are drawn `pending`, and the aim
+   * ring follows the pen.
    */
-  const hintIsLive = Boolean(carrying || pending || drawing || erasing);
 
   function toggleDrawer() {
     const next = !drawerOpen;
@@ -553,6 +546,23 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * strip across the downfield end and the class does nothing.
    */
   const inspectorSide = settings.drawerSide === 'right' ? 'at-left' : 'at-right';
+
+  /**
+   * Which end of the board the panel pins itself to, in portrait.
+   *
+   * It always went downfield, and the comment said why: the backfield is at the
+   * bottom, so a panel there covers the backs you just picked up. That was only
+   * ever half the board's story — the defense stands downfield, so on a
+   * defensive play the very same rule put the panel straight on top of the
+   * eleven men whose jobs it had been opened to set.
+   *
+   * So it takes the far end from whoever is selected rather than a fixed one.
+   * Offense is at the LOS and behind it, defense is in front of it, and nothing
+   * is drawn at either extreme, so the man in hand always ends up in the clear.
+   * In landscape the panel takes a side and this does nothing.
+   */
+  const inspectorEnd = (side: Side | undefined) =>
+    side === 'defense' ? 'at-bottom' : 'at-top';
 
   /** What the panel's one header says, now that no picker brings its own. */
   const drawerTitle =
@@ -869,6 +879,21 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   function applyRoute(preset: RoutePreset) {
     const p = selectedPlayer;
     if (!p) return;
+    /*
+     * Tapping the concept he is already running takes it back off.
+     *
+     * A route list is a row of on/off buttons and not a one-way door: a man is
+     * given a slant by tapping Slant, so the undoing of that is tapping Slant.
+     * Picking a different one still overrides, because that is the same rule —
+     * the last thing said about him wins.
+     *
+     * Ahead of remember(), because clearRoute takes its own snapshot and two of
+     * them would be two identical steps back for one tap.
+     */
+    if (routeOf(p.id)?.preset === preset.id) {
+      clearRoute(p.id);
+      return;
+    }
     remember();
     const hand = preset.hand ?? naturalHand(p);
     setAssignments((prev) => [
@@ -895,6 +920,14 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   function applyDefensePreset(preset: DefensePreset) {
     const p = selectedPlayer;
     if (!p) return;
+    // Same on/off rule the route list follows: the job he is already doing
+    // comes off when it is tapped again, and any other job overrides it.
+    const current = jobOf(p.id);
+    if (current?.preset === preset.id) {
+      remember();
+      setAssignments((prev) => prev.filter((a) => a.id !== current.id));
+      return;
+    }
     remember();
     const hand = preset.hand ?? naturalHand(p);
     setAssignments((prev) => [
@@ -941,6 +974,12 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     const p = selectedPlayer;
     if (!p) return;
     remember();
+    // The grass he already owns comes off when its own button is tapped again.
+    // A different zone still replaces it: a man has one patch, like one route.
+    if (zones.find((z) => z.playerId === p.id)?.preset === preset.id) {
+      setZones((prev) => prev.filter((z) => z.playerId !== p.id));
+      return;
+    }
     const shape = preset.shape(p, naturalHand(p), VIEW);
     setZones((prev) => [...prev.filter((z) => z.playerId !== p.id), { playerId: p.id, ...shape }]);
     // The other half of the same rule: a man given grass to cover is not also
@@ -1000,6 +1039,15 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   }
 
   function coverNearest(defender: PlayerSlot) {
+    // Man up is a toggle too, and it has to be: the rope it draws is the one
+    // thing in the picker with no button of its own to take it off again.
+    if (assignments.some((a) => a.playerId === defender.id && a.kind === 'cover')) {
+      remember();
+      setAssignments((prev) =>
+        prev.filter((a) => !(a.playerId === defender.id && a.kind === 'cover')),
+      );
+      return;
+    }
     const man = nearestReceiver(defender);
     if (!man) return;
     remember();
@@ -1141,6 +1189,21 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   }
 
   /**
+   * The one job a defender is doing — his rush or his drop, and not the man he
+   * has. The twin of routeOf, and separate from it because a defender's rope to
+   * a receiver is a different fact that survives him being sent: the picker's
+   * on/off state has to be about the button that was tapped, so it has to look
+   * at exactly the assignment that button writes.
+   */
+  function jobOf(playerId: string) {
+    return (
+      assignments.find(
+        (a) => a.playerId === playerId && !isBlockKind(a.kind) && !isLinkKind(a.kind),
+      ) ?? null
+    );
+  }
+
+  /**
    * Keep a drawn route as a concept.
    *
    * Stored relative to the man who ran it, so it can be given to anybody
@@ -1270,10 +1333,15 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     if (TRACING && held) trace(`            -> placed ${byId(held.id)?.label} (${reason})`);
   }
 
-  function moveCarried(svg: SVGSVGElement, at: Yards) {
+  function moveCarried(svg: SVGSVGElement, at: Yards, client?: { x: number; y: number }) {
     const c = carry.current;
     if (!c) return;
-    applyDrag(svg, { kind: c.kind, id: c.id, dx: c.dx, dy: c.dy, ox: 0, oy: 0, moved: true }, at);
+    applyDrag(
+      svg,
+      { kind: c.kind, id: c.id, dx: c.dx, dy: c.dy, ox: 0, oy: 0, moved: true },
+      at,
+      client,
+    );
   }
 
   function clearAim() {
@@ -1294,10 +1362,48 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * to choose a player, then waiting for a move that never arrives, is why a
    * drag picked the right man and then left him standing where he was.
    */
-  function applyDrag(svg: SVGSVGElement, d: DragState, at: Yards): boolean {
+  function applyDrag(
+    svg: SVGSVGElement,
+    d: DragState,
+    at: Yards,
+    /** The same point in client pixels. Only the pan needs it; see below. */
+    client?: { x: number; y: number },
+  ): boolean {
     if (!d.moved) {
       if (Math.hypot(at.x - d.ox, at.y - d.oy) < pxToYards(svg, DRAG_SLOP_PX)) return false;
       d.moved = true;
+    }
+
+    /*
+     * Sliding the window, and it comes first because it is the one drag that
+     * changes nothing on the play.
+     *
+     * No snapshot: the view is not part of a play, so a step back over a pan
+     * would be a step that undid nothing anyone could see. No grid and no
+     * magnet either — those tidy a man onto a yard line, and this is not a man.
+     *
+     * Worked in pixels rather than in yards. Every other drag reads its target
+     * off the live matrix, but a pan *is* a change to that matrix, so yards
+     * taken from it are yards in a box that has already moved: the reading
+     * chases its own tail and the board drifts. Pen travel across the glass is
+     * the one quantity that stays still underneath the gesture, and the scale
+     * is fixed for its whole length because zoom cannot change mid-drag. The
+     * offset is set absolutely from where the grab began, never accumulated, so
+     * a frame that renders late cannot leave the board a yard adrift.
+     */
+    if (d.kind === 'pan') {
+      const from = panFrom.current;
+      const ctm = svg.getScreenCTM();
+      if (!from || !ctm || !client) return true;
+      const half = { x: VIEW.halfWidth, y: (VIEW.downfield + VIEW.behind) / 2 };
+      setPan({
+        // Drag right and the field goes right, which means the window goes
+        // left. Clamped so the middle of the view stays over the field: a board
+        // you can slide off the screen entirely is a board you can lose.
+        x: clamp(from.ox - (client.x - from.x) / ctm.a, -half.x, half.x),
+        y: clamp(from.oy - (client.y - from.y) / ctm.d, -half.y, half.y),
+      });
+      return true;
     }
 
     // The first movement of a gesture is the moment there is something to step
@@ -1416,11 +1522,15 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
     if (!d) {
       if (carry.current) {
-        moveCarried(svg, toYards(svg, e.clientX, e.clientY));
+        moveCarried(svg, toYards(svg, e.clientX, e.clientY), { x: e.clientX, y: e.clientY });
         return;
       }
-      // Touch has no hover, so there is nothing to preview for a finger.
-      if (e.pointerType !== 'touch') showAim(svg, e);
+      /*
+       * Touch has no hover, so there is nothing to preview for a finger — and
+       * the ring says what a press would pick up, which while the board tool is
+       * out is nothing at all.
+       */
+      if (e.pointerType !== 'touch' && !panning) showAim(svg, e);
       // A move with no drag underway is either hover or a lost grip. Both are
       // worth seeing, but only occasionally, or the log is nothing else.
       if (TRACING && e.pointerType === 'pen' && moveCount.current++ % 25 === 0) {
@@ -1429,7 +1539,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       return;
     }
 
-    applyDrag(svg, d, toYards(svg, e.clientX, e.clientY));
+    applyDrag(svg, d, toYards(svg, e.clientX, e.clientY), { x: e.clientX, y: e.clientY });
     e.preventDefault();
   }
 
@@ -1546,7 +1656,6 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     if (idleTimer.current) window.clearTimeout(idleTimer.current);
     idleTimer.current = null;
     tapGuard.current = performance.now() + CHATTER_MS;
-    setDrawing(false);
     ink.current?.clear();
 
     const svg = svgRef.current;
@@ -1610,6 +1719,36 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       return;
     }
 
+    /*
+     * Sliding the board beats every tool, because it is not one.
+     *
+     * Ahead of the pencil and the eraser deliberately: the toggle is a statement
+     * about what the next tap does, and a coach who has said "move the board"
+     * and then drawn a line across it would have caught the app lying. Nothing
+     * here picks anything up, so no mode's own rule is broken by it.
+     *
+     * Tap, move the pen, tap — the same grammar as everything else, and it
+     * comes free: the lift with no travel hands the board to `carry`, hover
+     * moves slide it, and the next tap sets it down. A finger that holds
+     * contact drags it directly, as a finger always has.
+     */
+    if (panning) {
+      if (carry.current) {
+        if (performance.now() - carry.current.at > CHATTER_MS) dropCarried('board set down');
+        return;
+      }
+      panFrom.current = { x: e.clientX, y: e.clientY, ox: pan.x, oy: pan.y };
+      drag.current = { kind: 'pan', id: PAN_ID, dx: 0, dy: 0, ox: at.x, oy: at.y, moved: false };
+      gestureRemembered.current = false;
+      try {
+        stageRef.current?.setPointerCapture(e.pointerId);
+      } catch {
+        /* not fatal */
+      }
+      if (TRACING) trace(`${describeEvent(e, at)}\n            -> grabbed the board`);
+      return;
+    }
+
     if (tool === 'erase') {
       if (!accepts(e)) return;
 
@@ -1651,7 +1790,6 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       stroke.current = [{ x: e.clientX, y: e.clientY }];
       strokeAt.current = performance.now();
       strokeOwner.current = nearestPlayer(visible, at, INK_OWNER_YARDS)?.id ?? null;
-      setDrawing(true);
       if (idleTimer.current) window.clearTimeout(idleTimer.current);
       idleTimer.current = window.setTimeout(commitStroke, INK_IDLE_MS);
       if (TRACING) {
@@ -1716,7 +1854,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         } catch {
           /* not fatal */
         }
-        const moved = applyDrag(svg, drag.current, at);
+        const moved = applyDrag(svg, drag.current, at, { x: e.clientX, y: e.clientY });
         if (TRACING) {
           trace(
             `${describeEvent(e, at)}\n            -> RESUMED ${held?.label ?? bounce.kind} ` +
@@ -2296,7 +2434,11 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         <LiveInkCanvas ref={ink} />
 
       {selectedBlock && (
-        <div className={`inspector ${inspectorSide}`}>
+        <div
+          className={`inspector ${inspectorSide} ${inspectorEnd(
+            byId(selectedBlock.playerId)?.side,
+          )}`}
+        >
           <div className="row">
             <strong>{describeAssignment(selectedBlock, players)}</strong>
           </div>
@@ -2355,7 +2497,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         * a man was picked up.
         */}
       {selectedPlayer && tool !== 'select' && (
-        <div className={`inspector ${inspectorSide}`}>
+        <div className={`inspector ${inspectorSide} ${inspectorEnd(selectedPlayer.side)}`}>
           <RoutePicker
             player={selectedPlayer}
             /*
@@ -2372,13 +2514,29 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                     onZone: applyZonePreset,
                     hasZone: zones.some((z) => z.playerId === selectedPlayer.id),
                     onToggleZone: () => toggleZone(selectedPlayer),
-                    onCoverNearest: nearestReceiver(selectedPlayer)
-                      ? () => coverNearest(selectedPlayer)
-                      : null,
+                    /*
+                     * What he is already doing, so the buttons that do it read
+                     * as pressed. Without this the on/off rule is invisible:
+                     * tapping the lit concept takes it off, and nothing in the
+                     * row was saying which one was lit.
+                     */
+                    activeJob: jobOf(selectedPlayer.id)?.preset,
+                    activeZone: zones.find((z) => z.playerId === selectedPlayer.id)?.preset,
+                    hasCover: assignments.some(
+                      (a) => a.playerId === selectedPlayer.id && a.kind === 'cover',
+                    ),
+                    onCoverNearest:
+                      nearestReceiver(selectedPlayer) ||
+                      assignments.some(
+                        (a) => a.playerId === selectedPlayer.id && a.kind === 'cover',
+                      )
+                        ? () => coverNearest(selectedPlayer)
+                        : null,
                   }
                 : undefined
             }
             custom={customRoutes.map(toPreset)}
+            activeRoute={routeOf(selectedPlayer.id)?.preset}
             onPick={applyRoute}
             onDeleteCustom={deleteCustomRoute}
             onSaveDrawn={
@@ -2403,12 +2561,6 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           />
         </div>
       )}
-      {/*
-        * The one line that guides the tap-tap grammar, floating clear of the
-        * panel so it survives the drawer being shut. Inert, and only there when
-        * there is something to say.
-        */}
-      {hint && (hintIsLive || !drawerOpen) && <div className="hint-pill">{hint}</div>}
 
       {/*
         * The handful of actions worth reaching without opening anything, each
@@ -2418,7 +2570,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       <div className={`quick-bar ${settings.drawerSide === 'right' ? 'left' : 'right'}`}>
         {carrying && (
           <button className="quick place" onClick={() => dropCarried('quick bar')}>
-            Place {byId(carrying)?.label}
+            {carrying === PAN_ID ? 'Set the board' : `Place ${byId(carrying)?.label ?? ''}`}
           </button>
         )}
         {selectedBlock && (
@@ -2448,6 +2600,25 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         </button>
 
         <div className="zoom">
+          {/*
+            * Sliding the board, beside magnifying it, because they are the same
+            * kind of thing: neither one changes a line on the play. It is a
+            * toggle and not a one-shot — you slide, look, slide again — and it
+            * drops whatever is in hand on the way in, or a player picked up a
+            * moment ago would still be following the pen that is now moving the
+            * field out from under him.
+            */}
+          <button
+            className={panning ? 'quick pan on' : 'quick pan'}
+            aria-pressed={panning}
+            aria-label={panning ? 'Stop moving the board' : 'Move the board'}
+            onClick={() => {
+              if (carrying) dropCarried('board tool');
+              setPanning((v) => !v);
+            }}
+          >
+            ✥
+          </button>
           <button
             className="quick"
             aria-label="Zoom in"
@@ -2464,9 +2635,10 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           >
             −
           </button>
-          {zoom !== 1 && (
-            <button className="quick" aria-label="Actual size" onClick={() => setZoom(1)}>
-              {Math.round(zoom * 100)}%
+          {/* One way back to the top of the field, whichever of the two moved it. */}
+          {viewMoved && (
+            <button className="quick" aria-label="Back to the whole field" onClick={resetView}>
+              {zoom !== 1 ? `${Math.round(zoom * 100)}%` : 'Centre'}
             </button>
           )}
         </div>
@@ -2524,23 +2696,6 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
             <section className="tool-group">
               <h4>Mode</h4>
               <BlockTool tool={tool} unit={unit} onTool={handleTool} />
-              <p className="tool-note">
-                {tool === 'select'
-                  ? 'Tap a man to pick him up, tap again to set him down.'
-                  : tool === 'draw'
-                    ? 'Tap to start, move the pen, tap to finish. It does not have to stay down.'
-                    : tool === 'erase'
-                      ? 'Tap to start, sweep over the ink, tap to stop. Freehand rubs out in parts; a route or block goes whole.'
-                      : tool === 'cover'
-                        ? 'Tap the defender, then tap the man he has.'
-                        : tool === 'stunt'
-                          ? 'Tap the man who crashes, then the man who loops behind him.'
-                          : tool === 'routes'
-                            ? unit === 'defense'
-                              ? 'Tap a defender for his job, his zone and the man he has.'
-                              : 'Tap a man to see what he can run, which way he runs it, and whether he gets the ball.'
-                            : 'Tap the blocker, then tap who he goes to.'}
-              </p>
             </section>
 
             {selectedPlayer && (
@@ -2660,13 +2815,14 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                   Clear {drawn.length + annotations.length + zones.length || ''}
                 </button>
               </div>
-              <p className="tool-note">
-                {unit === 'defense'
-                  ? scout
-                    ? `Set against ${scout.name || scout.suggestedName || 'a play'}. Tap a defender for his job.`
-                    : 'Jobs mode: tap a defender and pick what he does.'
-                  : 'Routes mode: tap a man on the board and pick what he runs.'}
-              </p>
+              {/* What it is set against is a fact about the play; the line
+                  telling you to tap a defender was an instruction, and it is
+                  gone with the rest of them. */}
+              {unit === 'defense' && scout && (
+                <p className="tool-note">
+                  Set against {scout.name || scout.suggestedName || 'a play'}.
+                </p>
+              )}
             </section>
 
             <section className="tool-group">
@@ -2719,11 +2875,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                   Save image
                 </button>
               </div>
-              <p className="tool-note">
-                {saved && Date.now() - saved < 4000
-                  ? 'Saved to the cloud.'
-                  : 'Every change is already kept on this phone. Save pushes it to the cloud now.'}
-              </p>
+              {saved && Date.now() - saved < 4000 && (
+                <p className="tool-note">Saved to the cloud.</p>
+              )}
             </section>
 
             {/*

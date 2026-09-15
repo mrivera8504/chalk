@@ -196,14 +196,8 @@ body,
   touch-action: manipulation;
   left: 0;
   right: 0;
-  max-height: 70%;
+  max-height: 62%;
   overflow-y: auto;
-  /*
-   * Pinned to the downfield end, not the near end. The backfield sits at the
-   * bottom of the board, so a panel there covers the backs you just selected.
-   * Nothing is ever drawn 15 yards downfield of the LOS.
-   */
-  top: 0;
   z-index: 2;
   /* One compact row, so it covers as little of the board as it can. */
   flex-direction: row;
@@ -215,6 +209,69 @@ body,
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   backdrop-filter: blur(6px);
+}
+
+/*
+ * Which end it pins to, and it is whichever end the selected man is not at.
+ *
+ * It used to be downfield always, on the reasoning that the backfield is at the
+ * bottom and a panel there covers the backs. True, and only half the board: the
+ * defense stands downfield, so the same fixed end laid the panel straight over
+ * the eleven men whose jobs it had been opened to set. Nothing is ever drawn at
+ * either extreme, so the far end from the man in hand is always the clear one.
+ */
+.stage .inspector.at-top {
+  top: 0;
+  bottom: auto;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.stage .inspector.at-bottom {
+  bottom: 0;
+  top: auto;
+  border-bottom: 0;
+  border-top: 1px solid var(--line);
+  /*
+   * A third of the board, and that number is the backfield.
+   *
+   * The board is 30 yards tall — 20 downfield, 10 behind — so the line of
+   * scrimmage sits two thirds of the way DOWN the screen, and a defender stands
+   * below the middle of it even though he is downfield of the ball. A panel
+   * given 62% from the bottom cleared the deep zones and then covered the front:
+   * the men it had been opened to set.
+   *
+   * The bottom ten yards are the one strip nothing defensive is ever drawn in,
+   * so that is the panel's share. It stops on the LOS, and the list scrolls
+   * inside it rather than the box growing to fit.
+   */
+  max-height: 33%;
+  overflow: hidden;
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  padding: 0 10px 4px;
+}
+
+/* The one scroller is the list itself, so its sticky head keeps working and the
+   fade at the edge still means "there is more below". */
+.stage .inspector.at-bottom .route-picker {
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+
+/*
+ * The quick bar lives at the bottom, so it steps up to the top when the panel
+ * takes the bottom — the same swap it already does across in landscape, and for
+ * the same reason: stood on top of the route list it covers the bottom row of
+ * it.
+ */
+.stage:has(.inspector.at-bottom) .quick-bar {
+  bottom: auto;
+  top: 10px;
 }
 
 /* Wraps rather than scrolls: a tool you cannot see is a tool you will not use. */
@@ -268,7 +325,9 @@ body,
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(300px, 58%);
+  /* Narrower than it was. 300px on a 412px phone is three quarters of the
+     board; the rows inside it are pills, not paragraphs, and they fit. */
+  width: min(264px, 52%);
   transform: translateX(100%);
   transition: transform 180ms ease;
   pointer-events: auto;
@@ -310,7 +369,7 @@ body,
 }
 
 .drawer.left.open .drawer-tab {
-  left: min(300px, 58%);
+  left: min(264px, 52%);
 }
 
 /*
@@ -347,7 +406,7 @@ body,
 }
 
 .drawer.open .drawer-tab {
-  right: min(300px, 58%);
+  right: min(264px, 52%);
 }
 
 /*
@@ -361,8 +420,8 @@ body,
 .drawer-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px 6px;
+  gap: 5px;
+  padding: 5px 8px 4px;
   position: sticky;
   top: 0;
   z-index: 2;
@@ -378,7 +437,7 @@ body,
 }
 
 .drawer-head .drawer-back {
-  min-height: 36px;
+  min-height: 34px;
   padding: 4px 9px 6px;
   font-size: 17px;
   line-height: 1;
@@ -388,14 +447,14 @@ body,
 
 .drawer-head .quiet {
   margin-left: auto;
-  min-height: 36px;
-  padding: 6px 10px;
+  min-height: 34px;
+  padding: 5px 9px;
   font-size: 12px;
 }
 
 /* The line under the title that used to be the picker's own subtitle. */
 .drawer-sub {
-  margin: -2px 12px 6px;
+  margin: -2px 10px 4px;
   font-size: 11.5px;
   color: var(--dim);
 }
@@ -405,7 +464,7 @@ body,
  * gave every button the same weight and told you what none of them were for.
  */
 .tool-group {
-  padding: 4px 0 10px;
+  padding: 2px 0 6px;
   border-top: 1px solid var(--line);
 }
 
@@ -414,7 +473,7 @@ body,
 }
 
 .tool-group h4 {
-  margin: 8px 12px 2px;
+  margin: 5px 10px 2px;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.09em;
@@ -434,14 +493,21 @@ body,
 .drawer-panel .tools {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  padding: 6px 12px 10px;
+  gap: 5px;
+  padding: 4px 10px 6px;
 }
 
 .drawer-panel .tools button {
   width: 100%;
   min-width: 0;
-  min-height: 44px;
+  /*
+   * 40px, which is the floor above and not a return to the 33px that had the
+   * pen missing everything. The extra four this row used to carry were there
+   * because it is a list; the list is short enough to be read at the floor.
+   */
+  min-height: 40px;
+  padding: 7px 10px;
+  font-size: 12.5px;
   justify-content: center;
   text-align: center;
   /*
@@ -455,7 +521,7 @@ body,
 }
 
 .drawer-panel .tool-group .tools {
-  padding-bottom: 4px;
+  padding-bottom: 2px;
 }
 
 /* One control that needs the whole width to say what it is. Squeezed into half
@@ -497,21 +563,20 @@ body,
   max-height: 34vh;
   overflow-y: auto;
   touch-action: auto;
-  margin-top: 2px;
   border-top: 1px solid var(--line);
 }
 
 /* The toggles a pen has to hit on the way past: the star, the zone, the flip. */
 .route-picker .picker-head button {
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .route-picker .picker-head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 7px 0 6px;
+  gap: 5px;
+  padding: 4px 0;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -549,14 +614,45 @@ body,
   color: var(--zone);
 }
 
+/*
+ * The heading sits beside its row, not above it.
+ *
+ * Six groups, each one spending a whole line on a nine-character word in 10px
+ * grey: that was 140-odd pixels of a panel that only gets a third of the board.
+ * Put the label in a column down the left and the rows close up behind it —
+ * nothing moves horizontally that was not already wrapping, because a row of
+ * pills wraps at the same count either way.
+ */
 .route-picker .picker-group {
-  padding: 0 0 6px;
+  padding: 0 0 3px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
+.route-picker .picker-group h3 {
+  flex: 0 0 44px;
+  margin: 0;
+  /* Sits against the middle of the first row of buttons rather than its top. */
+  padding-top: 13px;
+  line-height: 1.15;
+  text-align: right;
+}
+
+.route-picker .picker-group > .picker-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/*
+ * 40px, the floor this whole app sits on, rather than the 44 a list used to
+ * take. Well clear of the 33px that had a stylus missing every pill; the four
+ * it gives back are four on every row of a panel that has six of them.
+ */
 .route-picker .picker-row button {
-  min-height: 44px;
-  padding: 8px 12px;
-  font-size: 13px;
+  min-height: 40px;
+  padding: 6px 9px;
+  font-size: 12.5px;
 }
 
 /*
@@ -565,12 +661,12 @@ body,
  * the size that had the pen missing buttons everywhere else in this app.
  */
 .route-picker .swatch {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
 }
 
 .route-picker .picker-row.swatches {
-  gap: 8px;
+  gap: 6px;
 }
 
 .route-picker .picker-note {
@@ -638,34 +734,18 @@ body,
   background: color-mix(in srgb, var(--hover) 16%, var(--panel));
 }
 
+/* The board tool wears the same lit state as the pencil: both are switches that
+   change what the next tap on the field means. */
+.quick-bar .pan.on {
+  border-color: var(--hover);
+  color: var(--hover);
+  background: color-mix(in srgb, var(--hover) 16%, var(--panel));
+}
+
 /* Setting a carried player down is the one that is urgent. */
 .quick-bar .quick.place {
   border-color: var(--select);
   color: var(--select);
-}
-
-/*
- * Whose block you are halfway through assigning, floating over the board so it
- * outlives the drawer. Inert: it must never swallow a tap meant for the field.
- */
-.hint-pill {
-  position: absolute;
-  left: 50%;
-  bottom: 12px;
-  transform: translateX(-50%);
-  z-index: 2;
-  pointer-events: none;
-  max-width: 84%;
-  padding: 7px 13px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  backdrop-filter: blur(6px);
-  color: var(--select);
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /*
@@ -854,16 +934,27 @@ button:focus-visible {
    * It takes the edge the drawer is not on, so the two can be open together
    * without either covering the other.
    */
-  .stage .inspector {
+  .stage .inspector,
+  .stage .inspector.at-top,
+  .stage .inspector.at-bottom {
     top: 0;
     bottom: 0;
     width: min(340px, 42%);
     max-height: none;
+    overflow: hidden;
     flex-direction: column;
     align-items: stretch;
     flex-wrap: nowrap;
     padding: 6px 12px 10px;
+    border-top: 0;
     border-bottom: 0;
+  }
+
+  /* It has a whole side here, so the end it would have taken means nothing and
+     the quick bar keeps the bottom. */
+  .stage:has(.inspector.at-bottom) .quick-bar {
+    bottom: 10px;
+    top: auto;
   }
 
   .stage .inspector.at-left {
@@ -1348,10 +1439,10 @@ button:focus-visible {
 .picker-head span { font-size: 11.5px; color: var(--dim); }
 .picker-head .quiet { margin-left: auto; }
 
-.picker-group { padding: 2px 12px 8px; }
+.picker-group { padding: 1px 10px 5px; }
 
 .picker-group h3 {
-  margin: 6px 0 5px;
+  margin: 4px 0 3px;
   font-size: 10.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1359,10 +1450,12 @@ button:focus-visible {
   font-weight: 600;
 }
 
-.picker-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.picker-row { display: flex; flex-wrap: wrap; gap: 5px; }
 
 .drawer-panel .picker-row button {
-  min-height: 44px;
+  min-height: 40px;
+  padding: 7px 10px;
+  font-size: 12.5px;
 }
 
 .picker-note {

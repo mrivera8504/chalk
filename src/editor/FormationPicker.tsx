@@ -76,12 +76,6 @@ export function FormationPicker({
         </div>
       )}
 
-      {mine.length === 1 && (
-        <p className="picker-note">
-          Line the players up how you want them, then save. Star the one your
-          team actually lines up in and every new play starts there.
-        </p>
-      )}
     </div>
   );
 }

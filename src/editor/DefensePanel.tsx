@@ -40,10 +40,6 @@ export function DefensePanel({ library, scoutPlayId, onCoverage, onScout }: Prop
             </button>
           ))}
         </div>
-        <p className="picker-note">
-          Drops the whole coverage on the men who are off the ball. Every box and
-          every rope is yours to drag or delete afterwards.
-        </p>
       </div>
 
       <div className="picker-group">
@@ -65,12 +61,6 @@ export function DefensePanel({ library, scoutPlayId, onCoverage, onScout }: Prop
             </p>
           )}
         </div>
-        {looks.length > 0 && (
-          <p className="picker-note">
-            Brings that play's offense over, routes and all. Your front, your
-            zones and the men you have stay where they are.
-          </p>
-        )}
       </div>
     </div>
   );

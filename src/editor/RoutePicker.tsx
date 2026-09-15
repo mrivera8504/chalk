@@ -45,6 +45,12 @@ export interface DefenseTools {
   /** A zone with no concept behind it, to be dragged into shape. */
   hasZone: boolean;
   onToggleZone: () => void;
+  /** The rush or drop he is already doing, so its own button reads as on. */
+  activeJob?: string;
+  /** The zone concept he is already playing, for the same reason. */
+  activeZone?: string;
+  /** He already has somebody, so Man up is the button that takes it off. */
+  hasCover: boolean;
   /** Man up on the nearest receiver, without a trip through the Man tool. */
   onCoverNearest: (() => void) | null;
 }
@@ -55,6 +61,13 @@ interface Props {
   defense?: DefenseTools;
   /** The user's own, already wearing the preset face. */
   custom: RoutePreset[];
+  /**
+   * The concept he is already running.
+   *
+   * Every row in this panel is an on/off button — tapping the lit one takes it
+   * back off — and that is only usable if the lit one is visibly lit.
+   */
+  activeRoute?: string;
   /** Set when this player has a drawn route there is any point saving. */
   onSaveDrawn: (() => void) | null;
   onPick: (preset: RoutePreset) => void;
@@ -87,15 +100,15 @@ interface Props {
  */
 function Group<T extends { id: string; name: string }>({
   title,
-  note,
   routes,
+  activeId,
   onPick,
   onDeleteCustom,
 }: {
   title: string;
-  /** A line under the heading, for a row whose name is not the whole story. */
-  note?: string;
   routes: T[];
+  /** The one in this row he is already doing, drawn pressed. */
+  activeId?: string;
   onPick: (p: T) => void;
   onDeleteCustom?: (id: string) => void;
 }) {
@@ -103,12 +116,13 @@ function Group<T extends { id: string; name: string }>({
   return (
     <div className="picker-group">
       <h3>{title}</h3>
-      {note && <p className="picker-note">{note}</p>}
       <div className="picker-row">
         {routes.map((r) =>
           onDeleteCustom ? (
             <span key={r.id} className="chip">
-              <button onClick={() => onPick(r)}>{r.name}</button>
+              <button aria-pressed={r.id === activeId} onClick={() => onPick(r)}>
+                {r.name}
+              </button>
               <button
                 className="chip-x"
                 aria-label={`Delete ${r.name}`}
@@ -118,7 +132,7 @@ function Group<T extends { id: string; name: string }>({
               </button>
             </span>
           ) : (
-            <button key={r.id} onClick={() => onPick(r)}>
+            <button key={r.id} aria-pressed={r.id === activeId} onClick={() => onPick(r)}>
               {r.name}
             </button>
           ),
@@ -143,6 +157,7 @@ export function RoutePicker({
   player,
   defense,
   custom,
+  activeRoute,
   onSaveDrawn,
   onPick,
   onDeleteCustom,
@@ -204,8 +219,18 @@ export function RoutePicker({
             >
               Zone
             </button>
+            {/* Pressed in the plain style rather than the zone's colour: the
+                rope he draws is not a patch of grass. */}
             {defense.onCoverNearest && (
-              <button onClick={defense.onCoverNearest} aria-label={`${player.label} takes a man`}>
+              <button
+                aria-pressed={defense.hasCover}
+                onClick={defense.onCoverNearest}
+                aria-label={
+                  defense.hasCover
+                    ? `${player.label} takes nobody`
+                    : `${player.label} takes a man`
+                }
+              >
                 Man up
               </button>
             )}
@@ -297,10 +322,6 @@ export function RoutePicker({
         </div>
       )}
 
-      {hasVision && onVision && (
-        <p className="picker-note">Drag the cone on the board to swing where he looks.</p>
-      )}
-
       {defense ? (
         <>
           {/*
@@ -311,18 +332,21 @@ export function RoutePicker({
           <Group
             title="Rush"
             routes={DEFENSE_PRESETS.filter((d) => d.group === 'rush')}
+            activeId={defense.activeJob}
             onPick={(p) => defense.onPick(p as DefensePreset)}
           />
           {/*
             * Hook and Flat appear here and again below, and that is not a
             * duplicate: this row draws the arrow he runs, and the rows below
-            * hand him the grass he owns. Most calls want one or the other, so
-            * the difference is said out loud rather than left to be worked out.
+            * hand him the grass he owns. The headings carry that on their own —
+            * Drop is a drop and Zone is a patch of grass — and the lines that
+            * used to spell it out were the first thing a capped panel cut in
+            * half.
             */}
           <Group
             title="Drop"
-            note="An arrow showing where he goes."
             routes={DEFENSE_PRESETS.filter((d) => d.group === 'drop')}
+            activeId={defense.activeJob}
             onPick={(p) => defense.onPick(p as DefensePreset)}
           />
           {/*
@@ -332,46 +356,52 @@ export function RoutePicker({
             */}
           <Group
             title="Zone"
-            note="The grass he owns, drawn as a box."
             routes={ZONE_PRESETS.filter((z) => z.group === 'under')}
+            activeId={defense.activeZone}
             onPick={(p) => defense.onZone(p as ZonePreset)}
           />
           <Group
             title="Deep zone"
             routes={ZONE_PRESETS.filter((z) => z.group === 'deep')}
+            activeId={defense.activeZone}
             onPick={(p) => defense.onZone(p as ZonePreset)}
           />
-          {defense.hasZone && (
-            <p className="picker-note">
-              Drag the box to move it, or its far corner to change how much grass
-              he has.
-            </p>
-          )}
         </>
       ) : (
         <>
-          <Group title="Pass" routes={ROUTES.filter((r) => r.group === 'pass')} onPick={onPick} />
-          <Group title="Run" routes={ROUTES.filter((r) => r.group === 'run')} onPick={onPick} />
-          <Group title="Yours" routes={custom} onPick={onPick} onDeleteCustom={onDeleteCustom} />
+          <Group
+            title="Pass"
+            routes={ROUTES.filter((r) => r.group === 'pass')}
+            activeId={activeRoute}
+            onPick={onPick}
+          />
+          <Group
+            title="Run"
+            routes={ROUTES.filter((r) => r.group === 'run')}
+            activeId={activeRoute}
+            onPick={onPick}
+          />
+          <Group
+            title="Yours"
+            routes={custom}
+            activeId={activeRoute}
+            onPick={onPick}
+            onDeleteCustom={onDeleteCustom}
+          />
         </>
       )}
 
-      {defense ? null : onSaveDrawn ? (
+      {/*
+        * No line under it saying what saving does. The panel is capped and
+        * scrolls, so the explanatory lines were the rows getting sliced in half
+        * at its edge — and the dialog the button opens says it anyway.
+        */}
+      {!defense && onSaveDrawn && (
         <div className="picker-group">
           <div className="picker-row">
             <button onClick={onSaveDrawn}>Save {player.label}'s route</button>
           </div>
-          <p className="picker-note">
-            Keeps the shape, not the spot, so you can give it to anyone.
-          </p>
         </div>
-      ) : (
-        !custom.length && (
-          <p className="picker-note">
-            Draw a route with the pen, pick that man again, and you can save it
-            here as one of your own.
-          </p>
-        )
       )}
     </div>
   );
