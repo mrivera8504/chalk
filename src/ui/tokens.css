@@ -1117,6 +1117,19 @@ button:focus-visible {
 }
 
 /*
+ * The build stamp at the foot of Settings. Deliberately plain and deliberately
+ * selectable — its whole job is being read out loud or copied into a message.
+ */
+.build-stamp {
+  margin: 4px 14px 16px;
+  font-size: 11px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/*
  * How long since a backup file was written, and only past a week. It sits
  * beside the sync label because they answer the same question from two sides:
  * where this playbook currently is, and how far back the last copy of it goes.

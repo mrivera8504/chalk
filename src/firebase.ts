@@ -145,14 +145,21 @@ export async function signInExisting(email: string, password: string): Promise<A
 }
 
 /**
- * Sign out and fall straight back to an anonymous account, so the app is never
- * in a state where there is nobody to save as. The local playbook is untouched
- * and will be pushed up under whatever account signs in next, which is why the
- * account screen warns before signing out.
+ * Sign out, and mint nothing.
+ *
+ * This used to sign straight back in anonymously so there was never a moment
+ * with nobody to save as. That cost an account every time — and since signing
+ * out is almost always the first half of signing in as somebody else, it was an
+ * account nobody would ever use again. Uid sprawl is not a cosmetic problem
+ * here: an abandoned anonymous uid is one nobody can ever sign into, and a
+ * playbook under one is a playbook that needs an admin key to reach.
+ *
+ * Nothing is lost in the gap. Local storage keeps the book and keeps the uid it
+ * belongs to, so signing back into the same account merges, and the next launch
+ * takes an anonymous account if one is genuinely needed.
  */
-export async function signOutToAnonymous(): Promise<void> {
+export async function signOutOfAccount(): Promise<void> {
   await signOut(auth);
-  await signInAnonymously(auth);
 }
 
 /** Firebase's codes are not sentences. These are. */

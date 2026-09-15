@@ -634,6 +634,20 @@ them**, because a field with no signal is the condition this app was built for
 and colouring it red teaches everybody to ignore the colour by the second
 practice.
 
+**Signing out mints nothing.** It used to sign straight back in anonymously so
+there was never a moment with nobody to save as — an account every time, and
+since signing out is nearly always the first half of signing in as somebody
+else, an account nobody would ever use again. Nothing is lost in the gap:
+storage keeps the book and the uid it belongs to, and the next launch takes an
+anonymous account only if one is genuinely needed.
+
+**Every build says which build it is.** `__BUILD__` — short sha and build time,
+substituted by Vite, logged as the first line in the console and printed at the
+foot of Settings. A service worker means two devices can be running two
+different bundles at the same moment, and with no stamp the only way to answer
+"is this phone on the new code?" was an MD5 of the deployed asset against a
+local build. An evening went into that question once.
+
 **Recovering a stranded playbook.** The Admin SDK authenticates as the project
 rather than as a user, so a document under an abandoned anonymous uid can be
 read without signing in as anybody — which matters because nobody ever can. Every
@@ -642,6 +656,14 @@ documents that do not themselves exist but carry a subcollection, which is
 exactly the shape this app writes. Firestore's console has no per-document JSON
 export, and `gcloud firestore export` writes LevelDB to a bucket, so a script is
 the way out.
+
+And **a rescue file is a snapshot, not the truth.** The device on the other end
+keeps working while one is being assembled: pushing a union built ten minutes
+earlier cost a coach two plays he drew in between and rolled a third back to an
+older copy. Anything writing a book back has to merge against what is live at
+the moment it writes, per play, exactly as the app does. The same goes for
+nudging timestamps to win a comparison — doing that made a stale copy of a play
+beat a real rename of it. Do not shift stamps; fix the merge.
 
 ## Backup, and what a backup has to carry
 
@@ -709,6 +731,12 @@ everything drawn beforehand under an id nobody could sign back into.
 
 Email/password has to be enabled in the Firebase console; `explainAuth` says so
 in words when it is not.
+
+Signing out leaves nobody signed in rather than falling back to a fresh
+anonymous account — see *The playbook, and how it syncs*. The playbook stays on
+the device either way, but it is tagged with the account it belongs to, so the
+confirm says which email it will come back under rather than promising it to
+whoever signs in next.
 
 Signing into an account that already exists is the other direction entirely: the
 uid changes, and that account's playbook comes *down* over what is on screen.

@@ -155,7 +155,13 @@ export function usePlaybook() {
    * over it 800ms later.
    */
   useEffect(() => {
-    if (!uid) return;
+    // Nobody signed in — before auth answers, or after a sign-out. The book is
+    // on this device and going nowhere, and the label should say exactly that
+    // rather than leaving "saved" on screen for a cloud nobody is talking to.
+    if (!uid) {
+      setSync('local');
+      return;
+    }
     let alive = true;
     setSync('syncing');
     void pullFromCloud(uid).then((res) => {

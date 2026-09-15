@@ -3,7 +3,7 @@ import { askConfirm } from '../ui/dialog';
 import {
   explainAuth,
   signInExisting,
-  signOutToAnonymous,
+  signOutOfAccount,
   upgradeToEmail,
   watchAccount,
   type Account,
@@ -93,14 +93,25 @@ export function AccountPanel({ onSaveNow, onClose }: Props) {
               disabled={busy}
               onClick={() =>
                 void askConfirm('Sign out?', {
+                  /*
+                   * It used to promise the playbook would be saved to whichever
+                   * account signed in next. That stopped being true when local
+                   * storage started recording which account a book belongs to
+                   * — which is the change that stopped one device's plays being
+                   * pushed over another account's.
+                   */
                   body:
-                    'The playbook stays on this device, and will be saved to ' +
-                    'whichever account signs in next.',
+                    `This playbook belongs to ${account.email} and stays in the ` +
+                    'cloud under it. Sign back in with that email to get it ' +
+                    'back; sign in with a different one and you will see that ' +
+                    "account's playbook instead.",
                   confirmLabel: 'Sign out',
                 }).then((ok) => {
                   if (!ok) return;
                   setBusy(true);
-                  void signOutToAnonymous().finally(() => setBusy(false));
+                  void signOutOfAccount()
+                    .catch((err) => setError(explainAuth(err)))
+                    .finally(() => setBusy(false));
                 })
               }
             >

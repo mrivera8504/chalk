@@ -333,6 +333,14 @@ export function SettingsPanel({ settings, onClose }: Props) {
           </button>
         </div>
       </div>
+
+      {/*
+        * Which build this device is on. Not a tip and not an instruction — it
+        * is a fact you can read out over the phone, which is exactly what was
+        * missing when two devices were running two different bundles and
+        * nobody could tell.
+        */}
+      <p className="build-stamp">build {__BUILD__}</p>
     </div>
   );
 }

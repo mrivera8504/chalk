@@ -1,8 +1,36 @@
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+/**
+ * Which build this is, baked in at compile time.
+ *
+ * A service worker means two devices can be running two different bundles at
+ * the same moment, and the app had no way to say which — answering "is this
+ * phone on the new code?" once took an MD5 of the deployed asset against a
+ * local build. Netlify sets COMMIT_REF; git answers on this machine; a checkout
+ * with neither is honest about it rather than guessing.
+ */
+function buildId(): string {
+  const sha =
+    process.env.COMMIT_REF?.slice(0, 7) ??
+    (() => {
+      try {
+        return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+          .toString()
+          .trim();
+      } catch {
+        return 'nogit';
+      }
+    })();
+  return `${sha} ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+}
+
 export default defineConfig({
+  define: {
+    __BUILD__: JSON.stringify(buildId()),
+  },
   plugins: [
     react(),
     /*
