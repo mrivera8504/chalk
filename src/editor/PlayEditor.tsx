@@ -126,6 +126,9 @@ const CHATTER_YARDS = 2.5;
  */
 const DRAG_SLOP_PX = 12;
 
+/** How near a route handle a tap has to land, in yards. The zone grip's reach. */
+const ROUTE_GRAB = 1.1;
+
 /** Freehand tolerance, in yards. Roughly a tenth of a player's width. */
 const INK_TOLERANCE = 0.15;
 
@@ -244,8 +247,11 @@ interface DragState {
    * aiming and sizing are the same gesture. A coverage has to be aimed and
    * sized separately: a flat is shallow and wide wherever it is.
    */
-  kind: 'player' | 'vision' | 'focus' | 'zone' | 'zone-size' | 'pan';
+  kind: 'player' | 'vision' | 'focus' | 'zone' | 'zone-size' | 'pan' | 'route-point';
+  /** The assignment, for a route point. */
   id: string;
+  /** Which point of the route is in hand. Only a route point has one. */
+  pt?: number;
   /** Grab offset, so the mark keeps its position relative to the pen. */
   dx: number;
   dy: number;
@@ -408,7 +414,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * until it is tapped down.
    */
   const carry = useRef<
-    { kind: DragState['kind']; id: string; dx: number; dy: number; at: number } | null
+    { kind: DragState['kind']; id: string; pt?: number; dx: number; dy: number; at: number } | null
   >(null);
   const strokeAt = useRef(0);
   const lastRawAt = useRef(0);
@@ -1142,7 +1148,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
      * is the contain a left-handed pick would have drawn. It is looked up in its
      * own table because its shape needs the gap map as well as the man.
      */
-    const def = current.preset ? defensePresetById(current.preset) : null;
+    const def = current.preset && !current.edited ? defensePresetById(current.preset) : null;
     if (def) {
       const hand = otherHand(was);
       setAssignments((prev) =>
@@ -1157,11 +1163,21 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
     const preset = current.preset ? presetsById.get(current.preset) : undefined;
     const twin = preset?.flipId ? presetsById.get(preset.flipId) : undefined;
-    const next = twin ?? preset;
+    // A reshaped line is mirrored as drawn: regenerating it from the preset
+    // would put the stock shape back over the coach's.
+    const next = current.edited ? undefined : (twin ?? preset);
 
     setAssignments((prev) =>
       prev.map((a) => {
         if (a.id !== current.id) return a;
+        if (a.edited) {
+          return {
+            ...a,
+            ...(twin ? { preset: twin.id } : {}),
+            hand: otherHand(was),
+            path: mirrorAbout(a.path, a.path[0]?.x ?? player.x),
+          };
+        }
         if (next) {
           const hand = twin ? (twin.hand ?? otherHand(was)) : otherHand(was);
           return {
@@ -1338,7 +1354,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     if (!c) return;
     applyDrag(
       svg,
-      { kind: c.kind, id: c.id, dx: c.dx, dy: c.dy, ox: 0, oy: 0, moved: true },
+      { kind: c.kind, id: c.id, pt: c.pt, dx: c.dx, dy: c.dy, ox: 0, oy: 0, moved: true },
       at,
       client,
     );
@@ -1444,6 +1460,28 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
     if (d.kind === 'vision') {
       setVision({ x, y });
+      return true;
+    }
+    if (d.kind === 'route-point') {
+      setAssignments((prev) =>
+        prev.map((a) => {
+          if (a.id !== d.id || d.pt === undefined || !a.path[d.pt]) return a;
+          const path = a.path.slice();
+          const p = path[d.pt];
+          const mx = x - p.x;
+          const my = y - p.y;
+          // The control point describes the curve arriving here, so it travels
+          // with the point or a bent stem would swing out across the field.
+          path[d.pt] = {
+            ...p,
+            x,
+            y,
+            ...(p.cx !== undefined ? { cx: p.cx + mx } : {}),
+            ...(p.cy !== undefined ? { cy: p.cy + my } : {}),
+          };
+          return { ...a, path, edited: true };
+        }),
+      );
       return true;
     }
     if (d.kind === 'zone' || d.kind === 'zone-size') {
@@ -1842,6 +1880,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         drag.current = {
           kind: bounce.kind,
           id: bounce.id,
+          pt: bounce.pt,
           dx: bounce.dx,
           dy: bounce.dy,
           ox: bounce.ox,
@@ -1864,6 +1903,24 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         }
         return;
       }
+    }
+
+    /*
+     * A handle on the selected man's route beats everything else in Routes.
+     * They are only drawn for the man in hand, so a tap on one is deliberate,
+     * and the end of a route often lands on top of somebody else's mark.
+     */
+    const handle = tool === 'routes' ? grabRoutePoint(at, pickRadius(svg)) : null;
+    if (handle) {
+      drag.current = handle;
+      gestureRemembered.current = false;
+      try {
+        stageRef.current?.setPointerCapture(e.pointerId);
+      } catch {
+        /* not fatal */
+      }
+      if (TRACING) trace(`${describeEvent(e, at)}\n            -> grabbed route point ${handle.pt}`);
+      return;
     }
 
     const radius = pickRadius(svg);
@@ -2002,6 +2059,49 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     } catch {
       /* not fatal */
     }
+  }
+
+  /**
+   * The points of the selected man's line that can be dragged.
+   *
+   * Every corner of a preset, which is a handful. A hand-drawn line is smoothed
+   * into dozens, and a handle on each would bury the route under dots, so it
+   * offers only its end — how far it goes is the thing worth changing on one.
+   * The first point never moves: it is where the man is standing.
+   */
+  const routeHandles = useMemo(() => {
+    if (tool !== 'routes' || !selectedPlayer) return [];
+    const a = routeOf(selectedPlayer.id);
+    if (!a || a.path.length < 2) return [];
+    const last = a.path.length - 1;
+    const idx = a.path.length <= 8 ? a.path.map((_, i) => i).slice(1) : [last];
+    return idx.map((pt) => ({ id: a.id, pt, x: a.path[pt].x, y: a.path[pt].y }));
+    // routeOf reads assignments, which is what this depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tool, selectedPlayer, assignments]);
+
+  /** Nearest handle within reach, the end winning a tie so a route can always grow. */
+  function grabRoutePoint(at: Yards, radius: number): DragState | null {
+    let best: (typeof routeHandles)[number] | null = null;
+    let bestD = Math.max(radius, ROUTE_GRAB);
+    for (const h of routeHandles) {
+      const d = Math.hypot(h.x - at.x, h.y - at.y);
+      if (d <= bestD) {
+        best = h;
+        bestD = d;
+      }
+    }
+    if (!best) return null;
+    return {
+      kind: 'route-point',
+      id: best.id,
+      pt: best.pt,
+      dx: best.x - at.x,
+      dy: best.y - at.y,
+      ox: at.x,
+      oy: at.y,
+      moved: false,
+    };
   }
 
   /**
@@ -2408,6 +2508,25 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               pending={
                 p.id === pending?.blockerId || p.id === pending?.targetId || p.id === carrying
               }
+            />
+          ))}
+
+          {/*
+            * The selected man's route handles, over the players: the end of a
+            * route often stops on somebody's mark, and a handle under it is a
+            * handle nobody finds.
+            */}
+          {routeHandles.map((h) => (
+            <circle
+              key={`rh${h.pt}`}
+              cx={h.x}
+              cy={h.y}
+              r={0.42}
+              fill="var(--chalk)"
+              fillOpacity={carrying === h.id ? 0.7 : 0.22}
+              stroke="var(--chalk)"
+              strokeWidth={0.09}
+              pointerEvents="none"
             />
           ))}
 

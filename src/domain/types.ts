@@ -118,6 +118,13 @@ export interface Assignment {
   hand?: Hand;
   /** null means derive from the kind. */
   color?: string;
+  /**
+   * Reshaped by hand after it was given out. The preset still names the concept
+   * — a slant with its break pulled a yard deeper is still a slant to the namer —
+   * but its shape can no longer be regenerated from it, so a flip mirrors the
+   * path the coach made instead of redrawing the stock one over it.
+   */
+  edited?: boolean;
 }
 
 /**
