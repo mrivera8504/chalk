@@ -74,7 +74,7 @@ function deepZones(deepMen: PlayerSlot[], parts: number, field: FieldSize): Zone
   }
 
   const width = (field.halfWidth * 2) / parts;
-  const centres = Array.from({ length: parts }, (_, i) => -field.halfWidth + width * (i + 0.5));
+  const centers = Array.from({ length: parts }, (_, i) => -field.halfWidth + width * (i + 0.5));
   const label = parts === 2 ? 'Deep 1/2' : parts === 3 ? 'Deep 1/3' : `Deep 1/${parts}`;
   const preset = parts === 2 ? 'half' : 'third';
 
@@ -86,10 +86,10 @@ function deepZones(deepMen: PlayerSlot[], parts: number, field: FieldSize): Zone
    * nearest-piece-first would give the middle safety an outside third simply
    * because a team-mate got to the middle one before him.
    */
-  if (sorted.length === centres.length) {
+  if (sorted.length === centers.length) {
     return sorted.map((man, i) => ({
       playerId: man.id,
-      x: centres[i],
+      x: centers[i],
       y: -14,
       w: width,
       h: 12,
@@ -100,7 +100,7 @@ function deepZones(deepMen: PlayerSlot[], parts: number, field: FieldSize): Zone
 
   // Short-handed: each man takes the piece he is nearest, and whatever is left
   // over is the part of the field this call has vacated.
-  const free = [...centres];
+  const free = [...centers];
   return sorted.flatMap((man) => {
     if (!free.length) return [];
     let best = 0;
@@ -174,7 +174,7 @@ export function applyCoverage(
 
   /*
    * Only men who can actually catch it. Pairing by raw distance without this
-   * put a linebacker in man coverage on the centre, which is not a mistake a
+   * put a linebacker in man coverage on the center, which is not a mistake a
    * coach would make and not one he should have to undo.
    */
   const receivers = eligibleReceivers(players);

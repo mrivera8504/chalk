@@ -135,10 +135,10 @@ export function SettingsPanel({ settings, onClose }: Props) {
       )}
 
       <div className="picker-group">
-        <h3>Route colours</h3>
+        <h3>Route colors</h3>
         <p className="picker-note">
-          Each receiver's route takes the next colour, so routes that cross can
-          be told apart. Tap a line on the board to give that one route a colour
+          Each receiver's route takes the next color, so routes that cross can
+          be told apart. Tap a line on the board to give that one route a color
           of its own.
         </p>
         <div className="swatch-edit">
@@ -147,7 +147,7 @@ export function SettingsPanel({ settings, onClose }: Props) {
               <input
                 type="color"
                 value={c}
-                aria-label={`Receiver ${i + 1} colour`}
+                aria-label={`Receiver ${i + 1} color`}
                 onChange={(e) => {
                   const next = s.routeColors.slice();
                   next[i] = e.target.value;
@@ -164,7 +164,7 @@ export function SettingsPanel({ settings, onClose }: Props) {
             <input
               type="color"
               value={s.carryColor}
-              aria-label="Ball carrier colour"
+              aria-label="Ball carrier color"
               onChange={(e) => setSettings({ carryColor: e.target.value })}
             />
             <span>Carry</span>
@@ -173,7 +173,7 @@ export function SettingsPanel({ settings, onClose }: Props) {
             <input
               type="color"
               value={s.blockColor}
-              aria-label="Block colour"
+              aria-label="Block color"
               onChange={(e) => setSettings({ blockColor: e.target.value })}
             />
             <span>Block</span>
@@ -188,7 +188,7 @@ export function SettingsPanel({ settings, onClose }: Props) {
               })
             }
           >
-            Reset colours
+            Reset colors
           </button>
         </div>
       </div>
@@ -322,7 +322,7 @@ export function SettingsPanel({ settings, onClose }: Props) {
             onClick={() =>
               void askConfirm('Put every setting back the way it came?', {
                 body:
-                  'The colours, the pen, the board and your league rules. ' +
+                  'The colors, the pen, the board and your league rules. ' +
                   'Your plays, formations and roster are not touched.',
                 confirmLabel: 'Reset settings',
                 danger: true,

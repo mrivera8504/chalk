@@ -33,11 +33,11 @@ function onField(zone: Omit<Zone, 'playerId'>, field: FieldSize): Omit<Zone, 'pl
   return { ...zone, x: Math.max(-limit, Math.min(limit, zone.x)) };
 }
 
-/** Which third of the field this man is nearest, as a centre line. */
-function thirdCentre(x: number, field: FieldSize): number {
+/** Which third of the field this man is nearest, as a center line. */
+function thirdCenter(x: number, field: FieldSize): number {
   const w = (field.halfWidth * 2) / 3;
-  const centres = [-field.halfWidth + w / 2, 0, field.halfWidth - w / 2];
-  return centres.reduce((best, c) => (Math.abs(c - x) < Math.abs(best - x) ? c : best));
+  const centers = [-field.halfWidth + w / 2, 0, field.halfWidth - w / 2];
+  return centers.reduce((best, c) => (Math.abs(c - x) < Math.abs(best - x) ? c : best));
 }
 
 export const ZONE_PRESETS: ZonePreset[] = [
@@ -81,7 +81,7 @@ export const ZONE_PRESETS: ZonePreset[] = [
     group: 'deep',
     shape: (p, _h, f) => {
       const w = (f.halfWidth * 2) / 3;
-      return { x: thirdCentre(p.x, f), y: -14, w, h: 12, preset: 'third', label: 'Deep 1/3' };
+      return { x: thirdCenter(p.x, f), y: -14, w, h: 12, preset: 'third', label: 'Deep 1/3' };
     },
   },
   {

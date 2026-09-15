@@ -2476,7 +2476,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                 key={c}
                 className="swatch"
                 style={{ background: c }}
-                aria-label={`Colour ${c}`}
+                aria-label={`Color ${c}`}
                 aria-pressed={selectedBlock.color === c}
                 onClick={() => recolor(selectedBlock.id, c)}
               />
@@ -2638,7 +2638,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           {/* One way back to the top of the field, whichever of the two moved it. */}
           {viewMoved && (
             <button className="quick" aria-label="Back to the whole field" onClick={resetView}>
-              {zoom !== 1 ? `${Math.round(zoom * 100)}%` : 'Centre'}
+              {zoom !== 1 ? `${Math.round(zoom * 100)}%` : 'Center'}
             </button>
           )}
         </div>

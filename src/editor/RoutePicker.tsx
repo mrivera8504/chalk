@@ -301,14 +301,14 @@ export function RoutePicker({
           {/* Labelled like every other row in here. It was the one group with no
               heading, which left a line of coloured circles under the marks
               with nothing saying what they would paint. */}
-          <h3>Line colour</h3>
+          <h3>Line color</h3>
           <div className="picker-row swatches">
             {swatches.map((c) => (
               <button
                 key={c}
                 className="swatch"
                 style={{ background: c }}
-                aria-label={`Colour ${c}`}
+                aria-label={`Color ${c}`}
                 aria-pressed={color === c}
                 onClick={() => onColor(c)}
               />
