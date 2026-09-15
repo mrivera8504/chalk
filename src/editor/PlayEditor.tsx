@@ -1466,19 +1466,18 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       setAssignments((prev) =>
         prev.map((a) => {
           if (a.id !== d.id || d.pt === undefined || !a.path[d.pt]) return a;
-          const path = a.path.slice();
-          const p = path[d.pt];
-          const mx = x - p.x;
-          const my = y - p.y;
-          // The control point describes the curve arriving here, so it travels
-          // with the point or a bent stem would swing out across the field.
-          path[d.pt] = {
-            ...p,
-            x,
-            y,
-            ...(p.cx !== undefined ? { cx: p.cx + mx } : {}),
-            ...(p.cy !== undefined ? { cy: p.cy + my } : {}),
-          };
+          /*
+           * The route keeps its shape and only its depth changes. Everything
+           * past where the man stands slides downfield or back together, so the
+           * stem grows or shrinks and the break is the same break a yard or
+           * three further on. Depth only: sliding it sideways would lean the
+           * stem, and a leaning stem is a different route.
+           */
+          const my = y - a.path[d.pt].y;
+          if (!my) return a;
+          const path = a.path.map((p, i) =>
+            i === 0 ? p : { ...p, y: p.y + my, ...(p.cy !== undefined ? { cy: p.cy + my } : {}) },
+          );
           return { ...a, path, edited: true };
         }),
       );
@@ -2062,25 +2061,24 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   }
 
   /**
-   * The points of the selected man's line that can be dragged.
+   * The one handle on the selected man's line: its end.
    *
-   * Every corner of a preset, which is a handful. A hand-drawn line is smoothed
-   * into dozens, and a handle on each would bury the route under dots, so it
-   * offers only its end — how far it goes is the thing worth changing on one.
-   * The first point never moves: it is where the man is standing.
+   * There was one on every corner, and dragging the break reshaped the route —
+   * which is not what a coach adjusting a route means. The shape is the concept;
+   * how deep it runs is the adjustment. So the end is the only grip, and moving
+   * it slides the whole route deeper or shallower.
    */
   const routeHandles = useMemo(() => {
     if (tool !== 'routes' || !selectedPlayer) return [];
     const a = routeOf(selectedPlayer.id);
     if (!a || a.path.length < 2) return [];
-    const last = a.path.length - 1;
-    const idx = a.path.length <= 8 ? a.path.map((_, i) => i).slice(1) : [last];
-    return idx.map((pt) => ({ id: a.id, pt, x: a.path[pt].x, y: a.path[pt].y }));
+    const pt = a.path.length - 1;
+    return [{ id: a.id, pt, x: a.path[pt].x, y: a.path[pt].y }];
     // routeOf reads assignments, which is what this depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool, selectedPlayer, assignments]);
 
-  /** Nearest handle within reach, the end winning a tie so a route can always grow. */
+  /** The handle, if the tap is within reach of it. */
   function grabRoutePoint(at: Yards, radius: number): DragState | null {
     let best: (typeof routeHandles)[number] | null = null;
     let bestD = Math.max(radius, ROUTE_GRAB);
