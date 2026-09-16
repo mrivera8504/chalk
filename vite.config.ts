@@ -39,7 +39,16 @@ export default defineConfig({
      * no bars you got a blank page and a playbook you could not reach.
      */
     VitePWA({
-      registerType: 'autoUpdate',
+      /*
+       * Prompt, not autoUpdate.
+       *
+       * autoUpdate reloads the page out from under whoever is holding it, which
+       * on this app means mid-drag on a play — and it only ever fired on a page
+       * load, which is exactly what an installed PWA on a sideline tablet never
+       * does. See store/update.ts: the check is asked for explicitly now, and
+       * the answer goes on screen for the coach to take when it suits them.
+       */
+      registerType: 'prompt',
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
         name: 'Chalk',

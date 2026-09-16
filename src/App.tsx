@@ -4,6 +4,7 @@ import { UNFILED_SECTION, type Side } from './domain/types';
 import { PlaybookList } from './playbook/PlaybookList';
 import { blankPlay, usePlaybook } from './store/usePlaybook';
 import { DialogHost } from './ui/DialogHost';
+import { UpdateBar } from './ui/UpdateBar';
 import { askConfirm } from './ui/dialog';
 
 export function App() {
@@ -40,6 +41,7 @@ export function App() {
     return (
       <>
         <DialogHost />
+        <UpdateBar />
         <PlayEditor
           key={open.id}
           play={open}
@@ -56,6 +58,7 @@ export function App() {
   return (
     <>
       <DialogHost />
+      <UpdateBar />
       <PlaybookList
         plays={book.plays}
         trashed={book.trashed}

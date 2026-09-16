@@ -1933,3 +1933,47 @@ button:disabled { opacity: 0.4; cursor: default; }
 .dialog-buttons button:disabled {
   opacity: 0.45;
 }
+
+/*
+ * "A new version is ready", at the foot of whatever is on screen.
+ *
+ * Under the dialog's z-index and over everything else: it must never cover a
+ * question the coach is being asked, and must never end up behind the board it
+ * is reporting on. `touch-action` is set for the same reason the dialog sets
+ * it — this mounts over `.stage`, which is `none`, and a bar whose buttons a
+ * pen cannot press is worse than no bar at all.
+ */
+.update-bar {
+  position: fixed;
+  z-index: 45;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 20px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px 9px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  touch-action: manipulation;
+}
+
+.update-bar span {
+  font-size: 13px;
+  margin-right: 2px;
+}
+
+.update-bar button {
+  min-height: 36px;
+  padding: 7px 12px;
+}
+
+/* Reads as the action without taking the view's one primary button. */
+.update-bar .update-take {
+  border-color: var(--select);
+  color: var(--select);
+  font-weight: 600;
+}
