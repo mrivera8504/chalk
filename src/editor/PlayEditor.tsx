@@ -86,6 +86,7 @@ import {
   writeFoundationId,
 } from '../domain/presets/formations';
 import { askConfirm, askText } from '../ui/dialog';
+import { useBackLayer } from '../ui/backstack';
 import { UndoStack } from '../store/undo';
 import { newId } from '../store/usePlaybook';
 import {
@@ -346,6 +347,13 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   const [picker, setPicker] = useState<
     'formation' | 'settings' | 'notes' | 'defense' | null
   >(null);
+  /*
+   * A picker is a layer over the drawer and has its own back arrow, so the back
+   * gesture matches it. The drawer itself deliberately is not one: opening and
+   * closing it is a remembered preference, and a swipe should not rewrite what
+   * the tools do next time the coach opens a play.
+   */
+  useBackLayer(Boolean(picker), () => setPicker(null));
   const [formations, setFormations] = useState<Formation[]>(readFormations);
   /* The starred set for this unit. The two sides star independently. */
   const [foundationId, setFoundationId] = useState<string | null>(() =>

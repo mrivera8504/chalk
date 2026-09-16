@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import './ui/tokens.css';
 import { installPenTaps } from './ui/penTaps';
+import { installBackGesture } from './ui/backstack';
 import { watchForUpdates } from './store/update';
 
 // First line in the console on every device, so "which bundle is this one
@@ -11,6 +12,10 @@ console.info(`Chalk build ${__BUILD__}`);
 
 // Before anything renders, so the first tap on the first button already works.
 installPenTaps();
+
+// Likewise before anything can open: the listener has to be up before there is
+// a layer for the back gesture to close.
+installBackGesture();
 
 // Registers the worker, then keeps asking whether it is still the current one
 // — which a device that is never closed would otherwise never find out.

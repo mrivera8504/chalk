@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { answerDialog, currentDialog, subscribeDialog } from './dialog';
+import { useBackLayer } from './backstack';
 
 /**
  * The one dialog, mounted once at the root.
@@ -31,6 +32,11 @@ export function DialogHost() {
       return () => window.clearTimeout(id);
     }
   }, [request]);
+
+  // The back gesture is a cancel too — the same answer as Escape, and as the
+  // tap on the scrim. A question is the top layer while it is up, so it is the
+  // first thing a swipe takes.
+  useBackLayer(Boolean(request), () => answerDialog(null));
 
   // Escape is a cancel, wherever the focus happens to be.
   useEffect(() => {
