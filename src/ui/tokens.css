@@ -37,9 +37,10 @@
 
   /*
    * One per receiver. Tokens rather than literals so the export can swap the
-   * whole set for ink that survives white paper; see PRINT_TOKENS in
-   * export/render.tsx. A colour picked by hand is stored as one of these names,
-   * so it adapts too.
+   * whole set for ink that survives white paper. A colour picked by hand is
+   * stored as one of these names, so it adapts too — and on paper it is these
+   * very values that are darkened, hue intact, rather than a fixed print
+   * palette standing in for them; see export/printInk.ts.
    */
   --route-0: #7fd4ff;
   --route-1: #86e5a0;
@@ -1724,11 +1725,170 @@ button:focus-visible {
 }
 
 .account-panel,
-.export-panel {
+.export-panel,
+.print-panel {
   margin: 0 14px 12px;
   max-height: none;
   border: 1px solid var(--line);
   border-radius: 12px;
+}
+
+/* ---- print ---- */
+
+/*
+ * A sheet of paper, on screen.
+ *
+ * Everything inside is positioned in percentages of the page and lettered in
+ * container units, so this same markup is a thumbnail in the panel and a proof
+ * filling a tablet, with no measuring and nothing to re-render when it resizes.
+ * `container-type: size` is what makes `cqw` mean "a hundredth of this page".
+ */
+.print-page {
+  container-type: size;
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #fff;
+  color: #000;
+  border-radius: 3px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+}
+
+.print-head,
+.print-name,
+.print-notes,
+.print-board {
+  position: absolute;
+}
+
+/* The board is an image of an SVG, sized to a box already in its proportions. */
+.print-board {
+  display: block;
+}
+
+.print-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.22);
+  font-weight: 700;
+  line-height: 1.1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.print-head span {
+  font-weight: 400;
+  color: #6b6b6b;
+  font-size: 0.72em;
+}
+
+/* Centred, which is the whole point of the change: flush left, a row of three
+   read as three plays shoved leftward rather than as a row. */
+.print-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  overflow: hidden;
+}
+
+.print-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.print-notes {
+  overflow: hidden;
+  line-height: 1.35;
+}
+
+/* Narrow enough that the options above it stay on screen beside it. The proof
+   that fills the view is Full screen; this one is for glancing at. */
+.print-preview {
+  max-width: 260px;
+  margin: 2px auto 8px;
+}
+
+.print-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.print-pager button {
+  min-height: 34px;
+  padding: 4px 12px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/*
+ * The proof, over everything.
+ *
+ * Under the dialog's z-index for the same reason the update bar is: a question
+ * the coach is being asked must never end up behind a picture of a page.
+ */
+.print-full {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px;
+  touch-action: manipulation;
+  background: color-mix(in srgb, #000 78%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+/*
+ * Just a centring box.
+ *
+ * The sheet inside sizes itself, from an inline width that knows the page's own
+ * proportions — see PagePreview. It has to be inline, because the answer
+ * changes when the paper is turned, and every attempt to do it here ended in
+ * `height: 100%` inside a box whose height came from its contents, which is
+ * circular and collapsed the sheet to nothing.
+ */
+.print-full-sheet {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.print-full-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+@media (orientation: landscape) {
+  /* The options and the proof sit side by side when there is width for it,
+     so changing a setting does not mean scrolling back up to see it. */
+  .print-panel .print-preview {
+    max-width: 300px;
+  }
 }
 
 .picker-note.bad {

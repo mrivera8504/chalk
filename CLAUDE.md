@@ -780,18 +780,67 @@ dependency — `computeHoles` and `checkFormation` in `PlayEditor.tsx` had stale
 components the editor draws with, then rasterizes it through an `<img>` and a
 canvas. A serialized SVG carries no stylesheet, so every custom property is
 written into the file's own `<style>`; `TOKENS` lists them and must be kept in
-step with what the renderers reference. `PRINT_TOKENS` then overrides the lot
-for paper — white turf, black marks, and saturated ink, because the screen
-palette is pastel for dark turf and vanishes on white. The rush ink stays red on
-paper and the zone keeps a hue of its own, unlike the two washes that go grey:
-a zone is drawn with an edge and a label rather than as a fade, and grey boxes
-over grey routes would not be tellable apart on a photocopy. Verified in-browser that
-custom properties do resolve inside a rasterized SVG.
+step with what the renderers reference. `PAPER_STRUCTURE` then overrides the
+field itself for paper — white turf, black marks, grey yard lines — and the two
+highlight washes go grey with it, because they are laid down at a tenth of their
+alpha and a yellow wash prints as either nothing at all or a stain across the
+routes drawn over it. Verified in-browser that custom properties do resolve
+inside a rasterized SVG.
 
-`export/pdf.ts` composes the sheets with `pdf-lib`: single play, call sheet at
-4/6/9 up, wristband strips (names only — a wristband is read in two seconds),
-big-print player cards, and the whole playbook in folder order. Every play is
-rasterized and embedded **once** per document.
+**The ink is derived, not chosen — and why the yellow printed green.** There
+used to be a second hand-picked palette beside the structural one, a fixed hex
+per token. It had two faults. It ignored the swatches in Settings, so a coach's
+own colours never reached paper at all; and the values did not hold their hue.
+The block gold went from 46° to 36°, which is the hue of a paper bag, and the
+lime route from 69° to 86°, which is the hue of grass — a coach printed a play
+and asked why the yellow had come out green. `export/printInk.ts` derives each
+ink from whatever is on the root instead, in OKLCH, by three rules: the hue
+never moves; the chroma it had is carried across and clamped to what the gamut
+will take at the new lightness; and the lightness comes down only as far as a
+3:1 contrast on white, which is what a 3pt stroke needs and no more. Darkening
+past that is exactly what turns a yellow into an olive.
+
+Carrying the *absolute* chroma is what makes both ends come out right, and for
+the same reason in each case. A pale yellow is pale in a band where sRGB has
+almost no chroma left once it darkens, so the clamp bites and the ink lands on
+the most saturated gold available, which reads yellow. A near-grey blue is
+near-grey in a band with chroma to spare, so the clamp never bites and it stays
+the quiet colour it was chosen to be. Pushing everything to the gamut edge
+instead — the first attempt — turned the deliberately-muted option ink into a
+vivid cyan.
+
+`export/paper.ts` holds the page arithmetic and nothing else — no pdf-lib, no
+React — because two things have to agree about it: the PDF, and the preview.
+`layout()` resolves the paper, the margin, the running head, the grid and a box
+per play, in **top-left** coordinates; `pdf.ts` flips to PDF space at the point
+of drawing. The grid is worked out rather than written down: every exact
+factorisation of the plays-per-page is tried and the one that draws the biggest
+play wins, which puts two-up side by side on landscape and stacked on portrait
+without either case being special. Whatever height a cell does not need is split
+above and below it — four across a landscape page otherwise collects half the
+paper at the foot and reads as though the printing was cut off.
+
+`export/pdf.ts` composes with `pdf-lib`. There is **one** play composer,
+`playSheetPdf`. The install sheet, the call sheet, the big-print cards and the
+playbook were the same page with different numbers in it, and each carried its
+own copy of the arithmetic, which is why none of them could be turned sideways
+and only one of them centred anything; `singlePlayPdf` and `playbookPdf` are
+thin wrappers on it now. Wristband strips and the team sheet are still their own
+functions — they are lists, not plays, and have no orientation to choose. Every
+play is rasterized and embedded **once** per document, at a resolution taken
+from the box it is actually going into.
+
+`export/PrintPanel.tsx` is the one screen for all of it: orientation, one to
+nine a page, edge-to-edge, name size, with the page drawn underneath while the
+options are changed and a full-screen proof. It reads the same `layout()` the
+PDF does, so it cannot drift from the sheet.
+
+**The preview must draw each board as an `<img>`, never as inline SVG.** An
+exported board carries its own `<style>` block setting the print palette on
+`:root`, which the moment it is inlined into the app is *the app's* root:
+dropping three of them into the playbook turned every thumbnail on the page
+white, turf and all. A data URL is its own document, and it is the same path
+`svgToPng` already takes to the PDF.
 
 ## Why buttons needed a hard press
 

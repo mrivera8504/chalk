@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { askConfirm } from '../ui/dialog';
 import type { RosterEntry } from '../domain/roster';
 import type { Play, Section } from '../domain/types';
-import { callSheetPdf, playbookPdf, playerCardsPdf, rosterPdf, wristbandPdf } from './pdf';
+import { rosterPdf, wristbandPdf } from './pdf';
+import { PrintPanel } from './PrintPanel';
 import { download, stamp } from './render';
 
 interface Props {
@@ -16,7 +17,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Job = 'book' | 'call4' | 'call6' | 'call9' | 'band' | 'cards' | 'roster' | null;
+type Job = 'band' | 'roster' | null;
 
 /**
  * Everything that leaves the app as a file.
@@ -30,6 +31,7 @@ export function ExportPanel({ plays, sections, roster, onJson, onRestore, onClos
   const [busy, setBusy] = useState<Job>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [restored, setRestored] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
   const file = useRef<HTMLInputElement>(null);
 
   /**
@@ -82,8 +84,20 @@ export function ExportPanel({ plays, sections, roster, onJson, onRestore, onClos
 
   const label = (job: Job, text: string) => (busy === job ? 'Working…' : text);
   const day = stamp();
-  const callJob = (n: 4 | 6 | 9): Exclude<Job, null> =>
-    n === 4 ? 'call4' : n === 6 ? 'call6' : 'call9';
+
+  // The plays are the whole of Print, so it takes the screen rather than
+  // sitting as one more group under Backup: choosing a layout means watching
+  // the page change, and there is no room to do that beside a file picker.
+  if (printing) {
+    return (
+      <PrintPanel
+        plays={plays}
+        sections={sections}
+        roster={roster}
+        onClose={() => setPrinting(false)}
+      />
+    );
+  }
 
   return (
     <div className="picker export-panel">
@@ -98,24 +112,17 @@ export function ExportPanel({ plays, sections, roster, onJson, onRestore, onClos
       </div>
 
       <div className="picker-group">
-        <h3>Call sheet</h3>
+        <h3>Plays</h3>
         <div className="picker-row">
-          {([4, 6, 9] as const).map((n) => (
-            <button
-              key={n}
-              disabled={busy !== null}
-              onClick={() =>
-                void run(
-                  callJob(n),
-                  () => callSheetPdf(plays, n, 'Call sheet'),
-                  `chalk-call-sheet-${n}up-${day}.pdf`,
-                )
-              }
-            >
-              {label(callJob(n), `${n} per page`)}
-            </button>
-          ))}
+          <button className="primary" disabled={!plays.length} onClick={() => setPrinting(true)}>
+            Print plays…
+          </button>
         </div>
+        <p className="picker-note">
+          Call sheets, install sheets and the whole book, in whatever shape you
+          need them: portrait or landscape, one to nine a page, with the page
+          shown before you save it.
+        </p>
       </div>
 
       <div className="picker-group">
@@ -132,32 +139,6 @@ export function ExportPanel({ plays, sections, roster, onJson, onRestore, onClos
             }
           >
             {label('band', 'Wristband strips')}
-          </button>
-          <button
-            disabled={busy !== null}
-            onClick={() =>
-              void run('cards', () => playerCardsPdf(plays), `chalk-player-cards-${day}.pdf`)
-            }
-          >
-            {label('cards', 'Big-print cards')}
-          </button>
-        </div>
-      </div>
-
-      <div className="picker-group">
-        <h3>Everything</h3>
-        <div className="picker-row">
-          <button
-            disabled={busy !== null}
-            onClick={() =>
-              void run(
-                'book',
-                () => playbookPdf(plays, sections, { showHoles: true }),
-                `chalk-playbook-${day}.pdf`,
-              )
-            }
-          >
-            {label('book', 'Full playbook PDF')}
           </button>
           <button
             disabled={busy !== null || !roster.length}

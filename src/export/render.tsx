@@ -12,6 +12,8 @@ import { ZoneArea } from '../render/Zone';
 import { PlayerShape } from '../render/PlayerShape';
 import { VisionCone } from '../render/VisionCone';
 import { VIEW, VIEW_BOX, toPathD } from '../render/geometry';
+import { BOARD_ASPECT } from './paper';
+import { inkForPaper } from './printInk';
 
 /**
  * The tokens the board renderers actually reference.
@@ -76,6 +78,32 @@ export interface SheetOptions {
 }
 
 /**
+ * The tokens that carry the coach's own palette.
+ *
+ * These are the ones Settings can change and the ones a play is actually drawn
+ * in, so on paper they are *derived* from whatever the coach chose rather than
+ * replaced — see `printInk.ts` for how, and for the bug that came of replacing
+ * them. Everything else in `TOKENS` is structure, not palette: turf, yard
+ * lines, the discs the players stand in. Those are set by hand below.
+ */
+const INK_TOKENS = [
+  '--route-0',
+  '--route-1',
+  '--route-2',
+  '--route-3',
+  '--route-4',
+  '--route-5',
+  '--ink-block',
+  '--ink-carry',
+  '--ink-motion',
+  '--ink-option',
+  '--ink-blitz',
+  '--ink-cover',
+  '--ball',
+  '--zone',
+];
+
+/**
  * Print turf.
  *
  * A call sheet gets photocopied, rained on and read at arm's length on a
@@ -83,33 +111,28 @@ export interface SheetOptions {
  * solid block of toner. These override the screen tokens for anything headed
  * to paper: white field, black marks, grey yard lines.
  */
-const PRINT_TOKENS =
+const PAPER_STRUCTURE =
   '--turf:#ffffff;--turf-line:rgba(0,0,0,0.16);--los:rgba(0,0,0,0.55);' +
   '--hole:rgba(0,0,0,0.45);--off-fill:#ffffff;--off-line:#000000;' +
   '--off-text:#000000;--def-fill:rgba(255,255,255,0.9);--def-line:#000000;' +
-  '--def-text:#000000;--chalk:#000000;' +
-  // The screen palette is pastel because it sits on dark turf. On white it
-  // disappears, so every ink goes to a saturated version of the same hue: the
-  // receiver you could tell apart by colour on the board is the same colour,
-  // still distinguishable, on the sheet.
-  '--ink-carry:#c2410c;--ink-block:#a16207;--ink-motion:#6d28d9;' +
-  // The rush stays red on paper because it is the line a coach counts first;
-  // the cover ink goes near-black, since the pale grey that reads on dark turf
-  // is invisible on white and a coverage rope is mostly what a defensive sheet
-  // is made of.
-  '--ink-blitz:#b91c1c;--ink-cover:#334155;' +
-  '--ink-option:#475569;--ball:#000000;--ball-line:#ffffff;--jersey:#334155;' +
-  '--route-0:#0369a1;--route-1:#15803d;' +
-  '--route-2:#6d28d9;--route-3:#be185d;--route-4:#4d7c0f;--route-5:#0f766e;' +
+  '--def-text:#000000;--chalk:#000000;--ball-line:#ffffff;--jersey:#334155;' +
   // The highlights go grey on paper. They are laid under the play at a tenth
   // of their alpha, and a yellow wash that reads on dark turf prints as either
   // nothing at all or a stain across the routes drawn over it.
-  '--vision:#1f2937;--focus:#1f2937;' +
-  // The zone keeps a hue of its own, unlike the other two washes. It is drawn
-  // with an edge and a label rather than as a fade, so it survives being printed
-  // at a tenth of its alpha, and grey boxes over grey routes would not be
-  // tellable apart on a photocopy.
-  '--zone:#1d4ed8';
+  '--vision:#1f2937;--focus:#1f2937';
+
+/**
+ * The coach's palette, as ink for white paper.
+ *
+ * Read off the live root every time rather than computed once, because the
+ * swatches in Settings write straight onto it: a print palette cached at module
+ * load would print the colours the app shipped with instead of the ones on the
+ * board.
+ */
+function paperInk(): string {
+  const cs = getComputedStyle(document.documentElement);
+  return INK_TOKENS.map((t) => `${t}:${inkForPaper(cs.getPropertyValue(t).trim())}`).join(';');
+}
 
 /**
  * One play as a standalone SVG document.
@@ -191,7 +214,9 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
     </>,
   );
 
-  const style = opts.forPrint ? `${tokenBlock()}:root{${PRINT_TOKENS}}` : tokenBlock();
+  const style = opts.forPrint
+    ? `${tokenBlock()}:root{${PAPER_STRUCTURE};${paperInk()}}`
+    : tokenBlock();
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${VIEW_BOX}" ` +
@@ -200,8 +225,13 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
   );
 }
 
-/** The board's aspect, so every caller sizes pages from one number. */
-export const BOARD_ASPECT = (VIEW.halfWidth * 2) / (VIEW.downfield + VIEW.behind);
+/**
+ * The board's aspect, so every caller sizes pages from one number.
+ *
+ * Lives with the rest of the page arithmetic in `paper.ts`; re-exported here
+ * for the callers that only ever wanted this one number out of it.
+ */
+export { BOARD_ASPECT };
 
 /**
  * Rasterize an SVG string at an exact pixel width.
