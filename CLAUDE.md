@@ -794,26 +794,58 @@ own colours never reached paper at all; and the values did not hold their hue.
 The block gold went from 46° to 36°, which is the hue of a paper bag, and the
 lime route from 69° to 86°, which is the hue of grass — a coach printed a play
 and asked why the yellow had come out green. `export/printInk.ts` derives each
-ink from whatever is on the root instead, in OKLCH, by three rules: the hue
-never moves; the chroma it had is carried across and clamped to what the gamut
-will take at the new lightness; and the lightness comes down only as far as a
-3:1 contrast on white, which is what a 3pt stroke needs and no more. Darkening
-past that is exactly what turns a yellow into an olive.
+ink from whatever is on the root instead, in OKLCH. The hue never moves. Then:
 
-Carrying the *absolute* chroma is what makes both ends come out right, and for
-the same reason in each case. A pale yellow is pale in a band where sRGB has
-almost no chroma left once it darkens, so the clamp bites and the ink lands on
-the most saturated gold available, which reads yellow. A near-grey blue is
-near-grey in a band with chroma to spare, so the clamp never bites and it stays
-the quiet colour it was chosen to be. Pushing everything to the gamut edge
-instead — the first attempt — turned the deliberately-muted option ink into a
-vivid cyan.
+**Reach for saturation before reaching for darkness.** Both make a mark stand
+out on white, and for a pale ink saturation is very nearly free — a fully
+saturated yellow is *darker* than a washed-out one, so turning the chroma up
+buys real contrast while the colour stays where it was. Darkening buys the same
+contrast by walking the colour toward black, which for a yellow means olive and
+then brown. So an ink that already reads on white is left exactly as chosen
+(which is what keeps the soft violet and the soft pink soft); one that does not
+gets the smallest chroma that does the job, at the lightness it had; and only a
+hue with no strong ink at that lightness is allowed to come down.
+
+The floor is **2:1, not 3:1**, and that is what lets a yellow stay yellow. 3:1
+is the WCAG floor for a *user-interface* mark, where the thing being identified
+might be a hairline and colour may not carry meaning. A route is a 3pt stroke of
+strongly coloured ink read at arm's length. The extra stop is bought by
+darkening, and darkening is the whole problem. The block gold prints `#d7b42e`
+at 3:1 it printed `#ab9343`, which a coach called gold and did not want.
+
+Two earlier attempts are worth not repeating. Pushing every ink to the gamut
+edge turned the deliberately-muted option ink into a vivid cyan. Putting each
+ink at its hue's most colourful lightness fixed the yellows but left the quiet
+ones pale — hue 230 is a cyan-blue that peaks *light*, so it never darkened.
+
+**Landscape widens the field, it does not just turn the paper.** The board on
+screen is a fixed window, 22 yards across and 30 deep, because a phone is taller
+than it is wide. Turning the page sideways left that window alone and put all
+the extra room into white margins. Widening the window alone would not have
+helped either: a board limited by its height is drawn at the same yards-per-inch
+however much empty sideline is added, so you get a wider picture of the same
+size play. `export/view.ts` computes the window from the plays themselves —
+everything they draw, padded, floored at 24 by 20 so a goal-line play is not
+blown up, then stretched (never cropped) to the proportions of the cell. Almost
+no play uses all thirty yards of depth, and giving back the depth nobody runs
+into is what actually makes the play bigger. `Field` takes the window as a prop
+so the turf, the five yard lines and the hash marks reach the edge of it.
+
+One window **per page**, shared by the plays on it: laid out side by side they
+get compared, and a coach reading a split off two cells needs a yard to be a
+yard in both. Per page rather than per document, because that is as far as the
+comparison goes — sharing across the whole book meant one cover-3 with a deep
+zone set the scale for every other page and drew the entire call sheet small.
 
 `export/paper.ts` holds the page arithmetic and nothing else — no pdf-lib, no
 React — because two things have to agree about it: the PDF, and the preview.
 `layout()` resolves the paper, the margin, the running head, the grid and a box
 per play, in **top-left** coordinates; `pdf.ts` flips to PDF space at the point
-of drawing. The grid is worked out rather than written down: every exact
+of drawing. `boardBox()` is the single place that decides how big a board is
+inside a cell, because the grid chooser and the layout both need that answer and
+they must not disagree — they did, and a landscape 4-up was scored as four tall
+slivers and laid out four across when 2×2 draws a play nearly twice the size.
+The grid is worked out rather than written down: every exact
 factorisation of the plays-per-page is tried and the one that draws the biggest
 play wins, which puts two-up side by side on landscape and stacked on portrait
 without either case being special. Whatever height a cell does not need is split
@@ -833,7 +865,12 @@ from the box it is actually going into.
 `export/PrintPanel.tsx` is the one screen for all of it: orientation, one to
 nine a page, edge-to-edge, name size, with the page drawn underneath while the
 options are changed and a full-screen proof. It reads the same `layout()` the
-PDF does, so it cannot drift from the sheet.
+PDF does, so it cannot drift from the sheet. The editor's own Print opens the
+same panel pointed at the one play — it used to be a button that wrote a
+portrait sheet and gave no say in it, which was the printing complaint arrived
+at from the other direction. Inside the drawer it takes no `onClose` and draws
+no header of its own, the same bargain `SettingsPanel` strikes, and it hides
+Per page and Folder order because one play has no grid and no folders.
 
 **The preview must draw each board as an `<img>`, never as inline SVG.** An
 exported board carries its own `<style>` block setting the print palette on

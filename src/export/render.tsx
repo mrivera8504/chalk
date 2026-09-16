@@ -11,8 +11,9 @@ import { FocusSquare } from '../render/FocusSquare';
 import { ZoneArea } from '../render/Zone';
 import { PlayerShape } from '../render/PlayerShape';
 import { VisionCone } from '../render/VisionCone';
-import { VIEW, VIEW_BOX, toPathD } from '../render/geometry';
+import { toPathD } from '../render/geometry';
 import { BOARD_ASPECT } from './paper';
+import { DEFAULT_VIEW, viewBox, type View } from './view';
 import { inkForPaper } from './printInk';
 
 /**
@@ -75,6 +76,15 @@ export interface SheetOptions {
   showGaps?: boolean;
   /** Paper is white, so the turf goes pale and the marks go dark. */
   forPrint?: boolean;
+  /**
+   * How much of the field to show, in yards.
+   *
+   * The board's own 22-by-30 window unless a sheet says otherwise. A printed
+   * sheet works it out from the plays and the shape of the paper, so a
+   * landscape page gets a landscape window rather than a tall board with white
+   * either side of it; see `view.ts`.
+   */
+  view?: View;
 }
 
 /**
@@ -166,6 +176,8 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
       ? play.players
       : play.players.filter((p) => p.side === 'offense');
 
+  const view = opts.view ?? DEFAULT_VIEW;
+
   const body = renderToStaticMarkup(
     <>
       <Field
@@ -173,6 +185,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
         showHoles={opts.showHoles ?? false}
         gaps={gaps}
         showGaps={opts.showGaps ?? false}
+        view={view}
       />
       {/* Under everything, exactly as on the board. */}
       {(play.zones ?? []).map((z) => (
@@ -219,8 +232,8 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
     : tokenBlock();
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${VIEW_BOX}" ` +
-    `width="${VIEW.halfWidth * 2}" height="${VIEW.downfield + VIEW.behind}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox(view)}" ` +
+    `width="${view.w}" height="${view.h}">` +
     `<style>${style}</style>${body}</svg>`
   );
 }
@@ -241,14 +254,18 @@ export { BOARD_ASPECT };
  * drew the board. Encoded as a data URL because a blob URL would have to be
  * revoked on a path that can throw.
  */
-export async function svgToPng(svg: string, widthPx: number): Promise<Uint8Array> {
+export async function svgToPng(
+  svg: string,
+  widthPx: number,
+  aspect = BOARD_ASPECT,
+): Promise<Uint8Array> {
   const img = new Image();
   img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   await img.decode();
 
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(widthPx);
-  canvas.height = Math.round(widthPx / BOARD_ASPECT);
+  canvas.height = Math.round(widthPx / aspect);
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('This browser would not give up a 2D canvas.');
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -259,7 +276,10 @@ export async function svgToPng(svg: string, widthPx: number): Promise<Uint8Array
 }
 
 export function playToPng(play: Play, widthPx: number, opts: SheetOptions = {}) {
-  return svgToPng(playToSvg(play, opts), widthPx);
+  // The canvas has to match the window, not the board's old fixed shape, or a
+  // landscape sheet is squeezed back into a portrait raster on its way out.
+  const view = opts.view ?? DEFAULT_VIEW;
+  return svgToPng(playToSvg(play, opts), widthPx, view.w / view.h);
 }
 
 /** What a play is called on paper: the name if it has one, else the suggestion. */

@@ -11,12 +11,20 @@ import {
 } from './paper';
 import { playSheetPdf } from './pdf';
 import { download, playToSvg, stamp } from './render';
+import { viewForPlays } from './view';
 
 interface Props {
   plays: Play[];
   sections: Section[];
   roster: RosterEntry[];
-  onClose: () => void;
+  /**
+   * Present when this is a screen of its own, absent when it is a layer inside
+   * the editor's drawer — which already carries a title, a back arrow and a
+   * Hide button. Same bargain the settings panel strikes, and for the reason
+   * given in *Chrome, controls and dialogs*: two headers stacked up meant two
+   * dismiss buttons that did different things.
+   */
+  onClose?: () => void;
 }
 
 /**
@@ -43,6 +51,14 @@ function PagePreview({
 }) {
   const L = useMemo(() => layout(opts), [opts]);
   const pct = (n: number, of: number) => `${(n / of) * 100}%`;
+
+  // Shaped to the cell, so landscape trims the depth nobody runs into rather
+  // than padding the margins. One window per page, matching what `pdf.ts` does.
+  const board = L.cells[0].board;
+  const view = useMemo(
+    () => viewForPlays(plays, board.w / board.h),
+    [plays, board.w, board.h],
+  );
 
   /*
    * Each board as an `<img>`, not as inline SVG.
@@ -72,10 +88,11 @@ function PagePreview({
               showDefense: opts.showDefense,
               showGaps: opts.showGaps,
               forPrint: true,
+              view,
             }),
           )}`,
       ),
-    [plays, opts.showHoles, opts.showDefense, opts.showGaps],
+    [plays, view, opts.showHoles, opts.showDefense, opts.showGaps],
   );
 
   return (
@@ -269,18 +286,24 @@ export function PrintPanel({ plays, sections, roster, onClose }: Props) {
     </button>
   );
 
+  // One play has no grid to lay out and no folders to sort by. Both controls
+  // would be live and do nothing, which is worse than their absence.
+  const many = ordered.length > 1;
+
   return (
-    <div className="picker print-panel">
-      <div className="picker-head">
-        <strong>Print</strong>
-        <span>
-          {ordered.length} {ordered.length === 1 ? 'play' : 'plays'} · {total}{' '}
-          {total === 1 ? 'page' : 'pages'}
-        </span>
-        <button className="quiet" onClick={onClose}>
-          Close
-        </button>
-      </div>
+    <div className={`picker print-panel${onClose ? ' standalone' : ''}`}>
+      {onClose && (
+        <div className="picker-head">
+          <strong>Print</strong>
+          <span>
+            {ordered.length} {ordered.length === 1 ? 'play' : 'plays'} · {total}{' '}
+            {total === 1 ? 'page' : 'pages'}
+          </span>
+          <button className="quiet" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      )}
 
       <div className="picker-group">
         <h3>Paper</h3>
@@ -302,16 +325,18 @@ export function PrintPanel({ plays, sections, roster, onClose }: Props) {
         </p>
       </div>
 
-      <div className="picker-group">
-        <h3>Per page</h3>
-        <div className="picker-row">
-          {([1, 2, 4, 6, 9] as const).map((n: PerPage) => (
-            <button key={n} aria-pressed={opts.perPage === n} onClick={() => set('perPage', n)}>
-              {n}
-            </button>
-          ))}
+      {many && (
+        <div className="picker-group">
+          <h3>Per page</h3>
+          <div className="picker-row">
+            {([1, 2, 4, 6, 9] as const).map((n: PerPage) => (
+              <button key={n} aria-pressed={opts.perPage === n} onClick={() => set('perPage', n)}>
+                {n}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="picker-group">
         <h3>Name</h3>
@@ -337,10 +362,11 @@ export function PrintPanel({ plays, sections, roster, onClose }: Props) {
           {toggle(!!opts.showGaps, 'Gaps', () => set('showGaps', !opts.showGaps))}
           {toggle(!!opts.showDefense, 'Defense', () => set('showDefense', !opts.showDefense))}
           {toggle(opts.showNotes, 'Notes', () => set('showNotes', !opts.showNotes))}
-          {toggle(byFolder, 'Folder order', () => {
-            setByFolder(!byFolder);
-            setPage(0);
-          })}
+          {many &&
+            toggle(byFolder, 'Folder order', () => {
+              setByFolder(!byFolder);
+              setPage(0);
+            })}
         </div>
         {opts.showNotes && opts.perPage > 1 && (
           <p className="picker-note">

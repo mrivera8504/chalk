@@ -1726,11 +1726,18 @@ button:focus-visible {
 
 .account-panel,
 .export-panel,
-.print-panel {
+.print-panel.standalone {
   margin: 0 14px 12px;
   max-height: none;
   border: 1px solid var(--line);
   border-radius: 12px;
+}
+
+/* Inside the drawer it is a layer, not a card: the panel around it already has
+   the edge, and a second border inset from it read as a box in a box. */
+.print-panel {
+  max-height: none;
+  background: none;
 }
 
 /* ---- print ---- */

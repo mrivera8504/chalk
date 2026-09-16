@@ -13,30 +13,52 @@ interface Props {
   /** The same spaces, lettered, for the defense. */
   gaps?: Gap[];
   showGaps?: boolean;
+  /**
+   * How much field to lay down, in yards. The board's own window unless a
+   * printed sheet asks for a wider one — the turf, the five yard lines and the
+   * hash marks all have to reach the edge of whatever window is being drawn, or
+   * a landscape sheet shows a field that stops halfway across the paper.
+   */
+  view?: { x: number; y: number; w: number; h: number };
 }
 
-export function Field({ holes, showHoles, occupied = [], gaps = [], showGaps = false }: Props) {
+const BOARD_VIEW = {
+  x: -VIEW.halfWidth,
+  y: -VIEW.downfield,
+  w: VIEW.halfWidth * 2,
+  h: VIEW.downfield + VIEW.behind,
+};
+
+export function Field({
+  holes,
+  showHoles,
+  occupied = [],
+  gaps = [],
+  showGaps = false,
+  view = BOARD_VIEW,
+}: Props) {
+  const left = view.x;
+  const right = view.x + view.w;
+  const top = view.y;
+  const bottom = view.y + view.h;
+
+  // Whole yards, so the lines land where they land on a field rather than
+  // wherever the window happens to begin.
   const lines: number[] = [];
-  for (let y = -VIEW.downfield; y <= VIEW.behind; y += 5) {
+  for (let y = Math.ceil(top / 5) * 5; y <= bottom; y += 5) {
     if (y !== 0) lines.push(y);
   }
 
   return (
     <g className="field">
-      <rect
-        x={-VIEW.halfWidth}
-        y={-VIEW.downfield}
-        width={VIEW.halfWidth * 2}
-        height={VIEW.downfield + VIEW.behind}
-        fill="var(--turf)"
-      />
+      <rect x={left} y={top} width={view.w} height={view.h} fill="var(--turf)" />
 
       {/* five yard lines */}
       {lines.map((y) => (
         <line
           key={`y${y}`}
-          x1={-VIEW.halfWidth}
-          x2={VIEW.halfWidth}
+          x1={left}
+          x2={right}
           y1={y}
           y2={y}
           stroke="var(--turf-line)"
@@ -45,8 +67,8 @@ export function Field({ holes, showHoles, occupied = [], gaps = [], showGaps = f
       ))}
 
       {/* hash marks every yard */}
-      {Array.from({ length: VIEW.downfield + VIEW.behind + 1 }, (_, i) => {
-        const y = -VIEW.downfield + i;
+      {Array.from({ length: Math.floor(bottom) - Math.ceil(top) + 1 }, (_, i) => {
+        const y = Math.ceil(top) + i;
         if (y % 5 === 0) return null;
         return (
           <g key={`h${y}`} stroke="var(--turf-line)" strokeWidth={0.1}>
@@ -58,8 +80,8 @@ export function Field({ holes, showHoles, occupied = [], gaps = [], showGaps = f
 
       {/* line of scrimmage */}
       <line
-        x1={-VIEW.halfWidth}
-        x2={VIEW.halfWidth}
+        x1={left}
+        x2={right}
         y1={0}
         y2={0}
         stroke="var(--los)"

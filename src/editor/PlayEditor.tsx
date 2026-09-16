@@ -109,7 +109,7 @@ import { RoutePicker } from './RoutePicker';
 import { TracePanel } from './TracePanel';
 import { TRACING, describeEvent, trace } from './trace';
 import { LegalityBadge } from './LegalityBadge';
-import { singlePlayPdf } from '../export/pdf';
+import { PrintPanel } from '../export/PrintPanel';
 import { download, playToPng, playTitle, stamp } from '../export/render';
 
 /*
@@ -345,7 +345,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   const [tags, setTags] = useState<string[]>(play.tags);
   const [erasing, setErasing] = useState(false);
   const [picker, setPicker] = useState<
-    'formation' | 'settings' | 'notes' | 'defense' | null
+    'formation' | 'settings' | 'notes' | 'defense' | 'print' | null
   >(null);
   /*
    * A picker is a layer over the drawer and has its own back arrow, so the back
@@ -582,15 +582,17 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   const drawerTitle =
     picker === 'settings'
       ? 'Settings'
-      : picker === 'notes'
-        ? 'Notes'
-        : picker === 'formation'
-          ? unit === 'defense'
-            ? 'Fronts'
-            : 'Formations'
-          : picker === 'defense'
-            ? 'The call'
-            : 'Tools';
+      : picker === 'print'
+        ? 'Print'
+        : picker === 'notes'
+          ? 'Notes'
+          : picker === 'formation'
+            ? unit === 'defense'
+              ? 'Fronts'
+              : 'Formations'
+            : picker === 'defense'
+              ? 'The call'
+              : 'Tools';
 
   const drawerSubtitle = useMemo(() => {
     if (picker === 'settings') return 'Saved on this device, for every play.';
@@ -2329,15 +2331,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * printed mid-edit matches the board. The name is the play's, slugged, so a
    * folder of these sorts the way the playbook does.
    */
-  async function exportPlay(kind: 'pdf' | 'png') {
-    const current = {
-      ...play,
-      name,
-      players,
-      assignments,
-      annotations,
-      ballCarrierId: ballCarrierId ?? undefined,
-    };
+  async function exportPlay() {
+    const current = livePlay();
     const slug =
       playTitle(current)
         .toLowerCase()
@@ -2345,22 +2340,34 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         .replace(/^-|-$/g, '') || 'play';
     setExporting(true);
     try {
-      if (kind === 'pdf') {
-        download(
-          await singlePlayPdf(current, { showHoles, showGaps }, roster),
-          `${slug}-${stamp()}.pdf`,
-          'application/pdf',
-        );
-      } else {
-        // 2000px across is a little over 300 DPI at the width this prints.
-        // What is on the board is what prints: if the gap letters are up while
-        // the play is being drawn, the sheet that comes out has them too.
-        const bytes = await playToPng(current, 2000, { showHoles, showGaps, showDefense });
-        download(bytes, `${slug}-${stamp()}.png`, 'image/png');
-      }
+      // 2000px across is a little over 300 DPI at the width this prints.
+      // What is on the board is what prints: if the gap letters are up while
+      // the play is being drawn, the sheet that comes out has them too.
+      const bytes = await playToPng(current, 2000, { showHoles, showGaps, showDefense });
+      download(bytes, `${slug}-${stamp()}.png`, 'image/png');
     } finally {
       setExporting(false);
     }
+  }
+
+  /**
+   * The play as it stands under the coach's hand, not as it was loaded.
+   *
+   * The editor holds the name, the men, the lines and the ink in its own state
+   * and writes them back on a debounce, so anything that leaves the app —
+   * a sheet, an image, the print preview — has to be built from that state
+   * rather than from `play`, or it exports the version from before the last
+   * few marks were made.
+   */
+  function livePlay(): Play {
+    return {
+      ...play,
+      name,
+      players,
+      assignments,
+      annotations,
+      ballCarrierId: ballCarrierId ?? undefined,
+    };
   }
 
   /**
@@ -2783,10 +2790,20 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         subtitle={drawerSubtitle}
         onBack={picker ? () => setPicker(null) : undefined}
         /* A form rather than a palette: give it the width to be read. */
-        wide={picker === 'settings' || picker === 'notes'}
+        wide={picker === 'settings' || picker === 'notes' || picker === 'print'}
       >
         {picker === 'settings' ? (
           <SettingsPanel settings={settings} />
+        ) : picker === 'print' ? (
+          /*
+           * The same Print screen the playbook opens, pointed at this one play.
+           *
+           * It used to be a button that wrote a portrait sheet and gave no say
+           * in it — which was the whole complaint about printing, arrived at
+           * from the other direction. One play or the whole book, the options
+           * are the options.
+           */
+          <PrintPanel plays={[livePlay()]} sections={[]} roster={roster} />
         ) : picker === 'notes' ? (
           <NotesPanel
             coachingPoint={coachingPoint}
@@ -2932,10 +2949,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                 <button onClick={() => setPicker('notes')}>
                   Notes{tags.length ? ` · ${tags.length}` : ''}
                 </button>
-                <button disabled={exporting} onClick={() => void exportPlay('pdf')}>
-                  {exporting ? 'Working…' : 'Print sheet'}
-                </button>
-                <button disabled={exporting} onClick={() => void exportPlay('png')}>
+                <button onClick={() => setPicker('print')}>Print…</button>
+                <button disabled={exporting} onClick={() => void exportPlay()}>
                   Save image
                 </button>
               </div>

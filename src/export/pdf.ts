@@ -10,6 +10,7 @@ import { byJersey, describePersonnel, type RosterEntry } from '../domain/roster'
 import { type Play, type Section } from '../domain/types';
 import { DEFAULT_PRINT, layout, type PrintOptions, type Rect } from './paper';
 import { playToPng, playTitle, type SheetOptions } from './render';
+import { viewForPlays } from './view';
 
 /** Points. Letter portrait, for the sheets that are lists rather than plays. */
 const PAGE = { w: 612, h: 792 };
@@ -143,16 +144,28 @@ function header(
  * the book would otherwise carry two copies of the image in the file. Keyed by
  * play id so a layout can place one wherever it needs to.
  */
-async function embedAll(
+async function embedPage(
   doc: PDFDocument,
   plays: Play[],
   opts: SheetOptions,
   widthPx: number,
+  aspect: number,
 ): Promise<Map<string, PDFImage>> {
   const out = new Map<string, PDFImage>();
+  /*
+   * One window per page, not one per document.
+   *
+   * Shared, because plays laid out side by side get compared — a coach reading
+   * a split off two cells needs a yard to be a yard in both — and per page
+   * rather than per sheet because that is exactly as far as the comparison
+   * goes. Sharing across the whole document meant the single deepest play in
+   * the book set the scale for every other page, so one cover-3 with a deep
+   * zone drew the entire call sheet small.
+   */
+  const view = viewForPlays(plays, aspect);
   for (const play of plays) {
     if (out.has(play.id)) continue;
-    const bytes = await playToPng(play, widthPx, { ...opts, forPrint: true });
+    const bytes = await playToPng(play, widthPx, { ...opts, forPrint: true, view });
     out.set(play.id, await doc.embedPng(bytes));
   }
   return out;
@@ -195,12 +208,19 @@ export async function playSheetPdf(
 ): Promise<Uint8Array> {
   const { doc, fonts } = await startDoc();
   const L = layout(opts);
-  const shots = await embedAll(doc, plays, opts, rasterFor(L.cells[0].board.w));
+  const board = L.cells[0].board;
   const total = L.pages(plays.length);
 
   for (let i = 0, p = 0; i < Math.max(plays.length, 1); i += opts.perPage, p++) {
     const page = doc.addPage([L.page.w, L.page.h]);
     const here = plays.slice(i, i + opts.perPage);
+    const shots = await embedPage(
+      doc,
+      here,
+      opts,
+      rasterFor(board.w),
+      board.w / board.h,
+    );
 
     if (L.head) {
       // On a full playbook the folder is the running head, because a binder is

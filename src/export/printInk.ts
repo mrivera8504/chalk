@@ -160,23 +160,18 @@ function contrastOnWhite(rgb: Rgb): number {
 /**
  * How hard a mark has to work on paper.
  *
- * Not one number, because the marks are not one thing. A route is a thick
- * stroke read at arm's length and 3:1 is plenty for it; pushing it further is
- * what costs a yellow its hue. A player label is small text on a white disc and
- * has to hold up against the 4.5:1 that text actually needs.
- */
-export const INK_CONTRAST = 3;
-export const TEXT_CONTRAST = 4.5;
-
-/**
- * A little of the way toward full saturation, and no more.
+ * 2:1, not the 3:1 this started at, and the difference is the whole reason a
+ * yellow can stay yellow. 3:1 is the WCAG floor for a *user-interface* mark,
+ * where the thing being identified might be a hairline border and colour is not
+ * allowed to carry meaning. A route is a 3pt stroke of a strongly coloured ink
+ * read at arm's length, which is a much easier thing to see, and the extra stop
+ * of contrast is bought by darkening — which is precisely what drags a yellow
+ * through olive on its way to brown.
  *
- * Paper has no dark turf behind it doing the work, so an ink that held its
- * screen saturation exactly does come out a touch limp. A quarter more than it
- * had: enough to put some body back into a pastel, small enough that a colour
- * chosen to be quiet stays quiet.
+ * A player's label is small text on a white disc and does need what text needs.
  */
-const LIFT = 0.25;
+export const INK_CONTRAST = 2;
+export const TEXT_CONTRAST = 4.5;
 
 /**
  * Almost to the edge of the gamut, never onto it.
@@ -207,35 +202,46 @@ export function inkForPaper(css: string, minContrast = INK_CONTRAST): string {
     return toHex(dark);
   }
 
-  // How saturated this colour is for its own hue and lightness, as a fraction
-  // of everything sRGB could have given it. That fraction is the thing carried
-  // across to paper, because it is what the eye reads as "how colourful is
-  // this" independently of how light it happens to be.
-  // The chroma it had, plus the lift, and then whatever the gamut will take.
-  //
-  // Carrying the absolute number across rather than a fraction is what makes
-  // this come out right at both ends, and it does so for the same reason in
-  // each case. A pale yellow is pale in a band where sRGB has almost no chroma
-  // to give once it darkens, so the clamp bites and the ink lands at the most
-  // saturated gold available — which reads yellow. A near-grey blue is near-grey
-  // in a band with chroma to spare, so the clamp never bites and it stays the
-  // quiet colour it was chosen to be.
-  const want = c0 * (1 + LIFT);
-  const at = (l: number): Rgb =>
-    oklchToRgb({ l, c: Math.min(want, maxChroma(l, h) * CEILING), h });
+  const shade = (l: number, c: number): Rgb =>
+    oklchToRgb({ l, c: Math.min(c, maxChroma(l, h) * CEILING), h });
 
-  // The brightest version that still clears the floor. Searching downward from
-  // the screen lightness rather than jumping to a fixed target is the whole
-  // point: a colour that already reads on white keeps the lightness it had, and
-  // one that does not gives up the least it can get away with.
-  if (contrastOnWhite(at(l0)) >= minContrast) return toHex(at(l0));
+  // Already strong enough on white: leave it exactly as the coach chose it.
+  // This is what keeps the soft violet and the soft pink soft — they read on
+  // paper as they are, and an ink that needs no help should be given none.
+  if (contrastOnWhite(shade(l0, c0)) >= minContrast) return toHex(shade(l0, c0));
 
+  /*
+   * Reach for saturation before reaching for darkness.
+   *
+   * Both make a mark stand out on white, and for a pale ink saturation is very
+   * nearly free: a fully saturated yellow is *darker* than a washed-out one, so
+   * turning the chroma up buys real contrast while the colour stays where it
+   * was. Darkening buys the same contrast by walking the colour toward black,
+   * which for a yellow means olive and then brown — the original complaint.
+   *
+   * So: the smallest chroma that does the job, at the lightness it already had.
+   */
+  const room = maxChroma(l0, h) * CEILING;
+  if (contrastOnWhite(shade(l0, room)) >= minContrast) {
+    let lo = c0;
+    let hi = room;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      if (contrastOnWhite(shade(l0, mid)) >= minContrast) hi = mid;
+      else lo = mid;
+    }
+    return toHex(shade(l0, hi));
+  }
+
+  // Saturation alone could not get there — this hue simply has no strong ink at
+  // that lightness — so now, and only now, it comes down. At full chroma the
+  // whole way, so it gives up as little lightness as possible on the journey.
   let lo = 0.15;
   let hi = l0;
   for (let i = 0; i < 20; i++) {
     const mid = (lo + hi) / 2;
-    if (contrastOnWhite(at(mid)) >= minContrast) lo = mid;
+    if (contrastOnWhite(shade(mid, maxChroma(mid, h) * CEILING)) >= minContrast) lo = mid;
     else hi = mid;
   }
-  return toHex(at(lo));
+  return toHex(shade(lo, maxChroma(lo, h) * CEILING));
 }
