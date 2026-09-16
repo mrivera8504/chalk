@@ -5,6 +5,7 @@ import { PlaybookList } from './playbook/PlaybookList';
 import { blankPlay, usePlaybook } from './store/usePlaybook';
 import { DialogHost } from './ui/DialogHost';
 import { UpdateBar } from './ui/UpdateBar';
+import { useBackLayer } from './ui/backstack';
 import { askConfirm } from './ui/dialog';
 
 export function App() {
@@ -12,6 +13,10 @@ export function App() {
   const [openId, setOpenId] = useState<string | null>(null);
 
   const open = book.plays.find((p) => p.id === openId) ?? null;
+
+  // The back gesture goes where the `‹` button goes: to the playbook, not out
+  // of the app.
+  useBackLayer(Boolean(open), () => setOpenId(null));
 
   const startNew = useCallback(
     (unit: Side = 'offense') => {
