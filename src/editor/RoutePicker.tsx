@@ -33,7 +33,7 @@ const SHAPES: { kind: ShapeKind; name: string }[] = [
 
 /**
  * Everything the picker offers a defender, which is a different list and not a
- * relabelled one.
+ * relabeled one.
  *
  * Present only for a man on the defensive side, so one panel serves both units
  * without either of them being shown a row that does nothing. A defender has no
@@ -88,7 +88,7 @@ interface Props {
   onVision: (() => void) | null;
   /** What he is drawn as. The formation sets it; this overrides the one man. */
   onShape: (shape: ShapeKind) => void;
-  /** The palette, and the colour his route is wearing. Undefined means auto. */
+  /** The palette, and the color his route is wearing. Undefined means auto. */
   swatches: readonly string[];
   color?: string;
   /** Null until he has a route: there is nothing to paint before that. */
@@ -250,7 +250,7 @@ export function RoutePicker({
             >
               Zone
             </button>
-            {/* Pressed in the plain style rather than the zone's colour: the
+            {/* Pressed in the plain style rather than the zone's color: the
                 rope he draws is not a patch of grass. */}
             {defense.onCoverNearest && (
               <button
@@ -397,17 +397,17 @@ export function RoutePicker({
       </div>
 
       {/*
-        * His route's colour, here rather than behind the Move tool.
+        * His route's color, here rather than behind the Move tool.
         *
-        * Recolouring used to mean leaving Routes, switching to Move, and
+        * Recoloring used to mean leaving Routes, switching to Move, and
         * finding the line itself under the man standing on it — three steps
         * away from the man whose route it is, when picking a receiver and
         * saying what he runs is one thought.
         */}
       {onColor && (
         <div className="picker-group">
-          {/* Labelled like every other row in here. It was the one group with no
-              heading, which left a line of coloured circles under the marks
+          {/* Labeled like every other row in here. It was the one group with no
+              heading, which left a line of colored circles under the marks
               with nothing saying what they would paint. */}
           <h3>Line color</h3>
           <div className="picker-row swatches">

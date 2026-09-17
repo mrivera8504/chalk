@@ -30,8 +30,8 @@ const STYLE: Record<AssignmentKind, Style> = {
   /*
    * The defensive half, and the one place line style is doing real work: a
    * defensive sheet is read in two seconds on a sideline and is mostly arrows.
-   * Going and getting it is solid and hot-coloured; giving up ground is dashed
-   * in the cover colour; a man you have is a dashed tether with no head at all,
+   * Going and getting it is solid and hot-colored; giving up ground is dashed
+   * in the cover color; a man you have is a dashed tether with no head at all,
    * because it is not a path anybody runs — it is a rope between two players.
    */
   blitz: { cap: 'arrow', color: 'var(--ink-blitz)' },
@@ -93,7 +93,7 @@ function Cap({
 interface Props {
   assignment: Assignment;
   selected?: boolean;
-  /** Per-receiver colour, when the caller has one. A hand-picked colour wins. */
+  /** Per-receiver color, when the caller has one. A hand-picked color wins. */
   autoColor?: string;
 }
 
@@ -103,11 +103,11 @@ export function AssignmentPath({ assignment, selected = false, autoColor }: Prop
 
   const style = STYLE[kind];
   /*
-   * The hand-picked colour, then the automatic one, then the kind. Selection
-   * used to come first and replace all three, which meant that recolouring the
+   * The hand-picked color, then the automatic one, then the kind. Selection
+   * used to come first and replace all three, which meant that recoloring the
    * line you had selected changed nothing you could see: the swatch was stored
    * and the board went on drawing the selection blue over it. A halo says the
-   * same thing without taking the colour away.
+   * same thing without taking the color away.
    */
   const color = assignment.color ?? autoColor ?? style.color;
   // A stroke drawn with pressure on carries its own weight; everything else

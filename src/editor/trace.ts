@@ -56,7 +56,7 @@ export function onTrace(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/** Compact description of a pointer event: the fields that decide behaviour. */
+/** Compact description of a pointer event: the fields that decide behavior. */
 export function describeEvent(e: React.PointerEvent | PointerEvent, at?: { x: number; y: number }): string {
   const where = at ? ` (${at.x.toFixed(1)},${at.y.toFixed(1)})yd` : '';
   const target = (e.target as Element | null)?.tagName?.toLowerCase() ?? '?';

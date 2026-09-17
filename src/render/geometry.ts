@@ -204,7 +204,7 @@ export type Picked =
  * players often less than two yards apart, and a route leaves from under the
  * mark of whoever runs it. Nearest-wins alone gets this wrong, because a line
  * passing beneath a player is always nearer to the middle of him than his own
- * centre is to a tap that landed slightly off.
+ * center is to a tap that landed slightly off.
  *
  * Measured on the device: five taps in a row that were 0.22 to 0.67 yards from
  * a guard — every one of them inside his mark — all selected the block line

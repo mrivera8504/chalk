@@ -1,10 +1,10 @@
 import type { Assignment, PlayerSlot } from './types';
 
 /**
- * One colour per receiver, so three routes that cross can be told apart at a
+ * One color per receiver, so three routes that cross can be told apart at a
  * glance without tracing any of them back to its man.
  *
- * Chosen to stay clear of the three colours already carrying meaning: the block
+ * Chosen to stay clear of the three colors already carrying meaning: the block
  * yellow, the carry orange, and the selection blue. The first entry is the old
  * single route blue, so a play drawn before this existed still looks the way it
  * did, and a one-receiver play is unchanged.
@@ -21,16 +21,16 @@ export const ROUTE_COLORS = [
   'var(--route-5)', // aqua
 ] as const;
 
-/** The manual palette: every auto colour, plus plain chalk for a neutral route. */
+/** The manual palette: every auto color, plus plain chalk for a neutral route. */
 export const SWATCHES = [...ROUTE_COLORS, 'var(--chalk)'] as const;
 
 /**
- * The colour a route takes when nobody has picked one by hand.
+ * The color a route takes when nobody has picked one by hand.
  *
  * Keyed to the player's place in the offense rather than to the assignment, so
- * a receiver keeps his colour when he is given a different route, and two
+ * a receiver keeps his color when he is given a different route, and two
  * routes drawn for the same man can never disagree. Returns nothing for blocks
- * and carries: those read by line style and their own colour already.
+ * and carries: those read by line style and their own color already.
  */
 export function autoRouteColor(a: Assignment, players: PlayerSlot[]): string | undefined {
   if (a.kind !== 'route') return undefined;

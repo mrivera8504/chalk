@@ -8,7 +8,7 @@ import {
 } from 'pdf-lib';
 import { byJersey, describePersonnel, type RosterEntry } from '../domain/roster';
 import { type Play } from '../domain/types';
-import { centreIn, DEFAULT_PRINT, layout, type PrintOptions, type Rect } from './paper';
+import { centerIn, DEFAULT_PRINT, layout, type PrintOptions, type Rect } from './paper';
 import { playToPng, playTitle, type SheetOptions } from './render';
 import type { View } from './view';
 import { contentAspect, viewForPlays } from './view';
@@ -32,7 +32,7 @@ function rasterFor(boxWidthPt: number): number {
 }
 
 const BLACK = rgb(0, 0, 0);
-const GREY = rgb(0.42, 0.42, 0.42);
+const GRAY = rgb(0.42, 0.42, 0.42);
 const RULE = rgb(0.78, 0.78, 0.78);
 
 interface Fonts {
@@ -77,9 +77,9 @@ function flip(pageH: number, r: Rect): number {
 }
 
 /**
- * The play's name, centred over its cell.
+ * The play's name, centered over its cell.
  *
- * Centred is the point: it used to be set flush against the left edge of the
+ * Centered is the point: it used to be set flush against the left edge of the
  * cell, which on a 3-up row read as three plays shoved leftward rather than as
  * a row, and on a full page put the title in the corner of an otherwise
  * symmetrical sheet.
@@ -97,7 +97,7 @@ function drawName(
   page.drawText(fitted.text, {
     x: box.x + (box.w - w) / 2,
     // Sat on the cell's baseline, a descender in a name overlapped the board
-    // below it. This centres the letters in the band they were given.
+    // below it. This centers the letters in the band they were given.
     y: flip(pageH, box) + (box.h - fitted.size) / 2 + fitted.size * 0.22,
     size: fitted.size,
     font: fonts.bold,
@@ -127,7 +127,7 @@ function header(
       y: size.h - margin + 2,
       size: 9,
       font: fonts.body,
-      color: GREY,
+      color: GRAY,
     });
   }
   page.drawLine({
@@ -197,7 +197,7 @@ export interface SheetMeta {
  * The one composer. There used to be four of these — an install sheet, a call
  * sheet, big-print cards and the playbook — each with its own copy of the page
  * arithmetic and its own fixed idea of the paper, which is why none of them
- * could be turned sideways and only one of them centred anything. They differ
+ * could be turned sideways and only one of them centered anything. They differ
  * in nothing but their options now, and the arithmetic they share lives in
  * `paper.ts`, where the preview can read it too.
  */
@@ -240,7 +240,7 @@ export async function playSheetPdf(
 
       const shot = shots.get(play.id);
       if (shot) {
-        const at = centreIn(cell.board, view.w / view.h);
+        const at = centerIn(cell.board, view.w / view.h);
         page.drawImage(shot, {
           x: at.x,
           y: flip(L.page.h, at),
@@ -283,7 +283,7 @@ export async function playSheetPdf(
  * Wristband strips: names only, in columns sized to a quarterback's forearm.
  *
  * No diagrams, and no orientation to choose. A wristband is read in two seconds
- * with a hand on a centre's back, so it carries the number and the name and
+ * with a hand on a center's back, so it carries the number and the name and
  * nothing that needs looking at.
  */
 export async function wristbandPdf(
@@ -322,7 +322,7 @@ export async function wristbandPdf(
         y,
         size: 8,
         font: fonts.body,
-        color: GREY,
+        color: GRAY,
       });
       page.drawText(fit(playTitle(play), fonts.bold, 9.5, stripW - 32), {
         x: x + 24,
@@ -373,7 +373,7 @@ export async function rosterPdf(roster: RosterEntry[], title = 'Roster'): Promis
       y: y + 1,
       size: 10,
       font: fonts.body,
-      color: GREY,
+      color: GRAY,
     });
     page.drawLine({
       start: { x: MARGIN, y: y - 7 },

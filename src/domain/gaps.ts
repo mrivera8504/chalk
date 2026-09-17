@@ -13,7 +13,7 @@ import type { Hand, PlayerSlot } from './types';
  * Holes and gaps are not the same map and cannot share one. A hole is numbered
  * odd one way and even the other because the offense calls a direction with the
  * number; a gap is lettered identically on both sides because the defense calls
- * a direction separately from the space. So the hole between the centre and the
+ * a direction separately from the space. So the hole between the center and the
  * right guard is 2 and the gap there is A, and both are right.
  */
 export interface Gap {
@@ -36,7 +36,7 @@ export function computeGaps(players: PlayerSlot[]): Gap[] {
 
   if (line.length < 2) return [];
 
-  // The centre is whoever on the line sits closest to the middle, exactly as
+  // The center is whoever on the line sits closest to the middle, exactly as
   // the hole map decides it. Two maps disagreeing about where the ball is would
   // put a 2-hole and an A-gap in different places.
   let centerIdx = 0;
@@ -46,7 +46,7 @@ export function computeGaps(players: PlayerSlot[]): Gap[] {
 
   const gaps: Gap[] = [];
 
-  // Out to the left of the centre, one letter per space.
+  // Out to the left of the center, one letter per space.
   let n = 0;
   for (let i = centerIdx; i > 0; i--) {
     gaps.push({ letter: LETTERS[n] ?? '?', x: (line[i].x + line[i - 1].x) / 2, side: 'left' });

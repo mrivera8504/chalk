@@ -91,12 +91,12 @@ function front(down: number[], off: { label: string; x: number; y: number }[]): 
   const middle = (down.length - 1) / 2;
   const onBall = down.map((x, i) => ({
     id: id('d'),
-    // A man head-up on the centre is the nose; everyone inside the ends is a tackle.
+    // A man head-up on the center is the nose; everyone inside the ends is a tackle.
     label: i === middle ? 'N' : 'T',
     side: 'defense' as const,
     x,
     // Off the ball by more than two marks' worth, so a nose head-up on the
-    // centre draws as two players rather than as one smudge.
+    // center draws as two players rather than as one smudge.
     y: -1.7,
     onLine: false,
     onLineLocked: false,

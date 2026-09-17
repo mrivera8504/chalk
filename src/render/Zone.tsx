@@ -101,7 +101,7 @@ export function resizeFrom(zone: Zone, to: { x: number; y: number }): Zone {
  * the field.
  *
  * The leader line matters more than it looks. Seven washes with nothing joining
- * them to anybody is a picture of some coloured rectangles; the line is what
+ * them to anybody is a picture of some colored rectangles; the line is what
  * makes it "he has that". It runs to the near edge rather than to the middle so
  * it never disappears under the label.
  */

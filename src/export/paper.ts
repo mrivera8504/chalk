@@ -74,10 +74,10 @@ export interface Rect {
 }
 
 export interface Cell {
-  /** Where the name goes: the full cell width, so it can be centred in it. */
+  /** Where the name goes: the full cell width, so it can be centered in it. */
   name: Rect;
   nameSize: number;
-  /** Where the diagram goes, already centred and in the board's proportions. */
+  /** Where the diagram goes, already centered and in the board's proportions. */
   board: Rect;
 }
 
@@ -99,14 +99,14 @@ export function pageSize(o: Orientation): { w: number; h: number } {
 }
 
 
-/** Fit a box of a given aspect inside another, centred in what is left. */
+/** Fit a box of a given aspect inside another, centered in what is left. */
 export function fitAspect(bw: number, bh: number, aspect: number): { w: number; h: number } {
   const w = Math.min(bw, bh * aspect);
   return { w, h: w / aspect };
 }
 
 /**
- * Centre a board of a given shape inside the room it was given.
+ * Center a board of a given shape inside the room it was given.
  *
  * The shape comes from the play — see `view.ts` — so the board no longer
  * stretches to fill the cell. On a wide sheet a deep play leaves white either
@@ -114,7 +114,7 @@ export function fitAspect(bw: number, bh: number, aspect: number): { w: number; 
  * thirteen yards of play in the middle of thirty-seven yards of empty grass,
  * and the grass is white on paper anyway.
  */
-export function centreIn(area: Rect, aspect: number): Rect {
+export function centerIn(area: Rect, aspect: number): Rect {
   const box = fitAspect(area.w, area.h, aspect);
   return {
     x: area.x + (area.w - box.w) / 2,
@@ -194,7 +194,7 @@ export function layout(opts: PrintOptions, boardAspect = BOARD_ASPECT): Layout {
   const page = pageSize(opts.orientation);
   const margin = opts.edgeToEdge ? MARGIN.edge : MARGIN.normal;
 
-  // At 1-up the play's name IS the header, big and centred over the board, so
+  // At 1-up the play's name IS the header, big and centered over the board, so
   // there is no second line of chrome above it repeating the sheet's title.
   const wantsHead = opts.perPage > 1;
   const headH = wantsHead ? 24 : 0;
@@ -226,8 +226,8 @@ export function layout(opts: PrintOptions, boardAspect = BOARD_ASPECT): Layout {
   // off. It would need a wrapping text setter to be worth it.
   const notesH = opts.showNotes && opts.perPage === 1 ? 44 : 0;
 
-  // The room the board is given. What actually lands in it is centred at the
-  // play's own shape by `centreIn`, once the caller has worked out the window.
+  // The room the board is given. What actually lands in it is centered at the
+  // play's own shape by `centerIn`, once the caller has worked out the window.
   const box = { w: cellW, h: cellH - labelH - notesH };
 
   /*
@@ -252,7 +252,7 @@ export function layout(opts: PrintOptions, boardAspect = BOARD_ASPECT): Layout {
       name: { x, top, w: cellW, h: labelH },
       nameSize,
       board: {
-        // Centred across the cell too, which is what makes a 3-up row read as a
+        // Centered across the cell too, which is what makes a 3-up row read as a
         // row rather than as three plays pushed against their left edges.
         x: x + (cellW - box.w) / 2,
         top: top + labelH,

@@ -210,7 +210,7 @@ export const ROUTES: RoutePreset[] = [
  *
  * A setting, not a constant: what counts as a deep in for ten-year-olds is a
  * coach's call, and it changes with the arm at quarterback. The settings store
- * pushes it in here the way it pushes colours onto the root, so the domain
+ * pushes it in here the way it pushes colors onto the root, so the domain
  * never reaches up into the store. Read when a route is drawn, so a change
  * applies to the next route given out and leaves every drawn one alone.
  */

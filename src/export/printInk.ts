@@ -2,22 +2,22 @@
  * Screen ink, turned into ink that works on white paper.
  *
  * The board is pastel because it sits on dark turf, and every one of those
- * colours vanishes on white — which is why an export used to swap the whole set
+ * colors vanishes on white — which is why an export used to swap the whole set
  * for a hand-picked print palette. That palette had two problems. It threw away
- * the colours a coach had actually chosen in Settings, and the hand-picked
+ * the colors a coach had actually chosen in Settings, and the hand-picked
  * values did not keep their hue: the lime route went from 69° to 86°, which is
  * the hue of grass, and the block gold went from 46° to 36°, which is the hue of
  * a paper bag. A coach printed a play and asked why the yellow came out green.
  *
- * So nothing is hand-picked here. A print colour is derived from the screen
- * colour by three rules, in this order:
+ * So nothing is hand-picked here. A print color is derived from the screen
+ * color by three rules, in this order:
  *
  *   1. The hue never moves. Whatever the coach picked, that is the hue on paper.
  *   2. Saturation is kept as a *fraction* of what the hue can hold, not as an
- *      absolute. Darkening a colour shrinks the room it has for chroma, so an
+ *      absolute. Darkening a color shrinks the room it has for chroma, so an
  *      ink that kept its absolute chroma would come out washed out, and one
  *      pushed to the gamut edge would come out garish — that second mistake
- *      turned the deliberately-muted option grey into a vivid cyan. Holding the
+ *      turned the deliberately-muted option gray into a vivid cyan. Holding the
  *      fraction is what makes the pale ones stay pale and the loud ones stay
  *      loud.
  *   3. Lightness comes down only as far as it must. Enough contrast against
@@ -26,8 +26,8 @@
  *      text, so it does not need the contrast that text would.
  *
  * The work happens in OKLCH rather than HSL. HSL's hue is not perceptual: two
- * colours at the same HSL hue and different lightness do not look like the same
- * colour, which is the whole failure being fixed. OKLab holds hue steady as
+ * colors at the same HSL hue and different lightness do not look like the same
+ * color, which is the whole failure being fixed. OKLab holds hue steady as
  * lightness moves.
  */
 
@@ -35,7 +35,7 @@
 interface Oklch {
   /** Perceptual lightness, 0 (black) to 1 (white). */
   l: number;
-  /** Chroma — how far from grey. Unbounded in principle, ~0.37 at the sRGB edge. */
+  /** Chroma — how far from gray. Unbounded in principle, ~0.37 at the sRGB edge. */
   c: number;
   /** Hue in degrees. The number this module exists to leave alone. */
   h: number;
@@ -123,8 +123,8 @@ function oklchToRgb({ l: L, c, h }: Oklch): Rgb {
 }
 
 /** Whether an OKLCH triple survives the trip to sRGB without being clipped. */
-function inGamut(colour: Oklch): boolean {
-  const { r, g, b } = oklchToRgb(colour);
+function inGamut(color: Oklch): boolean {
+  const { r, g, b } = oklchToRgb(color);
   const ok = (n: number) => n >= -0.0005 && n <= 1.0005;
   return ok(r) && ok(g) && ok(b);
 }
@@ -133,7 +133,7 @@ function inGamut(colour: Oklch): boolean {
  * The most saturated version of a hue that sRGB can actually print.
  *
  * Bisection rather than the closed form, because the closed form is a page of
- * coefficients to save a few dozen multiplies on six colours. sRGB's gamut is
+ * coefficients to save a few dozen multiplies on six colors. sRGB's gamut is
  * convex in chroma at a fixed lightness and hue, so halving converges.
  */
 function maxChroma(l: number, h: number): number {
@@ -162,8 +162,8 @@ function contrastOnWhite(rgb: Rgb): number {
  *
  * 2:1, not the 3:1 this started at, and the difference is the whole reason a
  * yellow can stay yellow. 3:1 is the WCAG floor for a *user-interface* mark,
- * where the thing being identified might be a hairline border and colour is not
- * allowed to carry meaning. A route is a 3pt stroke of a strongly coloured ink
+ * where the thing being identified might be a hairline border and color is not
+ * allowed to carry meaning. A route is a 3pt stroke of a strongly colored ink
  * read at arm's length, which is a much easier thing to see, and the extra stop
  * of contrast is bought by darkening — which is precisely what drags a yellow
  * through olive on its way to brown.
@@ -177,14 +177,14 @@ export const TEXT_CONTRAST = 4.5;
  * Almost to the edge of the gamut, never onto it.
  *
  * Sitting exactly on the sRGB boundary means every printer's own gamut mapping
- * has to pull the colour back in, and each one does it differently — which is
+ * has to pull the color back in, and each one does it differently — which is
  * its own kind of hue shift, arrived at by a different route. A hair inside is
- * a colour that survives the trip.
+ * a color that survives the trip.
  */
 const CEILING = 0.92;
 
 /**
- * One screen colour, as ink for white paper.
+ * One screen color, as ink for white paper.
  *
  * Returns the input untouched when it is not a plain hex — the structural
  * tokens are `rgba()` washes and are set by hand for print, not derived.
@@ -195,8 +195,8 @@ export function inkForPaper(css: string, minContrast = INK_CONTRAST): string {
 
   const { l: l0, c: c0, h } = rgbToOklch(rgb);
 
-  // Grey in, grey out. A hue that does not exist cannot be preserved, and
-  // saturating the rounding error in a near-neutral would invent a colour.
+  // Gray in, gray out. A hue that does not exist cannot be preserved, and
+  // saturating the rounding error in a near-neutral would invent a color.
   if (c0 < 0.01) {
     const dark = contrastOnWhite(rgb) >= minContrast ? rgb : { r: 0.13, g: 0.13, b: 0.13 };
     return toHex(dark);
@@ -215,8 +215,8 @@ export function inkForPaper(css: string, minContrast = INK_CONTRAST): string {
    *
    * Both make a mark stand out on white, and for a pale ink saturation is very
    * nearly free: a fully saturated yellow is *darker* than a washed-out one, so
-   * turning the chroma up buys real contrast while the colour stays where it
-   * was. Darkening buys the same contrast by walking the colour toward black,
+   * turning the chroma up buys real contrast while the color stays where it
+   * was. Darkening buys the same contrast by walking the color toward black,
    * which for a yellow means olive and then brown — the original complaint.
    *
    * So: the smallest chroma that does the job, at the lightness it already had.

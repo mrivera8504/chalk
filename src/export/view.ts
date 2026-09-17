@@ -60,7 +60,7 @@ const MIN = { w: 18, h: 15 };
  * 37-yard field: the yard lines ran to both edges of the sheet and the play sat
  * small in the middle of them, which is what a coach saw and called too small.
  * A little stretch keeps some field around the play; past that the board is
- * simply centred in the cell and the margin left white, which on paper — where
+ * simply centered in the cell and the margin left white, which on paper — where
  * the turf is white too — reads as nothing at all.
  */
 const STRETCH = 1.25;
@@ -182,7 +182,7 @@ export function viewForPlays(plays: Play[], aspect: number): View {
 
   // Toward the paper's proportions, but only so far. Growing is safe; shrinking
   // the other side to hit the ratio would crop, which is the one thing this
-  // must never do. Whatever shape is left over, the caller centres.
+  // must never do. Whatever shape is left over, the caller centers.
   if (w / h < aspect) w = Math.min(h * aspect, w * STRETCH);
   else h = Math.min(w / aspect, h * STRETCH);
 

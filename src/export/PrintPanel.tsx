@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { RosterEntry } from '../domain/roster';
 import type { Play, Section } from '../domain/types';
 import {
-  centreIn,
+  centerIn,
   layout,
   DEFAULT_PRINT,
   type NameSize,
@@ -160,7 +160,7 @@ function PagePreview({
               src={boards[n]}
               alt=""
               style={(() => {
-                const at = centreIn(cell.board, view.w / view.h);
+                const at = centerIn(cell.board, view.w / view.h);
                 return {
                   left: pct(at.x, L.page.w),
                   top: pct(at.top, L.page.h),
@@ -318,7 +318,7 @@ export function PrintPanel({ plays, sections, roster, onClose }: Props) {
    * Which men are drawn is an editing decision — it is set on the board, where
    * the coach can see what it does to the play, and stored on the play. Asking
    * again on the way to the printer meant two answers to one question, and the
-   * sheet quietly winning: a defence drawn against nobody printed with a look
+   * sheet quietly winning: a defense drawn against nobody printed with a look
    * across from it because a toggle in here still said so.
    */
 

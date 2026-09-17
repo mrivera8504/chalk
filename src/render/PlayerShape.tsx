@@ -12,7 +12,7 @@ interface Props {
 }
 
 /**
- * A five-pointed star, in yards, centred on the origin.
+ * A five-pointed star, in yards, centered on the origin.
  *
  * Drawn rather than typed as a glyph: a text star renders in whatever font the
  * device happens to have, and this same component is serialized into an export
@@ -40,7 +40,7 @@ export function PlayerShape({
   ball = false,
 }: Props) {
   /*
-   * The man with the ball is drawn as a star in the ball colour, whatever mark
+   * The man with the ball is drawn as a star in the ball color, whatever mark
    * he would otherwise wear. It used to be a small star pinned to the corner of
    * his mark, which is a badge on a player rather than a player you can pick out
    * — and picking the carrier out of eleven marks at a glance is the whole job.
@@ -141,7 +141,7 @@ export function PlayerShape({
           y={0.3}
           fontSize={0.82}
           fontWeight={600}
-          /* On the ball star, the mark's own outline colour: it is dark on the
+          /* On the ball star, the mark's own outline color: it is dark on the
              screen's yellow and white on the black one print swaps in, so the
              label reads on paper as well as on the board. */
           fill={

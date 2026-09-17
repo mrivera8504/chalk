@@ -15,7 +15,7 @@ export function isPairTool(tool: Tool): tool is BlockKind | LinkKind {
  * it is a thing you reach for in the middle of drawing a play rather than a
  * mode you set out in.
  *
- * The row is different for the two units and not merely relabelled. A defensive
+ * The row is different for the two units and not merely relabeled. A defensive
  * play has no pull and no combo, and an offensive one has no stunt; offering all
  * eight to both would be six buttons that do nothing wherever you happen to be,
  * which is what made the old sixteen-pill drawer unreadable.

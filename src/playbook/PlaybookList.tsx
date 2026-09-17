@@ -57,8 +57,8 @@ const SYNC_LABEL: Record<SyncState, string> = {
 /*
  * The states a coach has to do something about, as against the ones that pass
  * on their own. Offline is not one of them — a field with no signal is the
- * normal condition this app was built for, and colouring it red would teach
- * everybody to ignore the colour by the second practice.
+ * normal condition this app was built for, and coloring it red would teach
+ * everybody to ignore the color by the second practice.
  */
 const NEEDS_ACTION = new Set<SyncState>(['denied', 'blocked', 'toobig', 'failed']);
 
@@ -114,7 +114,7 @@ export function PlaybookList({
   const [more, setMore] = useState(false);
   /*
    * Settings from here as well as from inside a play. Every one of them — the
-   * colours, the pen, the board, the league rules — is the same on every play
+   * colors, the pen, the board, the league rules — is the same on every play
    * in the book, so having to open a play to reach them was asking a coach to
    * go through a thing he did not want to change to get at a thing he did.
    */
@@ -259,7 +259,7 @@ export function PlaybookList({
             * The roster, the sheets, the account and the install prompt live
             * behind this. Every one of them is something a coach does once a
             * season, and all four sitting in the same row as New play is what
-            * made this screen a wall of identical grey.
+            * made this screen a wall of identical gray.
             */}
           <button
             className="quiet"

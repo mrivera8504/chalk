@@ -225,7 +225,7 @@ function explain(err: unknown): SyncState {
         'The playbook is too large for one Firestore document (1 MiB). Freehand ' +
         'ink is the usual weight — and emptying the trash is the quickest relief.',
       offline: 'The cloud is unreachable.',
-      failed: 'The write failed for a reason this app does not recognise.',
+      failed: 'The write failed for a reason this app does not recognize.',
     };
     console.warn(`Playbook is saving locally only. ${why[state] ?? ''}`, err);
   }
@@ -292,7 +292,7 @@ export interface PushOptions {
  * actually had wore that shape, a small or empty copy landing on a large one,
  * so the shape is worth refusing even when the cause is one nobody has found
  * yet. And anything a push is about to replace is kept first, so "refused" is
- * not the only line of defence.
+ * not the only line of defense.
  */
 export async function pushToCloud(
   book: Playbook,
