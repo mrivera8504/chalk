@@ -313,6 +313,26 @@ export function PrintPanel({ plays, sections, roster, onClose }: Props) {
   // would be live and do nothing, which is worse than their absence.
   const many = ordered.length > 1;
 
+  /**
+   * Whether the front is a thing this sheet can be asked about, by the same
+   * bargain `many` strikes.
+   *
+   * It only ever *reveals* defenders the play already has, which leaves it
+   * inert in both of the places it was most likely to be pressed. A defensive
+   * play draws its front whatever the sheet says, so the toggle has nothing
+   * left to turn on; and most offensive plays were never given a front at all,
+   * so there is nobody to reveal. Making it work in either case would mean
+   * putting eleven men into the play from inside a print dialog, which is not
+   * a print option — it is an edit, and the board's own "+ Defense" is where
+   * that already lives.
+   *
+   * So it appears when at least one play on the sheet is holding a front it is
+   * not already showing, and otherwise it is not there to be pressed.
+   */
+  const canShowDefense = ordered.some(
+    (p) => (p.unit ?? 'offense') !== 'defense' && p.players.some((x) => x.side === 'defense'),
+  );
+
   return (
     <div className={`picker print-panel${onClose ? ' standalone' : ''}`}>
       {onClose && (
@@ -383,7 +403,8 @@ export function PrintPanel({ plays, sections, roster, onClose }: Props) {
         <div className="picker-row">
           {toggle(!!opts.showHoles, 'Holes', () => set('showHoles', !opts.showHoles))}
           {toggle(!!opts.showGaps, 'Gaps', () => set('showGaps', !opts.showGaps))}
-          {toggle(!!opts.showDefense, 'Defense', () => set('showDefense', !opts.showDefense))}
+          {canShowDefense &&
+            toggle(!!opts.showDefense, 'Defense', () => set('showDefense', !opts.showDefense))}
           {toggle(opts.showNotes, 'Notes', () => set('showNotes', !opts.showNotes))}
           {many &&
             toggle(byFolder, 'Folder order', () => {
