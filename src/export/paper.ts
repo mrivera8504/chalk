@@ -106,11 +106,6 @@ export function fitAspect(bw: number, bh: number, aspect: number): { w: number; 
   return { w, h: w / aspect };
 }
 
-/** Fit a board at its own screen proportions. Still used by the fixed sheets. */
-export function boxFit(bw: number, bh: number): { w: number; h: number } {
-  return fitAspect(bw, bh, BOARD_ASPECT);
-}
-
 /**
  * Centre a board of a given shape inside the room it was given.
  *

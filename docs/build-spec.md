@@ -2,6 +2,15 @@
 
 A play designer for 7-man youth tackle football. Single user. Pen-first, offline-first, installable.
 
+> **This is the plan, not the record.** It is kept as written so the reasoning
+> behind the constraints survives; it is not updated as the build moves. Where
+> the two disagree, the code and `CLAUDE.md` are right. The file tree in §12 is
+> the clearest case — `zustand` was never taken on, and `export/` went a
+> different way entirely: one PDF composer with options rather than a sheet per
+> file, plus `paper.ts` for the page arithmetic, `view.ts` for how much field to
+> show and `printInk.ts` for turning screen colour into ink. See *Export* in
+> `CLAUDE.md`.
+
 ---
 
 ## 1. Constraints that shaped this

@@ -7,7 +7,7 @@ import {
   type PDFPage,
 } from 'pdf-lib';
 import { byJersey, describePersonnel, type RosterEntry } from '../domain/roster';
-import { type Play, type Section } from '../domain/types';
+import { type Play } from '../domain/types';
 import { centreIn, DEFAULT_PRINT, layout, type PrintOptions, type Rect } from './paper';
 import { playToPng, playTitle, type SheetOptions } from './render';
 import type { View } from './view';
@@ -278,45 +278,6 @@ export async function playSheetPdf(
   return doc.save();
 }
 
-/**
- * One play to a page, the way the editor's own print button asks for it.
- *
- * The install sheet: the thing handed to a coach who was not at practice, so it
- * carries the notes and the coaching point, and holes are on.
- */
-export function singlePlayPdf(
-  play: Play,
-  opts: SheetOptions = {},
-  roster: RosterEntry[] = [],
-): Promise<Uint8Array> {
-  return playSheetPdf([play], { ...DEFAULT_PRINT, ...opts }, { roster });
-}
-
-/**
- * The whole playbook, in folder order.
- *
- * Folders become the running header rather than their own divider pages, which
- * only happens on a page that has a header at all — at 1-up the play's name is
- * the header and the folder would be competing with it.
- */
-export function playbookPdf(
-  plays: Play[],
-  sections: Section[],
-  opts: PrintOptions = DEFAULT_PRINT,
-): Promise<Uint8Array> {
-  const order = [...sections].sort((a, b) => a.order - b.order);
-  const name = new Map(order.map((s) => [s.id, s.name]));
-
-  const sorted = [
-    ...order.flatMap((s) => plays.filter((p) => p.sectionId === s.id)),
-    ...plays.filter((p) => !name.has(p.sectionId)),
-  ];
-
-  return playSheetPdf(sorted, opts, {
-    title: 'Playbook',
-    folderOf: (p) => name.get(p.sectionId) ?? 'Unfiled',
-  });
-}
 
 /**
  * Wristband strips: names only, in columns sized to a quarterback's forearm.

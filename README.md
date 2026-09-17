@@ -23,7 +23,22 @@ Plays are saved now. The app opens on a playbook rather than a blank field.
 - **Saving** — local storage first and synchronously, Firestore 800ms behind it.
   The app works with anonymous auth disabled or with no signal; it just says "on
   this device" instead of "saved".
-- **Export** — the whole playbook as JSON, since the anonymous account lives in
+- **Print** — one screen for every sheet: portrait or landscape, one to nine
+  plays a page, fill-the-page margins, three name sizes, and toggles for holes,
+  gaps, the defense and the notes. The page is drawn underneath while you change
+  the options, with a full-screen proof before you save. Also from inside a
+  play, for just that play. Wristband strips and the team sheet are separate,
+  being lists rather than plays.
+  - The field window is worked out from the plays, so landscape trims the depth
+    nobody runs into rather than padding the margins, and nothing is ever
+    cropped. Fill-the-page with the notes off puts a single play within an inch
+    of the paper on every side.
+  - Ink is derived from your own colours rather than substituted: the hue is
+    kept exactly and only the strength is changed, so the yellow you picked
+    prints yellow. Change a swatch in Settings and the sheets follow.
+  - Files are named after what is in them — `sweep-right-<date>.pdf`,
+    `goal-line-12-plays-6up-<date>.pdf`.
+- **Backup** — the whole playbook as JSON, since the anonymous account lives in
   this browser's storage and clearing site data would otherwise orphan it.
 
 ## Stage 2 — the blocking tool

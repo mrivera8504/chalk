@@ -15,6 +15,15 @@ it is made; a defensive play carries coverage zones, man-coverage ropes, blitzes
 aimed at computed gaps, contain and spill, line-game stunts, saveable fronts,
 one-tap coverages, and a look copied over from any offensive play in the book.
 
+**Printing is a screen now, not seven buttons.** Orientation, one to nine plays
+a page, fill-the-page, name size and what to show, with the sheet drawn
+underneath while the options change and a full-screen proof. The field window is
+worked out from the plays rather than fixed, so landscape gives back the depth
+nobody runs into instead of padding the margins, and the ink is derived from the
+coach's own swatches rather than replaced by a print palette — which is what had
+a yellow printing green, then gold. Read *Export* before touching anything under
+`src/export/`: most of the rules in it are a sheet that came out wrong.
+
 **The chrome has had a pass.** Every control is a pen-sized target, the drawer
 behaves like a menu rather than a palette, the inspector takes a side in
 landscape, and the twelve browser `prompt()` and `confirm()` boxes are gone. See
@@ -866,10 +875,12 @@ zone set the scale for every other page and drew the entire call sheet small.
 React — because two things have to agree about it: the PDF, and the preview.
 `layout()` resolves the paper, the margin, the running head, the grid and a box
 per play, in **top-left** coordinates; `pdf.ts` flips to PDF space at the point
-of drawing. `boardBox()` is the single place that decides how big a board is
-inside a cell, because the grid chooser and the layout both need that answer and
-they must not disagree — they did, and a landscape 4-up was scored as four tall
-slivers and laid out four across when 2×2 draws a play nearly twice the size.
+of drawing. `centreIn()` is the single place that decides where a board of a
+given shape sits inside a cell, and `bestGrid` scores its candidates through the
+same `fitAspect` — because the grid chooser and the layout both need that answer
+and they must not disagree. They did: a landscape 4-up was scored with the old
+fixed board shape, came out as four tall slivers, and was laid out four across
+where 2×2 draws a play nearly twice the size.
 The grid is worked out rather than written down: every exact
 factorisation of the plays-per-page is tried and the one that draws the biggest
 play wins, which puts two-up side by side on landscape and stacked on portrait
@@ -878,14 +889,17 @@ above and below it — four across a landscape page otherwise collects half the
 paper at the foot and reads as though the printing was cut off.
 
 `export/pdf.ts` composes with `pdf-lib`. There is **one** play composer,
-`playSheetPdf`. The install sheet, the call sheet, the big-print cards and the
-playbook were the same page with different numbers in it, and each carried its
-own copy of the arithmetic, which is why none of them could be turned sideways
-and only one of them centred anything; `singlePlayPdf` and `playbookPdf` are
-thin wrappers on it now. Wristband strips and the team sheet are still their own
-functions — they are lists, not plays, and have no orientation to choose. Every
-play is rasterized and embedded **once** per document, at a resolution taken
-from the box it is actually going into.
+`playSheetPdf`, and it is the only one. The install sheet, the call sheet, the
+big-print cards and the playbook were the same page with different numbers in
+it, and each carried its own copy of the arithmetic, which is why none of them
+could be turned sideways and only one of them centred anything. They collapsed
+into options. `singlePlayPdf` and `playbookPdf` survived a while as thin
+wrappers and were deleted once nothing called them: the panel builds the folder
+order itself, since it is the thing that knows what the coach filtered to.
+Wristband strips and the team sheet are still their own functions — they are
+lists, not plays, and have no orientation to choose. Every play is rasterized and
+embedded **once** per document, at a resolution taken from the box it is
+actually going into.
 
 `export/PrintPanel.tsx` is the one screen for all of it: orientation, one to
 nine a page, edge-to-edge, name size, with the page drawn underneath while the
@@ -896,6 +910,19 @@ portrait sheet and gave no say in it, which was the printing complaint arrived
 at from the other direction. Inside the drawer it takes no `onClose` and draws
 no header of its own, the same bargain `SettingsPanel` strikes, and it hides
 Per page and Folder order because one play has no grid and no folders.
+
+**A sheet is named after what is on it.** `sheetName()` in `export/render.tsx`:
+one play is called after the play, a run of plays after the folder they all came
+out of, or after the book when they came from several, and a grid carries how
+many are to a page. Every sheet used to be `chalk-plays-<date>.pdf`, so three
+prints in an evening gave that name and two more of it with numbers in brackets
+after it. The `Nup` matters — a call sheet and an install sheet of the same
+plays on the same day are two different sheets and would otherwise collide. The
+`slug()` beside it is shared with the editor's Save image rather than copied,
+and caps the length, because a play named after the whole call was producing a
+paragraph with an extension on the end. Same-day repeats of the *same* sheet
+still collide and Chrome appends a number; a time would fix it and make every
+name uglier, so it has not been done.
 
 **The preview must draw each board as an `<img>`, never as inline SVG.** An
 exported board carries its own `<style>` block setting the print palette on
