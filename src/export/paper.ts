@@ -55,8 +55,14 @@ export const DEFAULT_PRINT: PrintOptions = {
 /** The board's proportions — 22 yards across, 30 deep. Taller than it is wide. */
 export const BOARD_ASPECT = (VIEW.halfWidth * 2) / (VIEW.downfield + VIEW.behind);
 
-/** A binder margin, and the smallest margin a printer will actually image. */
-const MARGIN = { normal: 40, edge: 14 };
+/**
+ * A binder margin, and the smallest margin a printer will actually image.
+ *
+ * Half an inch and a quarter. Both came down: every point of margin is a point
+ * the play does not get, and on a landscape sheet — where the height is what
+ * the play is limited by — the top and bottom margins are the expensive ones.
+ */
+const MARGIN = { normal: 36, edge: 18 };
 
 const GUTTER = 14;
 
@@ -93,18 +99,6 @@ export function pageSize(o: Orientation): { w: number; h: number } {
   return o === 'landscape' ? { w: LETTER.h, h: LETTER.w } : { ...LETTER };
 }
 
-/**
- * How far the field window is allowed to be stretched to match a cell.
- *
- * Wider than a phone board in one direction and squarer in the other. Past
- * these the window stops following the cell: a very wide slot would be filled
- * with empty sideline, and a very tall one with grass nobody runs into.
- */
-const ASPECT_RANGE = { min: 0.62, max: 1.85 };
-
-function clampNum(n: number, lo: number, hi: number): number {
-  return n < lo ? lo : n > hi ? hi : n;
-}
 
 /** Fit a box of a given aspect inside another, centred in what is left. */
 export function fitAspect(bw: number, bh: number, aspect: number): { w: number; h: number } {
@@ -118,22 +112,24 @@ export function boxFit(bw: number, bh: number): { w: number; h: number } {
 }
 
 /**
- * The board's box inside a cell of a given size.
+ * Centre a board of a given shape inside the room it was given.
  *
- * The one place that decides it, because the grid chooser and the layout both
- * need the answer and they must not disagree. They did: the chooser was still
- * sizing candidates with the board's old fixed 22-by-30 shape while the layout
- * had moved on to filling the cell, so a landscape 4-up was scored as though
- * each play were a tall sliver and four-across won. Under the rule actually
- * used, 2×2 draws a play nearly twice the size.
+ * The shape comes from the play — see `view.ts` — so the board no longer
+ * stretches to fill the cell. On a wide sheet a deep play leaves white either
+ * side of itself, and that is the right answer: filling it meant drawing
+ * thirteen yards of play in the middle of thirty-seven yards of empty grass,
+ * and the grass is white on paper anyway.
  */
-function boardBox(cellW: number, cellH: number): { w: number; h: number } {
-  const raw = { w: cellW, h: cellH };
-  const ratio = raw.h > 0 ? raw.w / raw.h : BOARD_ASPECT;
-  return ratio < ASPECT_RANGE.min || ratio > ASPECT_RANGE.max
-    ? fitAspect(raw.w, raw.h, clampNum(ratio, ASPECT_RANGE.min, ASPECT_RANGE.max))
-    : raw;
+export function centreIn(area: Rect, aspect: number): Rect {
+  const box = fitAspect(area.w, area.h, aspect);
+  return {
+    x: area.x + (area.w - box.w) / 2,
+    top: area.top + (area.h - box.h) / 2,
+    w: box.w,
+    h: box.h,
+  };
 }
+
 
 /**
  * How many across and how many down.
@@ -151,6 +147,7 @@ function bestGrid(
   availW: number,
   availH: number,
   labelH: number,
+  boardAspect: number,
 ): { cols: number; rows: number } {
   let best = { cols: 1, rows: perPage, area: -1 };
   for (let cols = 1; cols <= perPage; cols++) {
@@ -159,7 +156,9 @@ function bestGrid(
     const cellW = (availW - GUTTER * (cols - 1)) / cols;
     const cellH = (availH - GUTTER * (rows - 1)) / rows;
     if (cellW <= 0 || cellH - labelH <= 0) continue;
-    const box = boardBox(cellW, cellH - labelH);
+    // Scored at the shape the board will actually take in that cell, which now
+    // comes from the play rather than from a fixed window.
+    const box = fitAspect(cellW, cellH - labelH, boardAspect);
     const area = box.w * box.h;
     if (area > best.area) best = { cols, rows, area };
   }
@@ -176,6 +175,16 @@ function bestGrid(
  */
 const NAME_SCALE: Record<NameSize, number> = { normal: 1, big: 1.45, huge: 2.1 };
 
+/**
+ * The band the name sits in, as a multiple of the letters themselves.
+ *
+ * 1.28, not the 1.5 it was. The band is pure chrome and it is subtracted from
+ * the height, which on landscape is the dimension the play is limited by — a
+ * 'Huge' name was taking an inch and a third of an 8½-inch sheet before the
+ * board got a look at it.
+ */
+const NAME_BAND = 1.28;
+
 function nameSizeFor(cellW: number, which: NameSize): number {
   const base = Math.max(9, Math.min(30, cellW * 0.062));
   return base * NAME_SCALE[which];
@@ -187,7 +196,7 @@ function nameSizeFor(cellW: number, which: NameSize): number {
  * One call gives both renderers the page, the margin, the running head, the
  * grid and a box for every play on it.
  */
-export function layout(opts: PrintOptions): Layout {
+export function layout(opts: PrintOptions, boardAspect = BOARD_ASPECT): Layout {
   const page = pageSize(opts.orientation);
   const margin = opts.edgeToEdge ? MARGIN.edge : MARGIN.normal;
 
@@ -205,33 +214,27 @@ export function layout(opts: PrintOptions): Layout {
   // A first guess at the label band, so the grid can be chosen knowing roughly
   // what the names will cost it, then the real size once the cells are known.
   const guess = nameSizeFor(availW / Math.max(1, Math.round(Math.sqrt(opts.perPage))), opts.nameSize);
-  const { cols, rows } = bestGrid(opts.perPage, availW, availH, guess * 1.5);
+  const { cols, rows } = bestGrid(opts.perPage, availW, availH, guess * NAME_BAND, boardAspect);
 
   const cellW = (availW - GUTTER * (cols - 1)) / cols;
   const cellH = (availH - GUTTER * (rows - 1)) / rows;
   const nameSize = nameSizeFor(cellW, opts.nameSize);
-  const labelH = nameSize * 1.5;
+  const labelH = nameSize * NAME_BAND;
 
   // Notes only at 1-up. On a grid there is no room for them, and a call sheet
   // is read at a glance anyway: the name is the whole point of it.
-  const notesH = opts.showNotes && opts.perPage === 1 ? 58 : 0;
+  //
+  // A landscape sheet leaves a gutter down each side, and putting the notes
+  // there instead — buying back the height, which is the dimension a play is
+  // short of on wide paper — was tried and taken out again. The gutter comes to
+  // about an inch and a quarter, and the notes are set on one line each and
+  // ellipsized rather than wrapped, so a column that narrow simply cut them
+  // off. It would need a wrapping text setter to be worth it.
+  const notesH = opts.showNotes && opts.perPage === 1 ? 44 : 0;
 
-  /*
-   * The board takes the whole cell, rather than being cut down to the board's
-   * own proportions.
-   *
-   * It used to be `boxFit`, which fitted a fixed 22-by-30 window into the cell
-   * and centred it — so turning the paper sideways bought nothing but wider
-   * margins. The window is no longer fixed: `view.ts` shapes it to whatever box
-   * it is given, growing the field sideways rather than the paper's white. So
-   * the box is simply the room available, and the play fills it.
-   *
-   * The shape is fenced in either direction all the same. A 9-up cell or a
-   * `Fill the page` 2-up can be extreme enough that matching it would show
-   * forty yards of empty sideline, or a letterbox slot with no depth to run a
-   * route in, so past those limits it goes back to fitting and centring.
-   */
-  const box = boardBox(cellW, cellH - labelH - notesH);
+  // The room the board is given. What actually lands in it is centred at the
+  // play's own shape by `centreIn`, once the caller has worked out the window.
+  const box = { w: cellW, h: cellH - labelH - notesH };
 
   /*
    * Whatever height the cell did not need, split above and below.

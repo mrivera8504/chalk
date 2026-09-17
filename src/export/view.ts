@@ -45,10 +45,25 @@ const PAD = 2;
  *
  * Without a floor, a goal-line play with everyone inside five yards would be
  * blown up until the players were the size of dinner plates and the field had
- * no context left. This is about the width of a formation plus its splits, and
- * deep enough to see where a route is going.
+ * no context left. Lower than it was: `PAD` already puts two yards of grass
+ * round the outermost mark, so the floor only has to catch the extreme case,
+ * and every yard of floor beyond what the play uses is a yard the play is
+ * shrunk to make room for.
  */
-const MIN = { w: 24, h: 20 };
+const MIN = { w: 18, h: 15 };
+
+/**
+ * How much empty field may be added to meet the shape of the paper.
+ *
+ * A quarter more than the play needs, and not a yard beyond. Stretching all the
+ * way to the paper's proportions is what put a 13-yard play in the middle of a
+ * 37-yard field: the yard lines ran to both edges of the sheet and the play sat
+ * small in the middle of them, which is what a coach saw and called too small.
+ * A little stretch keeps some field around the play; past that the board is
+ * simply centred in the cell and the margin left white, which on paper — where
+ * the turf is white too — reads as nothing at all.
+ */
+const STRETCH = 1.25;
 
 /** A player's mark, in yards, so a disc at the edge is not clipped in half. */
 const MARK = 1.1;
@@ -113,7 +128,8 @@ function boundsOf(play: Play): Bounds {
  * with room around it, and is then stretched — only ever outwards — to the
  * target proportions. Asking for landscape cannot cut a route off.
  */
-export function viewForPlays(plays: Play[], aspect: number): View {
+/** The window a set of plays needs, before any paper is involved. */
+function contentView(plays: Play[]): View {
   /*
    * Seeded with the line of scrimmage and nothing else.
    *
@@ -138,16 +154,39 @@ export function viewForPlays(plays: Play[], aspect: number): View {
     all.maxY = Math.max(all.maxY, b.maxY + PAD);
   }
 
-  let w = Math.max(MIN.w, all.maxX - all.minX);
-  let h = Math.max(MIN.h, all.maxY - all.minY);
+  const w = Math.max(MIN.w, all.maxX - all.minX);
+  const h = Math.max(MIN.h, all.maxY - all.minY);
   const cx = (all.minX + all.maxX) / 2;
   const cy = (all.minY + all.maxY) / 2;
 
-  // Stretch the short side to meet the paper. Growing is safe; shrinking the
-  // other side to hit the ratio would crop, which is the one thing this must
-  // never do.
-  if (w / h < aspect) w = h * aspect;
-  else h = w / aspect;
+  return { x: cx - w / 2, y: cy - h / 2, w, h };
+}
 
+/**
+ * The shape a play wants, before any paper is involved.
+ *
+ * The grid chooser needs this: it has to score 2×2 against 4×1 knowing roughly
+ * how the board will sit in each cell, and the board's shape now comes from the
+ * play rather than from a fixed 22-by-30 window. Taken unstretched, so it does
+ * not depend on the cell it is about to help choose — which would be circular.
+ */
+export function contentAspect(plays: Play[]): number {
+  const v = contentView(plays);
+  return v.w / v.h;
+}
+
+/** That window, leaned toward the shape of the cell it is going into. */
+export function viewForPlays(plays: Play[], aspect: number): View {
+  const v = contentView(plays);
+  let { w, h } = v;
+
+  // Toward the paper's proportions, but only so far. Growing is safe; shrinking
+  // the other side to hit the ratio would crop, which is the one thing this
+  // must never do. Whatever shape is left over, the caller centres.
+  if (w / h < aspect) w = Math.min(h * aspect, w * STRETCH);
+  else h = Math.min(w / aspect, h * STRETCH);
+
+  const cx = v.x + v.w / 2;
+  const cy = v.y + v.h / 2;
   return { x: cx - w / 2, y: cy - h / 2, w, h };
 }

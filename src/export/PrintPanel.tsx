@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { RosterEntry } from '../domain/roster';
 import type { Play, Section } from '../domain/types';
 import {
+  centreIn,
   layout,
   DEFAULT_PRINT,
   type NameSize,
@@ -11,7 +12,7 @@ import {
 } from './paper';
 import { playSheetPdf } from './pdf';
 import { download, playToSvg, stamp } from './render';
-import { viewForPlays } from './view';
+import { contentAspect, viewForPlays } from './view';
 
 interface Props {
   plays: Play[];
@@ -49,11 +50,12 @@ function PagePreview({
   /** Filling the view rather than sitting in the panel. */
   full?: boolean;
 }) {
-  const L = useMemo(() => layout(opts), [opts]);
+  const L = useMemo(() => layout(opts, contentAspect(plays)), [opts, plays]);
   const pct = (n: number, of: number) => `${(n / of) * 100}%`;
 
-  // Shaped to the cell, so landscape trims the depth nobody runs into rather
-  // than padding the margins. One window per page, matching what `pdf.ts` does.
+  // Leaned toward the cell, so landscape trims the depth nobody runs into — but
+  // only so far, so the play is never left small in a field of empty grass. One
+  // window per page, matching what `pdf.ts` does.
   const board = L.cells[0].board;
   const view = useMemo(
     () => viewForPlays(plays, board.w / board.h),
@@ -158,12 +160,15 @@ function PagePreview({
               className="print-board"
               src={boards[n]}
               alt=""
-              style={{
-                left: pct(cell.board.x, L.page.w),
-                top: pct(cell.board.top, L.page.h),
-                width: pct(cell.board.w, L.page.w),
-                height: pct(cell.board.h, L.page.h),
-              }}
+              style={(() => {
+                const at = centreIn(cell.board, view.w / view.h);
+                return {
+                  left: pct(at.x, L.page.w),
+                  top: pct(at.top, L.page.h),
+                  width: pct(at.w, L.page.w),
+                  height: pct(at.h, L.page.h),
+                };
+              })()}
             />
           </div>
         );

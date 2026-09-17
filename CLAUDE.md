@@ -831,6 +831,31 @@ no play uses all thirty yards of depth, and giving back the depth nobody runs
 into is what actually makes the play bigger. `Field` takes the window as a prop
 so the turf, the five yard lines and the hash marks reach the edge of it.
 
+**The window leans toward the paper, it does not stretch all the way to it.**
+Matching the cell's proportions exactly put a thirteen-yard play in the middle
+of a thirty-seven-yard field: the yard lines ran to both edges of the sheet and
+the play sat small in the middle of them, which is what a coach saw and called
+too small. `STRETCH` caps the added grass at a quarter more than the play needs;
+whatever shape is left over, `centreIn` centres in the cell and leaves white.
+On paper that costs nothing — the turf is white too, so an unfilled margin reads
+as no margin at all, where empty grass reads as a small play. That change alone
+made a landscape sheet about a quarter bigger, and the floor came down with it
+(`MIN`, 18 by 15) because every yard of floor past what the play uses is a yard
+the play is shrunk to make room for.
+
+A play is deeper than it is wide, so on landscape paper the **height** is what
+limits it and the leftover width is unavoidable — it only fills when the play
+itself is wide, which a spread formation is. The chrome subtracted from that
+height is therefore the expensive part: margins are half an inch and a quarter
+(`MARGIN`), and the name's band is 1.28× the letters rather than 1.5×. `Fill the
+page` with Notes off gets a single play to within an inch of the paper on every
+side, which is about the limit.
+
+Putting the notes in the side gutter instead of a band beneath — buying the
+height back — was tried and taken out. The gutter is about an inch and a
+quarter, and notes are set one line each and ellipsized rather than wrapped, so
+a column that narrow just cut them off. It needs a wrapping text setter first.
+
 One window **per page**, shared by the plays on it: laid out side by side they
 get compared, and a coach reading a split off two cells needs a yard to be a
 yard in both. Per page rather than per document, because that is as far as the
