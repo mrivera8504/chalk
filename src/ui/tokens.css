@@ -254,6 +254,22 @@ body,
   padding: 0 10px 4px;
 }
 
+/*
+ * Room for the drawer tab, which sits in this corner and draws over the panel.
+ *
+ * Only in portrait, and only at the bottom: the tab is the one thing on the
+ * board that never moves, so the panel that arrives under it is the one that
+ * gives way. Turned sideways the inspector takes the edge the drawer is not on
+ * and the two never meet, which is why the landscape block below clears this.
+ */
+.stage:has(.drawer.right) .inspector.at-bottom {
+  padding-right: 60px;
+}
+
+.stage:has(.drawer.left) .inspector.at-bottom {
+  padding-left: 60px;
+}
+
 /* The one scroller is the list itself, so its sticky head keeps working and the
    fade at the edge still means "there is more below". */
 .stage .inspector.at-bottom .route-picker {
@@ -363,7 +379,7 @@ body,
 .drawer.left .drawer-tab {
   right: auto;
   left: 0;
-  border-radius: 0 9px 9px 0;
+  border-radius: 0 9px 0 0;
   border-right: 1px solid var(--line);
   border-left: 0;
   transition: left 180ms ease;
@@ -374,15 +390,22 @@ body,
 }
 
 /*
- * Rides the panel's edge in and out. Tall and pinned to the middle of the side,
- * because it is the one control that reaches every other control and a pen
- * should never have to hunt for it.
+ * Rides the panel's edge in and out, down in the corner.
+ *
+ * It used to be pinned to the middle of the side, which put it across the line
+ * of scrimmage — the one height where something is always drawn. The bottom of
+ * the board is the strip the inspector already reasons about below: twenty
+ * yards downfield and ten behind means the LOS sits two thirds of the way down
+ * the screen, and the bottom ten yards are where nothing is ever drawn.
+ *
+ * Still one fixed place, which is the point: it is the control that reaches
+ * every other control, and a pen should never have to hunt for it. A corner is
+ * easier to find than a middle, not harder — there is an edge to run into.
  */
 .drawer-tab {
   position: absolute;
-  top: 50%;
+  bottom: 0;
   right: 0;
-  transform: translateY(-50%);
   transition: right 180ms ease;
   pointer-events: auto;
   /*
@@ -398,8 +421,10 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px 0 0 9px;
+  /* Only the inward top corner is rounded: the other three meet an edge. */
+  border-radius: 9px 0 0 0;
   border-right: 0;
+  border-bottom: 0;
   color: var(--dim);
   font-size: 18px;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
@@ -971,7 +996,12 @@ button:focus-visible {
    */
   .stage .inspector,
   .stage .inspector.at-top,
-  .stage .inspector.at-bottom {
+  .stage .inspector.at-bottom,
+  /* Sideways it is on the other edge entirely, so it keeps no room for the
+     tab — listed by the same selector that reserved it, or that rule's higher
+     specificity would hold the gap open out here where nothing is under it. */
+  .stage:has(.drawer.right) .inspector.at-bottom,
+  .stage:has(.drawer.left) .inspector.at-bottom {
     top: 0;
     bottom: 0;
     width: min(340px, 42%);
