@@ -134,7 +134,7 @@ export function ExportPanel({ plays, sections, roster, onJson, onRestore, onClos
               void run(
                 'band',
                 () => wristbandPdf(plays, 'Chalk'),
-                `chalk-wristband-${day}.pdf`,
+                `wristband-${plays.length}-plays-${day}.pdf`,
               )
             }
           >

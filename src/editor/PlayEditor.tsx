@@ -110,7 +110,7 @@ import { TracePanel } from './TracePanel';
 import { TRACING, describeEvent, trace } from './trace';
 import { LegalityBadge } from './LegalityBadge';
 import { PrintPanel } from '../export/PrintPanel';
-import { download, playToPng, playTitle, stamp } from '../export/render';
+import { download, playToPng, playTitle, slug, stamp } from '../export/render';
 
 /*
  * Measured from a real S Pen trace: bounce gaps ran 10-25ms, while a genuine
@@ -2333,18 +2333,13 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    */
   async function exportPlay() {
     const current = livePlay();
-    const slug =
-      playTitle(current)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '') || 'play';
     setExporting(true);
     try {
       // 2000px across is a little over 300 DPI at the width this prints.
       // What is on the board is what prints: if the gap letters are up while
       // the play is being drawn, the sheet that comes out has them too.
       const bytes = await playToPng(current, 2000, { showHoles, showGaps, showDefense });
-      download(bytes, `${slug}-${stamp()}.png`, 'image/png');
+      download(bytes, `${slug(playTitle(current), 'play')}-${stamp()}.png`, 'image/png');
     } finally {
       setExporting(false);
     }

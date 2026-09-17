@@ -11,7 +11,7 @@ import {
   type PrintOptions,
 } from './paper';
 import { playSheetPdf } from './pdf';
-import { download, playToSvg, stamp } from './render';
+import { download, playToSvg, sheetName } from './render';
 import { contentAspect, viewForPlays } from './view';
 
 interface Props {
@@ -234,6 +234,21 @@ export function PrintPanel({ plays, sections, roster, onClose }: Props) {
     };
   }, [plays, sections, byFolder]);
 
+  /*
+   * The folder's name, when every play on the sheet came out of one.
+   *
+   * The playbook hands this panel whatever its search and filters left, so a
+   * coach who has narrowed to one folder and hit Print is printing that folder
+   * and the file may as well say so. Mixed, or unfiled, and there is no one
+   * name to use.
+   */
+  const oneFolder = useMemo(() => {
+    if (!plays.length) return undefined;
+    const ids = new Set(plays.map((p) => p.sectionId));
+    if (ids.size !== 1) return undefined;
+    return sections.find((sec) => sec.id === [...ids][0])?.name;
+  }, [plays, sections]);
+
   const total = Math.max(1, Math.ceil(ordered.length / opts.perPage));
   const at = Math.min(page, total - 1);
   const onThisPage = ordered.slice(at * opts.perPage, (at + 1) * opts.perPage);
@@ -248,8 +263,11 @@ export function PrintPanel({ plays, sections, roster, onClose }: Props) {
         roster,
         folderOf,
       });
-      const shape = opts.perPage === 1 ? 'plays' : `${opts.perPage}up`;
-      download(bytes, `chalk-${shape}-${stamp()}.pdf`, 'application/pdf');
+      download(
+        bytes,
+        sheetName({ plays: ordered, perPage: opts.perPage, folder: oneFolder }),
+        'application/pdf',
+      );
     } catch (err) {
       setFailed(err instanceof Error ? err.message : 'The sheet did not finish.');
     } finally {

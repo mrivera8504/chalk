@@ -307,3 +307,51 @@ export function download(bytes: Uint8Array | string, filename: string, type: str
 export function stamp(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * A play's name, fit to be a filename.
+ *
+ * Lowercased, punctuation collapsed to hyphens, and capped — a coach who names
+ * a play after the whole call gets a readable file rather than a paragraph with
+ * an extension on the end. Falls back rather than returning nothing, because a
+ * file called `-2026-09-17.pdf` is worse than one called `untitled`.
+ */
+export function slug(text: string, fallback = 'untitled'): string {
+  const out = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 48)
+    .replace(/-$/, '');
+  return out || fallback;
+}
+
+/**
+ * What a sheet is called when it lands in the coach's downloads.
+ *
+ * Every sheet used to be `chalk-plays-<date>.pdf`, so a coach printing three
+ * things in an evening got that name and then two copies of it with numbers in
+ * brackets, and no way to tell which was which without opening all three. The
+ * name now says what is in it: one play is called after the play, a folder
+ * after the folder, and a grid says how many are to a page.
+ */
+export function sheetName(opts: {
+  plays: Play[];
+  perPage: number;
+  /** Set when every play on the sheet came out of the same folder. */
+  folder?: string;
+}): string {
+  const { plays, perPage, folder } = opts;
+
+  const subject =
+    plays.length === 1
+      ? slug(playTitle(plays[0]))
+      : folder
+        ? `${slug(folder, 'unfiled')}-${plays.length}-plays`
+        : `playbook-${plays.length}-plays`;
+
+  // A grid is a different sheet from the same plays, so it says so — otherwise
+  // a call sheet and an install sheet of one folder collide on the same day.
+  const shape = perPage > 1 ? `-${perPage}up` : '';
+  return `${subject}${shape}-${stamp()}.pdf`;
+}
