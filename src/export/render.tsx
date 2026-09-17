@@ -162,19 +162,35 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
   const holes = computeHoles(play.players, getSettings());
   const gaps = computeGaps(play.players);
   const qb = quarterback(play.players);
+  /*
+   * A defensive play always draws the front, whatever the sheet was asked for:
+   * the front is the play. The look across from it is the coach's call, and the
+   * play carries the answer.
+   */
+  const players = play.players.filter((p) =>
+    p.side === 'defense'
+      ? opts.showDefense || play.unit === 'defense'
+      : // The look, on a defense drawn against nobody. Read off the play and
+        // never off the sheet's options: the coach took it off the board, and a
+        // sheet is printed from a folder list that has no idea it did.
+        !play.hideOffense,
+  );
+
+  /*
+   * Regenerated from every player and only then filtered down to the men who
+   * are drawn, exactly as the editor does it: a block and a cover rope are
+   * stored as relationships, so rebuilding them from a half-empty roster would
+   * redraw them to the wrong place rather than leave them out.
+   */
+  const lines = refreshPaths(play.assignments, play.players).filter((a) =>
+    players.some((p) => p.id === a.playerId),
+  );
+
+  /* Both washes hang off a man, so neither outlives the one it comes off. */
   const focused = (play.focuses ?? []).flatMap((f) => {
-    const man = play.players.find((p) => p.id === f.playerId);
+    const man = players.find((p) => p.id === f.playerId);
     return man ? [{ man, focus: f }] : [];
   });
-  /*
-   * A defensive play always draws both sides, whatever the sheet was asked for:
-   * the front is the play, and a front printed with nothing across from it is a
-   * picture of seven men standing in a field.
-   */
-  const players =
-    opts.showDefense || play.unit === 'defense'
-      ? play.players
-      : play.players.filter((p) => p.side === 'offense');
 
   const view = opts.view ?? DEFAULT_VIEW;
 
@@ -198,7 +214,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
       {focused.map(({ man, focus }) => (
         <FocusSquare key={`focus${man.id}`} player={man} focus={focus} />
       ))}
-      {play.vision && qb && <VisionCone qb={qb} vision={play.vision} />}
+      {play.vision && qb && !play.hideOffense && <VisionCone qb={qb} vision={play.vision} />}
       {play.annotations.map((path, i) => (
         <path
           key={`ann${i}`}
@@ -213,7 +229,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
       ))}
       {/* Regenerated from the players, as the board draws them: a block, a
           cover rope and a stunt are stored as relationships, never as lines. */}
-      {refreshPaths(play.assignments, play.players).map((a) => (
+      {lines.map((a) => (
         <AssignmentPath key={a.id} assignment={a} autoColor={autoRouteColor(a, play.players)} />
       ))}
       {players.map((p) => (

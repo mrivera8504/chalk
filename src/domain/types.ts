@@ -281,6 +281,25 @@ export interface Play {
    * formation with no quarterback draws no cone.
    */
   scoutPlayId?: string;
+  /**
+   * Take the look off the board, on a defensive play drawn against nobody.
+   *
+   * A flag and not a delete, because the offense is what the front is *for*: the
+   * A gap is the space between their centre and their guard, so a blitz aimed
+   * through it has nothing to aim at once those two men are gone. They stay
+   * where they are, keeping the gap map and every cover rope honest, and simply
+   * are not drawn — here, and on paper, which is the whole point. A defensive
+   * card that hid the look on screen and then printed it would be a card the
+   * coach has to check every time.
+   *
+   * Lives on the play rather than beside `showDefense`, which is a view toggle
+   * for the coach's session. Whether this defense is drawn against a look is a
+   * fact about the play, and a sheet printed from the folder list months later
+   * has to know it without anybody remembering to set it again.
+   *
+   * Absent means shown, so nothing already saved has to be rewritten.
+   */
+  hideOffense?: boolean;
   players: PlayerSlot[];
   assignments: Assignment[];
   /**

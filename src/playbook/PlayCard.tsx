@@ -39,6 +39,24 @@ export function PlayCard({
   const qb = quarterback(play.players);
   const title = play.name || play.suggestedName || 'Untitled';
 
+  /*
+   * A defensive play shows both sides: the front is the play, and without the
+   * look it is set against there is nothing for it to be lined up on. Unless
+   * the coach took the look off, which the card has to honour too — a thumbnail
+   * showing an offense the play no longer draws is the card lying about what
+   * opening it will give you. An offensive play still shows only its own side.
+   */
+  const shownPlayers = play.players.filter((p) =>
+    p.side === 'offense' ? !play.hideOffense : play.unit === 'defense',
+  );
+
+  /* Regenerated from everyone, then cut to the men on the board — a block and a
+     cover rope are functions of both ends, so they are rebuilt before filtering
+     and never from a half-empty roster. */
+  const shownLines = refreshPaths(play.assignments, play.players).filter((a) =>
+    shownPlayers.some((p) => p.id === a.playerId),
+  );
+
   // A play filed in a section that has since been deleted reads as unfiled,
   // which is where deleteSection already put it.
   const filedIn = sections.some((s) => s.id === play.sectionId)
@@ -58,13 +76,17 @@ export function PlayCard({
               player={play.players.find((p) => p.id === z.playerId) ?? null}
             />
           ))}
+          {/* Both washes hang off a man, so neither outlives the one it
+              comes off — as on the board and on the sheet. */}
           {(play.focuses ?? []).map((f) => {
-            const man = play.players.find((p) => p.id === f.playerId);
+            const man = shownPlayers.find((p) => p.id === f.playerId);
             return man ? (
               <FocusSquare key={`focus${f.playerId}`} player={man} focus={f} />
             ) : null;
           })}
-          {play.vision && qb && <VisionCone qb={qb} vision={play.vision} />}
+          {play.vision && qb && !play.hideOffense && (
+            <VisionCone qb={qb} vision={play.vision} />
+          )}
           {play.annotations.map((path, i) => (
             <path
               key={`ann${i}`}
@@ -81,24 +103,17 @@ export function PlayCard({
             * all stored as who-does-what-to-whom, so a thumbnail that drew the
             * saved path would be showing where those men used to stand.
             */}
-          {refreshPaths(play.assignments, play.players).map((a) => (
+          {shownLines.map((a) => (
             <AssignmentPath key={a.id} assignment={a} autoColor={autoRouteColor(a, play.players)} />
           ))}
-          {/*
-            * A defensive play shows both sides: the front is the play, and
-            * without the look it is set against there is nothing for it to be
-            * lined up on. An offensive play still shows only its own side.
-            */}
-          {play.players
-            .filter((p) => play.unit === 'defense' || p.side === 'offense')
-            .map((p) => (
-              <PlayerShape
-                key={p.id}
-                player={p}
-                selected={false}
-                ball={p.id === play.ballCarrierId}
-              />
-            ))}
+          {shownPlayers.map((p) => (
+            <PlayerShape
+              key={p.id}
+              player={p}
+              selected={false}
+              ball={p.id === play.ballCarrierId}
+            />
+          ))}
         </svg>
       </button>
 

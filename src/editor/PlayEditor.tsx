@@ -339,6 +339,11 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   );
   /** The offensive play this defense is set against, by id. */
   const [scoutPlayId, setScoutPlayId] = useState<string | undefined>(play.scoutPlayId);
+  /**
+   * The look, taken off the board. Saved with the play rather than held for the
+   * session, because it has to survive onto the sheet — see `hideOffense`.
+   */
+  const [hideOffense, setHideOffense] = useState(play.hideOffense ?? false);
   const [name, setName] = useState(play.name);
   const [notes, setNotes] = useState(play.notes);
   const [coachingPoint, setCoachingPoint] = useState(play.coachingPoint);
@@ -468,9 +473,17 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     setPan({ x: 0, y: 0 });
   }
 
+  /**
+   * Who is actually on the board, either side of the ball.
+   *
+   * Both halves can be taken off, for opposite reasons: an offensive play is
+   * usually drawn without a front, and a defensive play can be drawn against
+   * nobody. Hit testing reads this and not `players`, so a man who is not drawn
+   * cannot be tapped, dragged or handed a route by accident.
+   */
   const visible = useMemo(
-    () => (showDefense ? players : players.filter((p) => p.side === 'offense')),
-    [players, showDefense],
+    () => players.filter((p) => (p.side === 'defense' ? showDefense : !hideOffense)),
+    [players, showDefense, hideOffense],
   );
 
   /**
@@ -478,6 +491,25 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * current positions rather than cached. Dragging either man redraws the line.
    */
   const drawn = useMemo(() => refreshPaths(assignments, players), [assignments, players]);
+
+  /**
+   * The lines belonging to men who are on the board.
+   *
+   * Regenerated from *all* the players above and only then filtered, because a
+   * cover rope is a function of both ends: the defender still has the slot
+   * receiver whether or not the receiver is drawn, and rebuilding from a
+   * half-empty roster would straighten his rope out.
+   *
+   * Filtered on the owner alone. What a hidden man runs goes with him; what a
+   * defender does about him stays, because that line is the defense's own drawn
+   * work and this is a hide, not a delete. Everything that reads a line off the
+   * board — the eraser, Select, the tap that opens a route's player — reads
+   * this, so nothing invisible can be rubbed out or picked up.
+   */
+  const shown = useMemo(
+    () => drawn.filter((a) => visible.some((p) => p.id === a.playerId)),
+    [drawn, visible],
+  );
 
   // settings belongs in both: the rules are live now, and changing which way
   // the even holes run has to renumber the board without touching a player.
@@ -622,6 +654,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       unit: play.unit,
       defenseFormationId,
       scoutPlayId,
+      hideOffense: hideOffense || undefined,
       notes,
       coachingPoint,
       tags,
@@ -639,6 +672,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     zones,
     defenseFormationId,
     scoutPlayId,
+    hideOffense,
     notes,
     coachingPoint,
     tags,
@@ -1113,6 +1147,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     setZones((prev) => prev.filter((z) => next.some((p) => p.id === z.playerId)));
     setFocuses((prev) => prev.filter((f) => next.some((p) => p.id === f.playerId)));
     setScoutPlayId(source.id);
+    // Asking for a look is asking to see it. Picking one off the list and
+    // getting an unchanged empty board would read as the tap having missed.
+    setHideOffense(false);
     setBallCarrierId(source.ballCarrierId ?? null);
     setSel(null);
     closeDrawerAfter();
@@ -1952,7 +1989,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
      * swatches are already in. So tapping a route is another way of tapping its
      * player, and there is still no line inspector over the board in Routes.
      */
-    const lines = tool === 'select' || tool === 'routes' ? drawn : [];
+    const lines = tool === 'select' || tool === 'routes' ? shown : [];
     const hit = pickAt(visible, lines, at, radius, PLAYER_R);
     const p = hit?.kind === 'player' ? byId(hit.id) : null;
 
@@ -2228,7 +2265,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       setAnnotations(left);
       return;
     }
-    const line = nearestAssignment(drawn, at, radius);
+    const line = nearestAssignment(shown, at, radius);
     if (line) {
       // Whole, as Delete does — and a stunt's two halves go together, because
       // rubbing out one of them would leave a man looping behind nobody.
@@ -2409,6 +2446,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     setPending(null);
     setTool('routes');
     setShowDefense(unit === 'defense');
+    // A new defensive play starts with a look across from it, and this says it
+    // goes back to where a new play starts.
+    setHideOffense(false);
     closeDrawerAfter();
   }
 
@@ -2478,11 +2518,17 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               selected={sel?.kind === 'player' && sel.id === z.playerId}
             />
           ))}
+          {/*
+            * The two washes go with the man they hang off. A focus square is an
+            * offset from a player and the cone's apex is the quarterback
+            * himself, so either one left up over a hidden offense would be a
+            * patch of light coming off nobody.
+            */}
           {focuses.map((f) => {
-            const man = byId(f.playerId);
+            const man = visible.find((p) => p.id === f.playerId) ?? null;
             return man ? <FocusSquare key={`focus${f.playerId}`} player={man} focus={f} /> : null;
           })}
-          {vision && qb && <VisionCone qb={qb} vision={vision} />}
+          {vision && qb && !hideOffense && <VisionCone qb={qb} vision={vision} />}
 
           {annotations.map((path, i) => (
             <path
@@ -2497,7 +2543,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
             />
           ))}
 
-          {drawn.map((a) => (
+          {shown.map((a) => (
             <AssignmentPath
               key={a.id}
               assignment={a}
@@ -2894,11 +2940,21 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               {/* What it is set against is a fact about the play; the line
                   telling you to tap a defender was an instruction, and it is
                   gone with the rest of them. */}
-              {unit === 'defense' && scout && (
-                <p className="tool-note">
-                  Set against {scout.name || scout.suggestedName || 'a play'}.
-                </p>
-              )}
+              {unit === 'defense' &&
+                (hideOffense ? (
+                  /* Said plainly, because it is the one state where the board
+                     is not the whole truth: the look is still on the play and
+                     still lettering the gaps, it is only not being drawn. */
+                  <p className="tool-note">
+                    No offense shown. It stays off the printed sheet too.
+                  </p>
+                ) : (
+                  scout && (
+                    <p className="tool-note">
+                      Set against {scout.name || scout.suggestedName || 'a play'}.
+                    </p>
+                  )
+                ))}
             </section>
 
             <section className="tool-group">
@@ -2930,6 +2986,37 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                 {unit === 'offense' && (
                   <button aria-pressed={showDefense} onClick={handleDefense}>
                     {defenseExists ? 'Defense' : '+ Defense'}
+                  </button>
+                )}
+                {/*
+                  * The mirror of it, on the other side of the ball. Pressed is
+                  * shown, exactly as Defense reads, so the two toggles behave
+                  * the same way round — and unlike the other three in this row,
+                  * this one is saved with the play, because a defensive card
+                  * drawn against nobody has to print that way too.
+                  */}
+                {unit === 'defense' && (
+                  <button
+                    aria-pressed={!hideOffense}
+                    /*
+                     * Not pushed onto the undo stack. The snapshot is the drawn
+                     * work — players, lines, washes — and this changes none of
+                     * it; a step that restored an identical board would be a
+                     * Step back that visibly does nothing. Tapping it again is
+                     * the undo, as it is for the three toggles beside it.
+                     *
+                     * The selection and any half-finished pair go, though:
+                     * both can be pointing at a man who is about to leave the
+                     * board, and an inspector open over nobody is a panel the
+                     * coach cannot dismiss by tapping the man it belongs to.
+                     */
+                    onClick={() => {
+                      setHideOffense((v) => !v);
+                      setSel(null);
+                      setPending(null);
+                    }}
+                  >
+                    Offense
                   </button>
                 )}
               </div>
