@@ -4,11 +4,12 @@ import { refreshPaths } from '../domain/regenerate';
 import {
   UNFILED_SECTION,
   drawnSides,
+  playSurface,
   quarterback,
   type Play,
   type Section,
 } from '../domain/types';
-import { useSettings } from '../store/settings';
+import { useSettings, boardVars } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
 import { PlayerShape } from '../render/PlayerShape';
@@ -70,7 +71,14 @@ export function PlayCard({
   return (
     <div className="play-card">
       <button className="thumb" onClick={() => onOpen(play.id)} aria-label={`Open ${title}`}>
-        <svg viewBox={VIEW_BOX} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        {/* Whichever surface the board is set to, so a card looks like the play
+            it opens. The properties inherit to everything drawn below. */}
+        <svg
+          viewBox={VIEW_BOX}
+          preserveAspectRatio="xMidYMid meet"
+          aria-hidden="true"
+          style={boardVars(playSurface(play, settings.fieldSurface))}
+        >
           <Field holes={holes} showHoles={false} />
           {/* Under the play, exactly as on the board. */}
           {(play.zones ?? []).map((z) => (
@@ -96,7 +104,7 @@ export function PlayCard({
               key={`ann${i}`}
               d={toPathD(path)}
               fill="none"
-              stroke="var(--chalk)"
+              stroke="var(--board-chalk)"
               strokeWidth={0.16}
               strokeLinecap="round"
               opacity={0.7}
@@ -130,7 +138,7 @@ export function PlayCard({
         <button className="card-name" onClick={() => onOpen(play.id)}>
           <strong>{title}</strong>
           <span className="card-sub">
-            {/* Which side of the ball, where the name is read. Defence only: an
+            {/* Which side of the ball, where the name is read. Defense only: an
                 unmarked play is an offensive one, which is what every play in
                 this book was before there was anything else to be. */}
             {play.unit === 'defense' && <em className="unit-tag">DEF</em>}

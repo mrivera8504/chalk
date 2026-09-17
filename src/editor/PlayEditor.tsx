@@ -23,7 +23,9 @@ import {
   drawnSides,
   isBlockKind,
   isLinkKind,
+  playSurface,
   type Assignment,
+  type FieldSurface,
   type Formation,
   type PathPoint,
   quarterback,
@@ -103,7 +105,7 @@ import { Drawer } from './Drawer';
 import { SettingsPanel } from './SettingsPanel';
 import { NotesPanel } from './NotesPanel';
 import { eraseAt } from '../domain/erase';
-import { useSettings, getSettings } from '../store/settings';
+import { useSettings, getSettings, boardVars } from '../store/settings';
 import { DefensePanel } from './DefensePanel';
 import { FormationPicker } from './FormationPicker';
 import { RoutePicker } from './RoutePicker';
@@ -215,7 +217,7 @@ const inkId = () => `k${Date.now().toString(36)}${(inkCounter++).toString(36)}`;
 function initialPlayers(unit: Side = 'offense'): PlayerSlot[] {
   const settings = getSettings();
   // A defensive play starts as a front with a look to line up against: gaps are
-  // computed from whoever is on the offensive line, so a defence with nobody
+  // computed from whoever is on the offensive line, so a defense with nobody
   // across from it has no gaps, no blitz aiming points and nothing to cover.
   return unit === 'defense'
     ? applyOnLine([...foundationOffense(), ...foundationDefense()], settings)
@@ -311,6 +313,17 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   const [showDefense, setShowDefense] = useState(
     () => drawnSides(play, getSettings().showDefense).defense,
   );
+  /**
+   * What this play is drawn on, when it has been set by hand.
+   *
+   * Undefined is the normal state and means "follow Settings", which is why
+   * this holds the override rather than the resolved answer: storing the answer
+   * would freeze every play the coach so much as opened, and then changing the
+   * setting would redraw nothing. See `playSurface`.
+   */
+  const [surface, setSurface] = useState<FieldSurface | undefined>(() => play.surface);
+  /** What the board actually is right now: this play's answer, or Settings'. */
+  const boardSurface = playSurface({ ...play, surface }, settings.fieldSurface);
   /** The gap letters over the line, the defense's half of the hole map. */
   const [showGaps, setShowGaps] = useState(false);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -384,7 +397,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    */
   const [zoom, setZoom] = useState(1);
   /**
-   * Where the window is looking, in yards, as an offset from the default centre.
+   * Where the window is looking, in yards, as an offset from the default center.
    *
    * A view control and not a fact about the play: it is never saved, never
    * exported and never undone. Zoom alone was not enough once the route panel
@@ -458,7 +471,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   const viewBox = useMemo(() => {
     const w = VIEW.halfWidth * 2;
     const h = VIEW.downfield + VIEW.behind;
-    // Centre of the default box: the middle of the field, a little downfield.
+    // Center of the default box: the middle of the field, a little downfield.
     const cx = pan.x;
     const cy = (-VIEW.downfield + VIEW.behind) / 2 + pan.y;
     const zw = w / zoom;
@@ -664,6 +677,13 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
        * defensive play never stores one: the front is the play.
        */
       hideDefense: unit === 'defense' ? undefined : !showDefense,
+      /*
+       * Only when the coach has set this play by hand — undefined is not an
+       * absence to be filled in, it is "follow Settings", and writing an answer
+       * here on every save would quietly cut every play in the book loose from
+       * the setting the first time it was opened.
+       */
+      surface,
       notes,
       coachingPoint,
       tags,
@@ -683,6 +703,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     scoutPlayId,
     hideOffense,
     showDefense,
+    surface,
     notes,
     coachingPoint,
     tags,
@@ -1083,7 +1104,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   /**
    * The nearest man he could be covering, for the one-tap Man button.
    *
-   * Eligible receivers only, computed from the board: covering the centre is
+   * Eligible receivers only, computed from the board: covering the center is
    * not a thing anybody does, and offering it would make the one-tap version of
    * this tool wrong more often than right.
    */
@@ -1654,7 +1675,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       : null;
 
     /*
-     * Contact that ended without travelling was a tap, so lift the player and
+     * Contact that ended without traveling was a tap, so lift the player and
      * let him follow the pen. Holding contact and dragging still works and ends
      * here as it always did, which is what a finger does; this path is for a
      * pen that cannot hold contact at all.
@@ -1988,13 +2009,13 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
      * him. Measured on the device: five taps in a row 0.22 to 0.67 yards from a
      * guard, every one inside his mark, all selected the block line instead,
      * which is what "the pen will not select unless I press hard" turned out to
-     * be. Pressing hard simply landed nearer his exact centre than the line.
+     * be. Pressing hard simply landed nearer his exact center than the line.
      */
     /*
      * Routes mode picks lines too, but it never selects one.
      *
      * It used to be given nothing, so a tap on a receiver's own route landed on
-     * open grass and cleared him — and his colour swatches with him. The line
+     * open grass and cleared him — and his color swatches with him. The line
      * resolves to the man who runs it instead, which opens the picker the
      * swatches are already in. So tapping a route is another way of tapping its
      * player, and there is still no line inspector over the board in Routes.
@@ -2192,7 +2213,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     for (const z of zones) {
       if (!insideZone(z, at)) continue;
       // Grab it by its middle, so the box keeps its position under the pen
-      // instead of jumping its centre to wherever the tap landed.
+      // instead of jumping its center to wherever the tap landed.
       return { kind: 'zone', id: z.playerId, dx: z.x - at.x, dy: z.y - at.y, ...base };
     }
 
@@ -2420,6 +2441,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
        */
       hideOffense: hideOffense || undefined,
       hideDefense: unit === 'defense' ? undefined : !showDefense,
+      /* Likewise from the board, so a sheet printed straight after the toggle
+         is the board the coach is looking at and not the one before it. */
+      surface,
     };
   }
 
@@ -2444,7 +2468,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
   /**
    * Back to an empty play. It had no confirmation at all, sitting one button
-   * along from Step back in the same grey — now it wears the danger colour and
+   * along from Step back in the same gray — now it wears the danger color and
    * asks, because it throws away everything drawn since the play was made.
    */
   async function reset() {
@@ -2505,6 +2529,10 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         */}
       <div
         className="stage"
+        /* Grass or white paper, for the field and everything drawn on it. The
+           properties inherit, so the svg below and the ink canvas beside it
+           both take them; the panels floating over the board do not. */
+        style={boardVars(boardSurface)}
         ref={stageRef}
         onPointerDown={handleStageDown}
         onPointerMove={handleMove}
@@ -2556,7 +2584,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               key={`ann${i}`}
               d={toPathD(path)}
               fill="none"
-              stroke="var(--chalk)"
+              stroke="var(--board-chalk)"
               strokeWidth={path[0]?.w ?? 0.14}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -2597,9 +2625,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               cx={h.x}
               cy={h.y}
               r={0.42}
-              fill="var(--chalk)"
+              fill="var(--board-chalk)"
               fillOpacity={carrying === h.id ? 0.7 : 0.22}
-              stroke="var(--chalk)"
+              stroke="var(--board-chalk)"
               strokeWidth={0.09}
               pointerEvents="none"
             />
@@ -2625,7 +2653,17 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           </g>
         </svg>
 
-        <LiveInkCanvas ref={ink} />
+        {/*
+          * Keyed on the surface, so changing it remounts this.
+          *
+          * The canvas takes no custom properties — it resolves `--ink-route` to
+          * a literal once, on mount — so a board switched from grass to white
+          * would otherwise go on painting the live stroke in the pale blue that
+          * has just become invisible. It holds nothing but an in-progress
+          * stroke, and nobody changes this setting mid-stroke: the control is
+          * two panels deep in a drawer.
+          */}
+        <LiveInkCanvas key={boardSurface} ref={ink} />
 
       {selectedBlock && (
         <div
@@ -2659,9 +2697,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           </div>
 
           {/*
-            * Colour is per line, not per player, so a receiver running a route
+            * Color is per line, not per player, so a receiver running a route
             * and carrying the ball on a reverse can read as two different
-            * things. Auto colouring is per receiver, which covers the common
+            * things. Auto coloring is per receiver, which covers the common
             * case; this row is for the one line that needs to stand out.
             */}
           <div className="row swatches">
@@ -2900,7 +2938,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
             {/*
               * Grouped by what each button does to the play rather than listed
-              * flat. Sixteen unlabelled pills all looked equally important and
+              * flat. Sixteen unlabeled pills all looked equally important and
               * none of them said what they were for.
               */}
             <section className="tool-group">
@@ -3056,8 +3094,34 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                 <button disabled={exporting} onClick={() => void exportPlay()}>
                   Save image
                 </button>
+                {/*
+                  * What this one play is drawn on.
+                  *
+                  * Pressed means white, like every other toggle in this drawer,
+                  * and it says what the board would become rather than what it
+                  * is. Tapping it is what cuts this play loose from Settings:
+                  * until then it follows the book, and the coach who wants the
+                  * whole book white has a better place to say so.
+                  */}
+                <button
+                  aria-pressed={boardSurface === 'white'}
+                  onClick={() => setSurface(boardSurface === 'white' ? 'grass' : 'white')}
+                >
+                  {boardSurface === 'white' ? 'White field' : 'Grass field'}
+                </button>
               </div>
-              {saved && Date.now() - saved < 4000 && (
+              {surface && (
+                <p className="tool-note">
+                  This play keeps its own field, whatever Settings says.{' '}
+                  <button className="quiet" onClick={() => setSurface(undefined)}>
+                    Follow the setting
+                  </button>
+                </p>
+              )}
+              {/* `saved > 0`, not `saved`: it starts at 0, and React renders a
+                  bare falsy number rather than skipping it — which left a stray
+                  "0" in the drawer until the first save of a session. */}
+              {saved > 0 && Date.now() - saved < 4000 && (
                 <p className="tool-note">Saved to the cloud.</p>
               )}
             </section>
@@ -3065,7 +3129,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
             {/*
               * The app, not the play. Settings sat in the group above, between
               * Notes and Print sheet, which said it was something about this
-              * play — it is the colours, the pen and the league rules, and it
+              * play — it is the colors, the pen and the league rules, and it
               * is the same on every play in the book.
               */}
             <section className="tool-group">
@@ -3076,9 +3140,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
             </section>
 
             {/*
-              * On its own at the bottom and wearing the one colour that means
+              * On its own at the bottom and wearing the one color that means
               * "this throws work away". It used to sit in the Undo group, in
-              * the same grey, one button along from Step back.
+              * the same gray, one button along from Step back.
               */}
             <section className="tool-group">
               <div className="tools full">

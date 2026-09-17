@@ -1,13 +1,14 @@
 import { useSyncExternalStore } from 'react';
-import { DEFAULT_SETTINGS, type Settings } from '../domain/types';
+import { DEFAULT_SETTINGS, type FieldSurface, type Settings } from '../domain/types';
 import { DEFAULT_ROUTE_DEPTHS, setRouteDepths, type RouteDepths } from '../domain/presets/routes';
+import { paperPalette } from '../ui/surface';
 
 /**
  * Everything adjustable, in one place.
  *
  * Extends the domain Settings rather than sitting beside them, because the
  * league rules (how many a side, how many on the line, which way the even holes
- * run) are settings in exactly the same sense as the colours are — they were
+ * run) are settings in exactly the same sense as the colors are — they were
  * simply frozen as a constant until there was a screen to change them on.
  */
 export interface AppSettings extends Settings {
@@ -20,6 +21,16 @@ export interface AppSettings extends Settings {
    * drawer should not be under it, so this is handedness, not decoration.
    */
   drawerSide: 'left' | 'right';
+  /**
+   * What the board is drawn on, for every play that has not been set by hand.
+   *
+   * Grass is the dark turf the app shipped with; white is the printed sheet,
+   * the same palette a call sheet comes out in — so a coach working under a gym
+   * light, or one who wants the board to look like what will be in their hand
+   * on Friday, gets exactly that and not an approximation of it. A single play
+   * can differ; see `Play.surface` and `playSurface`.
+   */
+  fieldSurface: FieldSurface;
   /** How near the line a mark clicks flush onto it. Zero turns the magnet off. */
   losMagnetYards: number;
   /** The grid everything else snaps to. */
@@ -62,6 +73,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   carryColor: '#ffb37a',
   blockColor: '#f2dfa0',
   drawerSide: 'right',
+  fieldSurface: 'grass',
   losMagnetYards: 0.5,
   snapStepYards: 0.25,
   showHoles: true,
@@ -102,7 +114,7 @@ let current = load();
 const listeners = new Set<() => void>();
 
 /**
- * Push the colours onto the document root.
+ * Push the colors onto the document root.
  *
  * The renderers ask for `var(--route-2)`, never a literal, so overriding the
  * token here reaches the board, the playbook thumbnails and the exporter at
@@ -114,6 +126,31 @@ function applyColors(s: AppSettings): void {
   s.routeColors.forEach((c, i) => root.style.setProperty(`--route-${i}`, c));
   root.style.setProperty('--ink-carry', s.carryColor);
   root.style.setProperty('--ink-block', s.blockColor);
+}
+
+/**
+ * The white board's palette, as inline custom properties for the board element.
+ *
+ * Scoped to the board rather than written onto the root like the colors above,
+ * and that is not a detail. Six of these tokens are worn by the app's own
+ * chrome as well as by the board — the star on the carrier button, the zone
+ * toggle, the DEF chip, every focus ring — so a white palette on the root would
+ * darken the panels' own controls to near-invisible on a dark panel. Custom
+ * properties inherit, so setting them on `.stage` and on a card's thumbnail
+ * reaches the field, the marks and the live ink canvas, and nothing else.
+ *
+ * Computed on first read rather than here, because `paperPalette` derives the
+ * inks from what the stylesheet computes and this module is evaluated before
+ * `ui/tokens.css` is applied. Cached so the object keeps its identity across
+ * renders, and dropped whenever a setting changes — a new route color has to
+ * reach the white board exactly as it reaches the green one.
+ */
+let boardCache: Record<string, string> | null = null;
+
+export function boardVars(surface: FieldSurface): Record<string, string> | undefined {
+  if (surface !== 'white') return undefined;
+  if (!boardCache) boardCache = paperPalette();
+  return boardCache;
 }
 
 applyColors(current);
@@ -133,6 +170,8 @@ export function setSettings(patch: Partial<AppSettings>): void {
   }
   applyColors(current);
   setRouteDepths(current.routeDepths);
+  // Rebuilt on the next read, off the colors applyColors has just written.
+  boardCache = null;
   listeners.forEach((l) => l());
 }
 

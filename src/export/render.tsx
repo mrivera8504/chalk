@@ -3,7 +3,7 @@ import { autoRouteColor } from '../domain/colors';
 import { computeGaps } from '../domain/gaps';
 import { computeHoles } from '../domain/holes';
 import { refreshPaths } from '../domain/regenerate';
-import { drawnSides, quarterback, type Play } from '../domain/types';
+import { drawnSides, playSurface, quarterback, type Play } from '../domain/types';
 import { getSettings } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
@@ -14,7 +14,7 @@ import { VisionCone } from '../render/VisionCone';
 import { toPathD } from '../render/geometry';
 import { BOARD_ASPECT } from './paper';
 import { DEFAULT_VIEW, viewBox, type View } from './view';
-import { inkForPaper } from './printInk';
+import { paperCss } from '../ui/surface';
 
 /**
  * The tokens the board renderers actually reference.
@@ -49,7 +49,9 @@ const TOKENS = [
   '--ink-option',
   '--ink-blitz',
   '--ink-cover',
-  '--chalk',
+  /* The board's own chalk — annotations and route handles. Not the UI's
+     `--chalk`, which is the color of text in the panels and never drawn. */
+  '--board-chalk',
   '--select',
   '--hover',
   '--locked',
@@ -91,62 +93,12 @@ export interface SheetOptions {
   view?: View;
 }
 
-/**
- * The tokens that carry the coach's own palette.
- *
- * These are the ones Settings can change and the ones a play is actually drawn
- * in, so on paper they are *derived* from whatever the coach chose rather than
- * replaced — see `printInk.ts` for how, and for the bug that came of replacing
- * them. Everything else in `TOKENS` is structure, not palette: turf, yard
- * lines, the discs the players stand in. Those are set by hand below.
+/*
+ * The paper palette — the structural half set by hand, the ink half derived
+ * from whatever the coach chose — lives in `ui/surface.ts`, because the white
+ * board on screen is drawn with the very same palette. See the note there on
+ * why there is one of it and not two.
  */
-const INK_TOKENS = [
-  '--route-0',
-  '--route-1',
-  '--route-2',
-  '--route-3',
-  '--route-4',
-  '--route-5',
-  '--ink-block',
-  '--ink-carry',
-  '--ink-motion',
-  '--ink-option',
-  '--ink-blitz',
-  '--ink-cover',
-  '--ball',
-  '--zone',
-];
-
-/**
- * Print turf.
- *
- * A call sheet gets photocopied, rained on and read at arm's length on a
- * sideline, and the dark board that works on a screen at night turns into a
- * solid block of toner. These override the screen tokens for anything headed
- * to paper: white field, black marks, grey yard lines.
- */
-const PAPER_STRUCTURE =
-  '--turf:#ffffff;--turf-line:rgba(0,0,0,0.16);--los:rgba(0,0,0,0.55);' +
-  '--hole:rgba(0,0,0,0.45);--off-fill:#ffffff;--off-line:#000000;' +
-  '--off-text:#000000;--def-fill:rgba(255,255,255,0.9);--def-line:#000000;' +
-  '--def-text:#000000;--chalk:#000000;--ball-line:#ffffff;--jersey:#334155;' +
-  // The highlights go grey on paper. They are laid under the play at a tenth
-  // of their alpha, and a yellow wash that reads on dark turf prints as either
-  // nothing at all or a stain across the routes drawn over it.
-  '--vision:#1f2937;--focus:#1f2937';
-
-/**
- * The coach's palette, as ink for white paper.
- *
- * Read off the live root every time rather than computed once, because the
- * swatches in Settings write straight onto it: a print palette cached at module
- * load would print the colours the app shipped with instead of the ones on the
- * board.
- */
-function paperInk(): string {
-  const cs = getComputedStyle(document.documentElement);
-  return INK_TOKENS.map((t) => `${t}:${inkForPaper(cs.getPropertyValue(t).trim())}`).join(';');
-}
 
 /**
  * One play as a standalone SVG document.
@@ -218,7 +170,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
           key={`ann${i}`}
           d={toPathD(path)}
           fill="none"
-          stroke="var(--chalk)"
+          stroke="var(--board-chalk)"
           strokeWidth={path[0]?.w ?? 0.14}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -241,9 +193,16 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
     </>,
   );
 
-  const style = opts.forPrint
-    ? `${tokenBlock()}:root{${PAPER_STRUCTURE};${paperInk()}}`
-    : tokenBlock();
+  /*
+   * Paper, or a board this play is drawn white on: the same palette either way,
+   * so a PNG shared out of the app matches the board it came off and a sheet is
+   * unchanged from what was confirmed on a printer. Read off the play through
+   * the same rule the board and the card use, never off the sheet's options —
+   * a sheet that asked the question a second time is how the printer and the
+   * board came to disagree about the front.
+   */
+  const onPaper = opts.forPrint || playSurface(play, getSettings().fieldSurface) === 'white';
+  const style = onPaper ? `${tokenBlock()}:root{${paperCss()}}` : tokenBlock();
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox(view)}" ` +

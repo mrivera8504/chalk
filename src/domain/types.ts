@@ -78,9 +78,9 @@ export type AssignmentKind =
   | 'stay' // nothing drawn
   // The defensive half. Kept in the one union rather than given their own,
   // because everything that handles an assignment — the eraser, delete, the
-  // colour swatches, the selection halo, the exporter — then handles these
+  // color swatches, the selection halo, the exporter — then handles these
   // without being taught anything.
-  | 'blitz' // arrow into a gap, the rush colour
+  | 'blitz' // arrow into a gap, the rush color
   | 'contain' // arrow that turns out at the edge and squeezes back
   | 'drop' // arrow to the spot he covers from, dashed
   | 'cover' // defender to the man he has, regenerated from both
@@ -137,6 +137,32 @@ export interface Assignment {
  */
 export function quarterback(players: PlayerSlot[]): PlayerSlot | null {
   return players.find((p) => p.side === 'offense' && p.backNumber === 1) ?? null;
+}
+
+/**
+ * What a play is drawn on: dark turf, or the white of a printed sheet.
+ *
+ * In the domain rather than beside the palette that implements it, because it
+ * is a property of a play now and not only a preference — see `Play.surface`.
+ */
+export type FieldSurface = 'grass' | 'white';
+
+/**
+ * The surface this play is actually drawn on.
+ *
+ * The same shape as `drawnSides` below and for the same reason: four things
+ * render a play, and one rule in one place is what stops them disagreeing.
+ *
+ * `deviceDefault` is the Settings answer, and it speaks for every play that has
+ * not been told otherwise — including plays the coach has opened, drawn on and
+ * saved. That is the one way this differs from `hideDefense`, which writes
+ * itself down on every save. Which men are on the board is a decision about the
+ * play, so a play that has been worked on has answered it; what the grass looks
+ * like is not. A coach who changes the setting means every play in the book,
+ * bar the ones they have deliberately set by hand.
+ */
+export function playSurface(play: Play, deviceDefault: FieldSurface): FieldSurface {
+  return play.surface ?? deviceDefault;
 }
 
 /**
@@ -216,7 +242,7 @@ export interface Focus {
  * grows as it is aimed, which is right for "this receiver works this patch" and
  * wrong for a coverage: a deep third is a wide shallow box sitting where it
  * sits, a flat is beside its man, a hook is behind him. Aiming and sizing have
- * to come apart, so the zone keeps its own centre and its own size in yards on
+ * to come apart, so the zone keeps its own center and its own size in yards on
  * the field, and a thin leader line back to the defender says whose it is.
  *
  * Stored on the field and not as an offset for the same reason: dragging the
@@ -310,7 +336,7 @@ export interface Play {
    * Take the look off the board, on a defensive play drawn against nobody.
    *
    * A flag and not a delete, because the offense is what the front is *for*: the
-   * A gap is the space between their centre and their guard, so a blitz aimed
+   * A gap is the space between their center and their guard, so a blitz aimed
    * through it has nothing to aim at once those two men are gone. They stay
    * where they are, keeping the gap map and every cover rope honest, and simply
    * are not drawn — here, and on paper, which is the whole point. A defensive
@@ -341,6 +367,20 @@ export interface Play {
    * is the play.
    */
   hideDefense?: boolean;
+  /**
+   * What this one play is drawn on, when it is not drawn on whatever the device
+   * is set to.
+   *
+   * Absent is the normal state and means "follow Settings" — so a coach who
+   * switches the book to white switches this play with it. It is written down
+   * only when the coach sets this play by hand, and from then on the play holds
+   * its own answer on every device it syncs to, which is the point: a card that
+   * is white because it gets printed and handed to a quarterback should be
+   * white on the tablet it was drawn on and the phone it is opened on.
+   *
+   * Read through `playSurface`, which is the only place it is interpreted.
+   */
+  surface?: FieldSurface;
   players: PlayerSlot[];
   assignments: Assignment[];
   /**

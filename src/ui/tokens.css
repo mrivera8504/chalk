@@ -6,6 +6,15 @@
   --chalk: #e8ede9;
   --dim: #8b9aa3;
 
+  /*
+   * Chalk *on the board* — freehand annotations and the handles on a selected
+   * route. Its own token, not `--chalk`, because that one is the color of text
+   * in the panels: the two were the same value until the field could be white,
+   * at which point turning the board's chalk black turned every label in the
+   * app black on a dark panel too. See ui/surface.ts.
+   */
+  --board-chalk: #e8ede9;
+
   --turf: #1e3a2b;
   --turf-line: rgba(232, 237, 233, 0.22);
   --los: rgba(232, 237, 233, 0.62);
@@ -37,7 +46,7 @@
 
   /*
    * One per receiver. Tokens rather than literals so the export can swap the
-   * whole set for ink that survives white paper. A colour picked by hand is
+   * whole set for ink that survives white paper. A color picked by hand is
    * stored as one of these names, so it adapts too — and on paper it is these
    * very values that are darkened, hue intact, rather than a fixed print
    * palette standing in for them; see export/printInk.ts.
@@ -322,7 +331,7 @@ body,
 
 /*
  * Settings and Notes are pages, not palettes: long forms with number fields,
- * colour rows and paragraphs of explanation, and nobody reads them while
+ * color rows and paragraphs of explanation, and nobody reads them while
  * drawing. They get the room, and the tool panel stays narrow.
  */
 .drawer-panel.wide {
@@ -486,7 +495,7 @@ body,
 }
 
 /*
- * One labelled group per thing a coach is trying to do. A flat wall of pills
+ * One labeled group per thing a coach is trying to do. A flat wall of pills
  * gave every button the same weight and told you what none of them were for.
  */
 .tool-group {
@@ -610,8 +619,8 @@ body,
 }
 
 /*
- * The star, in the colour it takes on the board, so the button and the mark it
- * puts the star on read as the same thing. It keeps that colour when pressed
+ * The star, in the color it takes on the board, so the button and the mark it
+ * puts the star on read as the same thing. It keeps that color when pressed
  * rather than inverting to chalk like every other toggle: a white block here
  * would say nothing about which man is carrying.
  */
@@ -626,7 +635,7 @@ body,
 }
 
 /*
- * And the same idea for the zone, in the zone's own colour. It borrowed the
+ * And the same idea for the zone, in the zone's own color. It borrowed the
  * star's class to get the shape and came out the ball yellow, which said the
  * defender was carrying something.
  */
@@ -644,7 +653,7 @@ body,
  * The heading sits beside its row, not above it.
  *
  * Six groups, each one spending a whole line on a nine-character word in 10px
- * grey: that was 140-odd pixels of a panel that only gets a third of the board.
+ * gray: that was 140-odd pixels of a panel that only gets a third of the board.
  * Put the label in a column down the left and the rows close up behind it —
  * nothing moves horizontally that was not already wrapping, because a row of
  * pills wraps at the same count either way.
@@ -858,7 +867,7 @@ button.primary {
 /*
  * Anything that throws work away. Quiet until it is about to be used, because a
  * red wall trains you to ignore red — but never the same as the button beside
- * it, which is what put Start over next to Step back in the same grey.
+ * it, which is what put Start over next to Step back in the same gray.
  */
 button.danger {
   color: var(--bad);
@@ -934,7 +943,7 @@ button:focus-visible {
   border: 2px solid transparent;
 }
 
-/* The ring is outside the colour, so the colour itself is never obscured. */
+/* The ring is outside the color, so the color itself is never obscured. */
 .inspector .swatch[aria-pressed='true'] {
   border-color: var(--chalk);
   outline: 1px solid var(--bg);
@@ -1266,7 +1275,7 @@ button:focus-visible {
 /*
  * Two rows with two jobs: find a play, or start one. It was one row of eight
  * identical pills — search, three filters, two new-play buttons, folders,
- * roster, export, account — wrapping onto two lines of grey, where the thing a
+ * roster, export, account — wrapping onto two lines of gray, where the thing a
  * coach opens the app to do looked exactly like the thing he does twice a year.
  */
 .book-tools {
@@ -1685,7 +1694,7 @@ button:focus-visible {
   color: var(--chalk);
 }
 
-/* The colour wells. Big enough that a pen tip is not the limiting factor. */
+/* The color wells. Big enough that a pen tip is not the limiting factor. */
 .swatch-edit {
   display: flex;
   flex-wrap: wrap;
@@ -1822,7 +1831,7 @@ button:focus-visible {
   font-size: 0.72em;
 }
 
-/* Centred, which is the whole point of the change: flush left, a row of three
+/* Centered, which is the whole point of the change: flush left, a row of three
    read as three plays shoved leftward rather than as a row. */
 .print-name {
   display: flex;

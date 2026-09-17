@@ -29,7 +29,7 @@ const GRIDS = [
   { v: 1, label: '1 yd' },
 ];
 
-/** A labelled row of mutually exclusive choices. Every setting here is one. */
+/** A labeled row of mutually exclusive choices. Every setting here is one. */
 function Choice<T extends string | number>({
   label,
   hint,
@@ -107,7 +107,7 @@ function Num({
  *
  * Grouped by what a change actually affects rather than by which module holds
  * the value: how the board behaves under the pen, what the lines look like,
- * and what counts as a legal formation. A coach looking for the colour of a
+ * and what counts as a legal formation. A coach looking for the color of a
  * corner route should not have to know it lives next to the hole numbering.
  */
 export function SettingsPanel({ settings, onClose }: Props) {
@@ -234,6 +234,27 @@ export function SettingsPanel({ settings, onClose }: Props) {
             Reset depths
           </button>
         </div>
+      </div>
+
+      <div className="picker-group">
+        <h3>The field</h3>
+        <p className="picker-note">
+          White is the same field a call sheet prints on — your own colors,
+          darkened just enough to read on white. Plays you share as pictures
+          come out the way the board looks. A single play can be set the other
+          way in the drawer, under This play, and then it keeps its own field
+          whatever this says.
+        </p>
+        <Choice
+          label="Drawn on"
+          hint="every play except the ones you set by hand"
+          value={s.fieldSurface}
+          options={[
+            { v: 'grass' as const, label: 'Grass' },
+            { v: 'white' as const, label: 'White' },
+          ]}
+          onPick={(v) => setSettings({ fieldSurface: v })}
+        />
       </div>
 
       <div className="picker-group">
