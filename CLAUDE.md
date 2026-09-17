@@ -796,6 +796,12 @@ alpha and a yellow wash prints as either nothing at all or a stain across the
 routes drawn over it. Verified in-browser that custom properties do resolve
 inside a rasterized SVG.
 
+**Confirmed on paper, 2026-09-17.** A sheet off a real printer was the one
+thing none of this could be checked against from here, and the whole ink
+derivation was screen-measured until then. It came out right. Treat the numbers
+in this section as load-bearing rather than provisional — if they are changed,
+print another sheet, because a screenshot will not tell you.
+
 **The ink is derived, not chosen — and why the yellow printed green.** There
 used to be a second hand-picked palette beside the structural one, a fixed hex
 per token. It had two faults. It ignored the swatches in Settings, so a coach's
@@ -921,8 +927,9 @@ plays on the same day are two different sheets and would otherwise collide. The
 `slug()` beside it is shared with the editor's Save image rather than copied,
 and caps the length, because a play named after the whole call was producing a
 paragraph with an extension on the end. Same-day repeats of the *same* sheet
-still collide and Chrome appends a number; a time would fix it and make every
-name uglier, so it has not been done.
+collide and Chrome appends a number, and that is **settled, not outstanding**: a
+timestamp would fix it and make every name uglier, and the coach was asked and
+said the numbers were fine. Do not add one.
 
 **The preview must draw each board as an `<img>`, never as inline SVG.** An
 exported board carries its own `<style>` block setting the print palette on
