@@ -48,7 +48,6 @@ export const DEFAULT_PRINT: PrintOptions = {
   nameSize: 'big',
   showNotes: true,
   showHoles: true,
-  showDefense: false,
   showGaps: false,
 };
 

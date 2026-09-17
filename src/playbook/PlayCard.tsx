@@ -1,7 +1,13 @@
 import { autoRouteColor } from '../domain/colors';
 import { computeHoles } from '../domain/holes';
 import { refreshPaths } from '../domain/regenerate';
-import { UNFILED_SECTION, quarterback, type Play, type Section } from '../domain/types';
+import {
+  UNFILED_SECTION,
+  drawnSides,
+  quarterback,
+  type Play,
+  type Section,
+} from '../domain/types';
 import { useSettings } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
@@ -40,14 +46,12 @@ export function PlayCard({
   const title = play.name || play.suggestedName || 'Untitled';
 
   /*
-   * A defensive play shows both sides: the front is the play, and without the
-   * look it is set against there is nothing for it to be lined up on. Unless
-   * the coach took the look off, which the card has to honour too — a thumbnail
-   * showing an offense the play no longer draws is the card lying about what
-   * opening it will give you. An offensive play still shows only its own side.
+   * The same rule the board and the sheet use, so a card cannot say one thing
+   * about a play and opening it say another.
    */
+  const sides = drawnSides(play, settings.showDefense);
   const shownPlayers = play.players.filter((p) =>
-    p.side === 'offense' ? !play.hideOffense : play.unit === 'defense',
+    p.side === 'defense' ? sides.defense : sides.offense,
   );
 
   /* Regenerated from everyone, then cut to the men on the board — a block and a
@@ -84,7 +88,7 @@ export function PlayCard({
               <FocusSquare key={`focus${f.playerId}`} player={man} focus={f} />
             ) : null;
           })}
-          {play.vision && qb && !play.hideOffense && (
+          {play.vision && qb && sides.offense && (
             <VisionCone qb={qb} vision={play.vision} />
           )}
           {play.annotations.map((path, i) => (

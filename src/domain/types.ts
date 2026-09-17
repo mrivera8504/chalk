@@ -139,6 +139,31 @@ export function quarterback(players: PlayerSlot[]): PlayerSlot | null {
   return players.find((p) => p.side === 'offense' && p.backNumber === 1) ?? null;
 }
 
+/**
+ * Which sides of the ball this play draws.
+ *
+ * One rule, in one place, because four things render a play — the board, the
+ * card, the sheet and the exported image — and each used to decide this for
+ * itself. They drifted: the printer asked its own question about the front and
+ * got its own answer, so a play could come out of the machine showing men the
+ * coach had taken off the board.
+ *
+ * `deviceDefault` is the Settings answer for what a freshly opened play shows,
+ * and it only ever speaks for a play that has not been told otherwise.
+ */
+export function drawnSides(
+  play: Play,
+  deviceDefault: boolean,
+): { offense: boolean; defense: boolean } {
+  const defensive = (play.unit ?? 'offense') === 'defense';
+  return {
+    // The offense is the play on an offensive play, so only a defense can drop it.
+    offense: defensive ? !play.hideOffense : true,
+    // And the front is the play on a defensive one.
+    defense: defensive ? true : (play.hideDefense !== undefined ? !play.hideDefense : deviceDefault),
+  };
+}
+
 /** Kinds the block tool produces: all defined by a blocker and a defender. */
 export const BLOCK_KINDS = ['block', 'pull', 'combo'] as const;
 export type BlockKind = (typeof BLOCK_KINDS)[number];
@@ -292,14 +317,30 @@ export interface Play {
    * card that hid the look on screen and then printed it would be a card the
    * coach has to check every time.
    *
-   * Lives on the play rather than beside `showDefense`, which is a view toggle
-   * for the coach's session. Whether this defense is drawn against a look is a
-   * fact about the play, and a sheet printed from the folder list months later
-   * has to know it without anybody remembering to set it again.
+   * Lives on the play and not on the session, because a sheet printed from the
+   * folder list months later has to know it without anybody remembering to set
+   * it again. Its twin below says the same thing about the front; read both
+   * through `drawnSides`, which is the only place either is interpreted.
    *
    * Absent means shown, so nothing already saved has to be rewritten.
    */
   hideOffense?: boolean;
+  /**
+   * The same decision about the other side of the ball, on an offensive play.
+   *
+   * A front only ever gets onto an offensive play because the coach put it
+   * there to block against, so whether it is drawn is a fact about the play in
+   * exactly the way the look is. It used to be asked again on the way to the
+   * printer, which meant the board and the sheet could disagree about a play
+   * the coach had already made their mind up about.
+   *
+   * Absent means "whatever a freshly opened play shows", the device setting —
+   * so nothing saved before this existed changes what it prints. Once the
+   * coach touches the toggle the play carries its own answer and the setting
+   * stops speaking for it. A defensive play ignores this entirely: the front
+   * is the play.
+   */
+  hideDefense?: boolean;
   players: PlayerSlot[];
   assignments: Assignment[];
   /**

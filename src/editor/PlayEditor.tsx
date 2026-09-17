@@ -20,6 +20,7 @@ import { applyCoverage, type CoveragePreset } from '../domain/presets/coverages'
 import { makeCover, makeStunt, stuntPartner } from '../domain/presets/links';
 import {
   PLAYER_R,
+  drawnSides,
   isBlockKind,
   isLinkKind,
   type Assignment,
@@ -308,7 +309,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * of the ball, hiding the defense would hide the play.
    */
   const [showDefense, setShowDefense] = useState(
-    () => play.unit === 'defense' || getSettings().showDefense,
+    () => drawnSides(play, getSettings().showDefense).defense,
   );
   /** The gap letters over the line, the defense's half of the hole map. */
   const [showGaps, setShowGaps] = useState(false);
@@ -655,6 +656,14 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       defenseFormationId,
       scoutPlayId,
       hideOffense: hideOffense || undefined,
+      /*
+       * Written down as an explicit yes or no rather than only when hidden.
+       * The absent case means "ask the device setting", and a play the coach
+       * has had open and set is a play that has answered for itself — leaving
+       * it absent would let a later change in Settings quietly redraw it. A
+       * defensive play never stores one: the front is the play.
+       */
+      hideDefense: unit === 'defense' ? undefined : !showDefense,
       notes,
       coachingPoint,
       tags,
@@ -673,6 +682,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     defenseFormationId,
     scoutPlayId,
     hideOffense,
+    showDefense,
     notes,
     coachingPoint,
     tags,
@@ -2375,7 +2385,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       // 2000px across is a little over 300 DPI at the width this prints.
       // What is on the board is what prints: if the gap letters are up while
       // the play is being drawn, the sheet that comes out has them too.
-      const bytes = await playToPng(current, 2000, { showHoles, showGaps, showDefense });
+      // Which sides are drawn rides on the play itself now, so it is not passed
+      // again here — `current` is already carrying the board's answer.
+      const bytes = await playToPng(current, 2000, { showHoles, showGaps });
       download(bytes, `${slug(playTitle(current), 'play')}-${stamp()}.png`, 'image/png');
     } finally {
       setExporting(false);
@@ -2399,6 +2411,15 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       assignments,
       annotations,
       ballCarrierId: ballCarrierId ?? undefined,
+      /*
+       * Which sides are drawn, taken from the board and not from the prop.
+       * The sheet and the exported image are rendered from this, and the prop
+       * only catches up with a toggle on the render after it — which is one
+       * render too late for a coach who hides the look and prints straight
+       * away.
+       */
+      hideOffense: hideOffense || undefined,
+      hideDefense: unit === 'defense' ? undefined : !showDefense,
     };
   }
 

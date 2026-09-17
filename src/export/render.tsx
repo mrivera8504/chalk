@@ -3,7 +3,7 @@ import { autoRouteColor } from '../domain/colors';
 import { computeGaps } from '../domain/gaps';
 import { computeHoles } from '../domain/holes';
 import { refreshPaths } from '../domain/regenerate';
-import { quarterback, type Play } from '../domain/types';
+import { drawnSides, quarterback, type Play } from '../domain/types';
 import { getSettings } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
@@ -70,8 +70,12 @@ function tokenBlock(): string {
 export interface SheetOptions {
   /** Hole numbers are for install; a call sheet reads better without them. */
   showHoles?: boolean;
-  /** The front. Off by default: most offensive plays are drawn without one. */
-  showDefense?: boolean;
+  /*
+   * There is deliberately no option here for either side of the ball. Which
+   * men are drawn is set on the board and stored on the play — see
+   * `drawnSides` — so a sheet renders the play the coach actually made rather
+   * than asking the question a second time and getting a different answer.
+   */
   /** The gap letters, the defensive half of the hole map. */
   showGaps?: boolean;
   /** Paper is white, so the turf goes pale and the marks go dark. */
@@ -163,18 +167,12 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
   const gaps = computeGaps(play.players);
   const qb = quarterback(play.players);
   /*
-   * A defensive play always draws the front, whatever the sheet was asked for:
-   * the front is the play. The look across from it is the coach's call, and the
-   * play carries the answer.
+   * Read off the play, never off the sheet's options: the coach settled this on
+   * the board, and a sheet printed months later from a folder list has no idea
+   * what was decided there unless the play says so.
    */
-  const players = play.players.filter((p) =>
-    p.side === 'defense'
-      ? opts.showDefense || play.unit === 'defense'
-      : // The look, on a defense drawn against nobody. Read off the play and
-        // never off the sheet's options: the coach took it off the board, and a
-        // sheet is printed from a folder list that has no idea it did.
-        !play.hideOffense,
-  );
+  const sides = drawnSides(play, getSettings().showDefense);
+  const players = play.players.filter((p) => (p.side === 'defense' ? sides.defense : sides.offense));
 
   /*
    * Regenerated from every player and only then filtered down to the men who
@@ -214,7 +212,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
       {focused.map(({ man, focus }) => (
         <FocusSquare key={`focus${man.id}`} player={man} focus={focus} />
       ))}
-      {play.vision && qb && !play.hideOffense && <VisionCone qb={qb} vision={play.vision} />}
+      {play.vision && qb && sides.offense && <VisionCone qb={qb} vision={play.vision} />}
       {play.annotations.map((path, i) => (
         <path
           key={`ann${i}`}
