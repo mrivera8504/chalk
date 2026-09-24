@@ -25,6 +25,17 @@ export const ROUTE_COLORS = [
 export const SWATCHES = [...ROUTE_COLORS, 'var(--chalk)'] as const;
 
 /**
+ * What a zone can be painted, which is the same palette without the chalk.
+ *
+ * A zone is a wash at a tenth of its alpha rather than a 3pt line, and the
+ * neutral chalk laid down that faintly is a shape nobody can see on turf and
+ * nothing at all on the white board. The six carry their own meaning anyway:
+ * this is for telling the deep men from the underneath ones, and six is more
+ * than a coverage has zones.
+ */
+export const ZONE_SWATCHES = ROUTE_COLORS;
+
+/**
  * The color a route takes when nobody has picked one by hand.
  *
  * Keyed to the player's place in the offense rather than to the assignment, so

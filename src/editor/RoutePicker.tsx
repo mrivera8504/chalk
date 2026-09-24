@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useScrollFade } from '../ui/useScrollFade';
+import { ZONE_SWATCHES } from '../domain/colors';
 import { byJersey, whoIs, type RosterEntry } from '../domain/roster';
 import { DEFENSE_PRESETS, type DefensePreset } from '../domain/presets/defense';
 import { ROUTES, type RoutePreset } from '../domain/presets/routes';
@@ -51,6 +52,10 @@ export interface DefenseTools {
   activeJob?: string;
   /** The zone concept he is already playing, for the same reason. */
   activeZone?: string;
+  /** The color his grass is painted. Undefined is the board's own zone blue. */
+  zoneColor?: string;
+  /** Null until he has a zone: there is nothing to paint before that. */
+  onZoneColor: ((color: string | undefined) => void) | null;
   /** He already has somebody, so Man up is the button that takes it off. */
   hasCover: boolean;
   /** Man up on the nearest receiver, without a trip through the Man tool. */
@@ -155,6 +160,53 @@ function Group<T extends { id: string; name: string }>({
               {r.name}
             </button>
           ),
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A row of colors and the Auto that takes the choice back off.
+ *
+ * One component for the route's line and the zone's wash, because they are the
+ * same decision made about two different things: a palette, the one in use
+ * drawn pressed, and a way back to whatever the app would have picked. Auto is
+ * there only once there is a hand-picked color to undo — a button that says it
+ * will restore what you are already looking at is a button that does nothing.
+ */
+function Swatches({
+  title,
+  swatches,
+  color,
+  onColor,
+}: {
+  title: string;
+  swatches: readonly string[];
+  color?: string;
+  onColor: (color: string | undefined) => void;
+}) {
+  return (
+    <div className="picker-group">
+      {/* Labeled like every other row in here. It was the one group with no
+          heading, which left a line of colored circles under the marks with
+          nothing saying what they would paint. */}
+      <h3>{title}</h3>
+      <div className="picker-row swatches">
+        {swatches.map((c) => (
+          <button
+            key={c}
+            className="swatch"
+            style={{ background: c }}
+            aria-label={`Color ${c}`}
+            aria-pressed={color === c}
+            onClick={() => onColor(c)}
+          />
+        ))}
+        {color !== undefined && (
+          <button className="quiet" onClick={() => onColor(undefined)}>
+            Auto
+          </button>
         )}
       </div>
     </div>
@@ -405,29 +457,7 @@ export function RoutePicker({
         * saying what he runs is one thought.
         */}
       {onColor && (
-        <div className="picker-group">
-          {/* Labeled like every other row in here. It was the one group with no
-              heading, which left a line of colored circles under the marks
-              with nothing saying what they would paint. */}
-          <h3>Line color</h3>
-          <div className="picker-row swatches">
-            {swatches.map((c) => (
-              <button
-                key={c}
-                className="swatch"
-                style={{ background: c }}
-                aria-label={`Color ${c}`}
-                aria-pressed={color === c}
-                onClick={() => onColor(c)}
-              />
-            ))}
-            {color !== undefined && (
-              <button className="quiet" onClick={() => onColor(undefined)}>
-                Auto
-              </button>
-            )}
-          </div>
-        </div>
+        <Swatches title="Line color" swatches={swatches} color={color} onColor={onColor} />
       )}
 
       {defense ? (
@@ -474,6 +504,20 @@ export function RoutePicker({
             activeId={defense.activeZone}
             onPick={(p) => defense.onZone(p as ZonePreset)}
           />
+          {/*
+            * Under the grass it paints, and only once he has some. Seven washes
+            * in one blue is a coverage a coach has to trace a leader line to
+            * read; painting the deep men apart from the underneath ones is the
+            * whole of what this row is for.
+            */}
+          {defense.onZoneColor && (
+            <Swatches
+              title="Zone color"
+              swatches={ZONE_SWATCHES}
+              color={defense.zoneColor}
+              onColor={defense.onZoneColor}
+            />
+          )}
         </>
       ) : (
         <>

@@ -17,6 +17,12 @@ export interface AppSettings extends Settings {
   carryColor: string;
   blockColor: string;
   /**
+   * The wash every coverage zone is drawn in, written onto the root as
+   * `--zone`. A single zone can be painted something else from the man's own
+   * picker; this is what the rest of them take.
+   */
+  zoneColor: string;
+  /**
    * Which edge the tool drawer lives on. A pen is held in one hand and the
    * drawer should not be under it, so this is handedness, not decoration.
    */
@@ -72,6 +78,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   routeColors: ['#7fd4ff', '#86e5a0', '#c4a7ff', '#ff9ecb', '#d6e86b', '#79e0d8'],
   carryColor: '#ffb37a',
   blockColor: '#f2dfa0',
+  zoneColor: '#8ab4ff',
   drawerSide: 'right',
   fieldSurface: 'grass',
   losMagnetYards: 0.5,
@@ -126,6 +133,7 @@ function applyColors(s: AppSettings): void {
   s.routeColors.forEach((c, i) => root.style.setProperty(`--route-${i}`, c));
   root.style.setProperty('--ink-carry', s.carryColor);
   root.style.setProperty('--ink-block', s.blockColor);
+  root.style.setProperty('--zone', s.zoneColor);
 }
 
 /**

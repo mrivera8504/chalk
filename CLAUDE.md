@@ -385,26 +385,56 @@ the centre and the right guard is the 2 hole and the A gap, and both are right.
 They draw on opposite sides of the LOS — numbers below, letters above — so each
 unit reads its own map off its own side and the two can be up at once.
 
-**A zone's corner grip is drawn, and set inside the corner.** It was invisible
-— the cone and the square are their own handles, so the zone borrowed that and
-gave its corner nothing to see — and on a preset deep zone it was unusable as
-well: a deep third is a third of the field, so its far corner lands exactly on
-the edge of the board, half the target off-screen and past the point a drag is
-allowed to reach. Every zone a coverage laid down could not, in practice, be
-resized. The grip is drawn on every zone, inset far enough to clear the edge,
-and the drag still works from the true corner so taking hold of it does not jog
-the box. `zone-size` is also the one drag allowed to reach the board edge: a man
+**A zone is round, and it is still stored as a width and a height.** Grass has
+no corners, and a rectangle over a field draws a filing cabinet rather than the
+space a man has to cover. `ZoneArea` draws an ellipse in the box the zone has
+always been kept in, so a hook is a circle because it is as deep as it is wide
+and a deep third is an oval because a third of the field is wider than it is
+deep. Nothing else moved: every preset, `resizeFrom`, `mirrorZones` and the
+coverages all go on speaking in `x`, `y`, `w`, `h`. What did have to follow the
+shape is everything that used to clamp against four straight edges — `insideZone`
+is the ellipse test and not its box, because the corners of that box are empty
+grass and a tap there belongs to whoever is standing in it; the leader line
+stops on the rim; and the label sits on the rim's own chord, measured at the top
+of the letters, which is the narrowest part of the curve the word has to fit
+under.
+
+**The corner grip sits on the rim.** It was invisible once — the cone and the
+square are their own handles, so the zone borrowed that and gave its corner
+nothing to see — and on a preset deep zone it was unusable as well: a deep third
+is a third of the field, so its far corner lands exactly on the edge of the
+board, half the target off-screen and past the point a drag is allowed to reach.
+On a rectangle that took an inset measured by hand. A round zone gives it back
+for nothing, because the rim at 45° is already three tenths of each half-axis
+inside the corner: always over its own wash, always reachable, and on the line a
+coach would take hold of. The drag still resolves to the true corner of the box
+— that is what the size is stored as — so taking hold of the grip does not jog
+the zone. `zone-size` is also the one drag allowed to reach the board edge: a man
 is kept a yard inside so his mark and number stay on, but a zone's corner is not
-a man. The label takes whichever top corner the grip did not.
+a man. The label takes whichever side the grip did not.
 
 **Zones are a patch of grass, not a focus square.** `Zone` keeps its own centre
 and its own size, in yards on the field, and a leader line back to its defender.
 The square hangs off its man and grows as it is aimed, which is right for "this
 receiver works this patch" and wrong for a coverage: a deep third is a wide
-shallow box sitting where it sits, a flat is beside its man, a hook is behind
+shallow patch sitting where it sits, a flat is beside its man, a hook is behind
 him. Aiming and sizing had to come apart, so the body moves it and the far
 corner sizes it — two `DragState` kinds, both through `applyDrag`, which is what
 buys tap-move-tap, contact-bounce resume and one-gesture-one-undo for free.
+
+**A zone can be painted, one man at a time.** Seven washes in one blue is a
+coverage that has to be read by tracing leader lines; painting the deep men
+apart from the underneath ones is what the row is for. `Zone.color`, picked from
+the six receiver colours in the defender's own picker beside his zone list, for
+the same reason his route's colour is there — it is a decision about this man,
+and the drawer is another corner of the screen. Undefined means `--zone`, which
+Settings now sets alongside the route, carry and block colours. Tokens, never
+literals, so `export/printInk.ts` derives the paper ink from whatever the coach
+chose rather than printing a hex nobody picked. Plain chalk is deliberately not
+offered: a wash at a tenth of its alpha in the neutral is invisible on turf and
+nothing at all on the white board. A hand-picked colour survives a change of
+concept — the colour is a fact about his grass, not about which preset drew
+it.
 
 Dragging the **defender** deliberately does not drag his zone. Where he lines up
 and where he has to get to are two different facts, and the gap between them is

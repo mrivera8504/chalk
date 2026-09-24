@@ -1062,7 +1062,17 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       return;
     }
     const shape = preset.shape(p, naturalHand(p), VIEW);
-    setZones((prev) => [...prev.filter((z) => z.playerId !== p.id), { playerId: p.id, ...shape }]);
+    /*
+     * A hand-picked color survives the change of concept. The color is a fact
+     * about this man's grass — "the deep men are red" — not about which concept
+     * drew it, and losing it every time a third became a half would make the
+     * palette useless for the one thing it is for.
+     */
+    const color = zones.find((z) => z.playerId === p.id)?.color;
+    setZones((prev) => [
+      ...prev.filter((z) => z.playerId !== p.id),
+      { playerId: p.id, ...shape, ...(color ? { color } : {}) },
+    ]);
     // The other half of the same rule: a man given grass to cover is not also
     // being sent, so the rush he was wearing comes off.
     setAssignments((prev) =>
@@ -2334,6 +2344,12 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     setAssignments((prev) => prev.map((a) => (a.id === id ? { ...a, color } : a)));
   }
 
+  /** The same thing done to a man's patch of grass. Undefined is back to auto. */
+  function recolorZone(playerId: string, color: string | undefined) {
+    remember();
+    setZones((prev) => prev.map((z) => (z.playerId === playerId ? { ...z, color } : z)));
+  }
+
   /**
    * Put a kid in this slot, or take him out.
    *
@@ -2754,6 +2770,10 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                      */
                     activeJob: jobOf(selectedPlayer.id)?.preset,
                     activeZone: zones.find((z) => z.playerId === selectedPlayer.id)?.preset,
+                    zoneColor: zones.find((z) => z.playerId === selectedPlayer.id)?.color,
+                    onZoneColor: zones.some((z) => z.playerId === selectedPlayer.id)
+                      ? (c) => recolorZone(selectedPlayer.id, c)
+                      : null,
                     hasCover: assignments.some(
                       (a) => a.playerId === selectedPlayer.id && a.kind === 'cover',
                     ),

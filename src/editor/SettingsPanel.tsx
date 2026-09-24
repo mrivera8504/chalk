@@ -178,6 +178,18 @@ export function SettingsPanel({ settings, onClose }: Props) {
             />
             <span>Block</span>
           </label>
+          {/* The coverage wash, beside the two inks. One zone can be painted
+              something else from the defender's own picker; this is what every
+              other one on every play takes. */}
+          <label className="swatch-slot">
+            <input
+              type="color"
+              value={s.zoneColor}
+              aria-label="Zone color"
+              onChange={(e) => setSettings({ zoneColor: e.target.value })}
+            />
+            <span>Zone</span>
+          </label>
           <button
             className="quiet"
             onClick={() =>
@@ -185,6 +197,7 @@ export function SettingsPanel({ settings, onClose }: Props) {
                 routeColors: DEFAULT_APP_SETTINGS.routeColors,
                 carryColor: DEFAULT_APP_SETTINGS.carryColor,
                 blockColor: DEFAULT_APP_SETTINGS.blockColor,
+                zoneColor: DEFAULT_APP_SETTINGS.zoneColor,
               })
             }
           >

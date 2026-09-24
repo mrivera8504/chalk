@@ -258,8 +258,18 @@ export interface Zone {
   h: number;
   /** The concept it was built from, so the namer can read the coverage back. */
   preset?: string;
-  /** 'Flat', 'Deep ⅓'. Drawn in the corner of the wash; blank draws nothing. */
+  /** 'Flat', 'Deep ⅓'. Drawn at the top of the wash; blank draws nothing. */
   label?: string;
+  /**
+   * The wash's own color, when the coach has picked one.
+   *
+   * Absent means the board's `--zone`, which is what every zone was until the
+   * deep men and the underneath ones needed telling apart at a glance. A token
+   * rather than a literal, exactly as a route's hand-picked color is: the
+   * exporter copies what the root computes into the sheet it writes, so one
+   * choice reaches the board, the thumbnails and paper together.
+   */
+  color?: string;
 }
 
 /**
