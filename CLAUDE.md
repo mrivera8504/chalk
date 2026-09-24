@@ -665,6 +665,32 @@ from the bug the shrink guard exists to catch, so it would either jam the sync
 or need an exemption — and an exemption that deletes plays on a schedule is the
 one thing not to build here.
 
+**The book comes down again every time the app comes back to the front.**
+There is no listener on the document — `pullFromCloud` is a `getDoc`, and one
+read as auth resolved was the whole of coming down from the cloud, so a tablet
+left open on the playbook screen never saw a play drawn on the phone however
+long it sat there. A resumed install does not remount, so the only signal there
+is is `visibilitychange`, which is what `store/update.ts` already listens to in
+order to ask whether there is a new build; the moment a coach comes back to the
+app is the moment they are about to read what is on it. `reconcile()` is the
+same function the account change calls, deliberately — a second copy of that
+reasoning is how four of these bugs happened. Three things it needs:
+
+- **A pull that changes nothing must not push.** Every `setPlays` runs the
+  autosave, so a pull that found nothing new would send the whole book straight
+  back up — once per app start before this, and now once per trip to another app
+  and back. `sameBook` compares ids, `updatedAt` and `deletedAt`, which is all a
+  merge can have changed, against **what is on screen** rather than against what
+  the merge started from: those are the same book on one device, and storage is
+  the one that can have moved underneath.
+- **The claim is still written every time.** `writeLocal` is outside that check,
+  because it is also where storage is stamped with whose book it is.
+- **The throttle skips only a successful pull.** A coach flicking to another app
+  and back is one glance, not five reads of the document; a pull that *failed*
+  sets no stamp, so coming back in range always retries. That retry is how a
+  tablet booted with no signal — `loadedFor` unset, unable to push at all —
+  finally reconciles without being restarted.
+
 **The playbook screen says how old the last backup is**, past a week, in the bad
 colour past two. Silent under that: a line which is always there is a line
 nobody reads.

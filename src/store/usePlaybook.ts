@@ -12,6 +12,7 @@ import { makeBackup, readBackup } from './backup';
 import {
   EMPTY,
   mergeBooks,
+  type Playbook,
   pullFromCloud,
   pushToCloud,
   readLocal,
@@ -20,6 +21,17 @@ import {
 } from './sync';
 
 const AUTOSAVE_MS = 800;
+
+/**
+ * How long after a successful pull the app will not pull again on being
+ * brought to the front.
+ *
+ * A coach checking the roster app and coming straight back is one glance at the
+ * board, not a reason to read the document twice. Long enough to swallow that,
+ * short enough that the phone-then-tablet case a coach actually does — draw it
+ * on one, pick up the other — is always a fresh read.
+ */
+const FOREGROUND_PULL_MS = 5000;
 
 /**
  * When a backup file was last written.
@@ -55,6 +67,29 @@ const order = (list: Play[]): Play[] => [
   ...list.filter((p) => !p.deletedAt),
   ...list.filter((p) => p.deletedAt),
 ];
+
+/**
+ * Do these two books say the same thing?
+ *
+ * Every save stamps `updatedAt`, so an id, that stamp and whether the play is
+ * in the trash is the whole of what a merge can have changed about it — no need
+ * to walk a hundred plays' worth of paths and ink to find out. Order counts,
+ * because the order of the array is the order of the cards.
+ */
+function sameBook(a: Playbook, b: Playbook): boolean {
+  if (a.plays.length !== b.plays.length || a.sections.length !== b.sections.length) return false;
+  for (let i = 0; i < a.plays.length; i++) {
+    const x = a.plays[i];
+    const y = b.plays[i];
+    if (x.id !== y.id || x.updatedAt !== y.updatedAt || x.deletedAt !== y.deletedAt) return false;
+  }
+  for (let i = 0; i < a.sections.length; i++) {
+    const x = a.sections[i];
+    const y = b.sections[i];
+    if (x.id !== y.id || x.name !== y.name || x.order !== y.order) return false;
+  }
+  return true;
+}
 
 /**
  * A new play, on one side of the ball or the other.
@@ -147,6 +182,95 @@ export function usePlaybook() {
     };
   }, []);
 
+  /** Which uid a pull is answering, so one that lands late can be dropped. */
+  const uidNow = useRef<string | null>(null);
+  /** A pull is in the air, so the foreground one can stand down. */
+  const pulling = useRef(false);
+  /**
+   * The book as it is on screen this moment.
+   *
+   * A pull has to compare its result against what the coach is looking at, and
+   * `allPlays` inside `reconcile` would be the copy captured when the callback
+   * was made. Written by the autosave effect below, which already builds it.
+   */
+  const onScreen = useRef<Playbook>({ plays: allPlays, sections });
+  /** When one last succeeded, for the throttle below. */
+  const pulledAt = useRef(0);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    uidNow.current = uid;
+  }, [uid]);
+
+  /**
+   * Take what the cloud holds for this account and reconcile it with what is on
+   * screen.
+   *
+   * One function with two callers — the account changing, and the app coming
+   * back to the foreground — because they are the same job and a second copy of
+   * this reasoning is how the four sync bugs happened in the first place.
+   */
+  const reconcile = useCallback(async (forUid: string) => {
+    pulling.current = true;
+    setSync('syncing');
+    try {
+      const res = await pullFromCloud(forUid);
+      // Signed out, or signed in as somebody else, while this was in the air.
+      if (!mounted.current || uidNow.current !== forUid) return;
+      if (!res.ok) {
+        // Unreachable is not empty. Leave loadedFor unset so nothing is pushed.
+        setSync(res.state);
+        return;
+      }
+
+      const local = readLocal();
+      /*
+       * A book carrying another uid belongs to the account that was signed in
+       * before this one, and the account screen promises signing in replaces
+       * what is on screen. Only an unclaimed book — one drawn before auth
+       * answered, or written by a build that predates the uid being stored —
+       * merges into the account that picks it up.
+       */
+      const ours = local.uid === null || local.uid === forUid;
+      const base = ours ? { plays: local.plays, sections: local.sections } : EMPTY;
+      const next = res.book ? mergeBooks(base, res.book) : base;
+
+      loadedFor.current = forUid;
+      claim.current = forUid;
+      // Unconditional, because this is also where storage is stamped with whose
+      // book it is: an unclaimed one has to be claimed even when its contents
+      // did not move an inch.
+      writeLocal(next, forUid);
+      /*
+       * Only when the merge actually changed something. Every setPlays runs the
+       * autosave effect, so a pull that found nothing new would push the whole
+       * book straight back up — once per app start before, and now once per trip
+       * to another app and back, which is not a thing to do to a coach's data
+       * plan on a sideline.
+       *
+       * Against what is on screen rather than against what the merge started
+       * from: those are the same book on one device, and storage is the one
+       * that can have moved underneath — a second tab of the same app writes
+       * it, and comparing the merge with itself would leave the stale screen up.
+       */
+      if (!sameBook(onScreen.current, next)) {
+        setPlays(next.plays);
+        setSections(next.sections);
+      }
+      pulledAt.current = Date.now();
+      setSync('synced');
+    } finally {
+      pulling.current = false;
+    }
+  }, []);
+
   /*
    * Reconcile whenever the account changes, not once on mount.
    *
@@ -162,44 +286,51 @@ export function usePlaybook() {
       setSync('local');
       return;
     }
-    let alive = true;
-    setSync('syncing');
-    void pullFromCloud(uid).then((res) => {
-      if (!alive) return;
-      if (!res.ok) {
-        // Unreachable is not empty. Leave loadedFor unset so nothing is pushed.
-        setSync(res.state);
-        return;
-      }
+    void reconcile(uid);
+  }, [uid, reconcile]);
 
-      const local = readLocal();
+  /**
+   * And again every time the app comes back to the front.
+   *
+   * There is no listener on the document — one read at boot was the whole of
+   * coming down from the cloud, so a tablet left open on the playbook screen
+   * never saw a play drawn on the phone, however long it sat there. The fix is
+   * the one `store/update.ts` already uses to ask whether there is a new build:
+   * the moment a coach returns to the app is the moment they are about to read
+   * what is on it. A resumed install does not remount, so this is the only
+   * signal there is.
+   *
+   * It also retries a pull that failed. A tablet booted on a field with no
+   * signal has `loadedFor` unset and cannot push at all; coming back to the app
+   * in range is what finally reconciles it.
+   */
+  useEffect(() => {
+    if (!uid) return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      // A coach flicking between this and the roster app is one glance, not a
+      // reason to read the document five times. A failed pull sets no stamp, so
+      // this never throttles a retry.
+      if (Date.now() - pulledAt.current < FOREGROUND_PULL_MS) return;
       /*
-       * A book carrying another uid belongs to the account that was signed in
-       * before this one, and the account screen promises signing in replaces
-       * what is on screen. Only an unclaimed book — one drawn before auth
-       * answered, or written by a build that predates the uid being stored —
-       * merges into the account that picks it up.
+       * Deliberately not a guard inside `reconcile` itself. A pull kicked off
+       * by signing in has to run whatever else is in the air — bailing there
+       * would leave the new account with `loadedFor` unset and its book
+       * undownloaded until the next launch, which is the shape of the bug that
+       * stranded a playbook in the first place.
        */
-      const ours = local.uid === null || local.uid === uid;
-      const base = ours ? { plays: local.plays, sections: local.sections } : EMPTY;
-      const next = res.book ? mergeBooks(base, res.book) : base;
-
-      loadedFor.current = uid;
-      claim.current = uid;
-      setPlays(next.plays);
-      setSections(next.sections);
-      writeLocal(next, uid);
-      setSync('synced');
-    });
-    return () => {
-      alive = false;
+      if (pulling.current) return;
+      void reconcile(uid);
     };
-  }, [uid]);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [uid, reconcile]);
 
   // Debounced autosave. Local first and synchronously, so a crash or a closed
   // tab between keystrokes costs nothing; the cloud follows when it can.
   useEffect(() => {
     const book = { plays: allPlays, sections };
+    onScreen.current = book;
     // Always, and before anything can fail — local storage is the floor, and
     // work drawn while auth is still resolving has to survive on its own.
     writeLocal(book, uid ?? claim.current);
