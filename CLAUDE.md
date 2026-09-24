@@ -665,16 +665,28 @@ from the bug the shrink guard exists to catch, so it would either jam the sync
 or need an exemption — and an exemption that deletes plays on a schedule is the
 one thing not to build here.
 
-**The book comes down again every time the app comes back to the front.**
-There is no listener on the document — `pullFromCloud` is a `getDoc`, and one
-read as auth resolved was the whole of coming down from the cloud, so a tablet
-left open on the playbook screen never saw a play drawn on the phone however
-long it sat there. A resumed install does not remount, so the only signal there
-is is `visibilitychange`, which is what `store/update.ts` already listens to in
-order to ask whether there is a new build; the moment a coach comes back to the
-app is the moment they are about to read what is on it. `reconcile()` is the
-same function the account change calls, deliberately — a second copy of that
-reasoning is how four of these bugs happened. Three things it needs:
+**The book comes down again when the app comes back to the front, or the signal
+comes back.** There is no listener on the document — `pullFromCloud` is a
+`getDoc`, and one read as auth resolved was the whole of coming down from the
+cloud, so a tablet left open on the playbook screen never saw a play drawn on
+the phone however long it sat there. Both signals are the ones
+`store/update.ts` already listens to in order to ask whether there is a new
+build, and for the same reasons: a resumed install does not remount, so
+`visibilitychange` is the only word the app gets that a coach has come back to
+it, and `online` is the only word it gets that the field has signal again.
+`reconcile()` is the same function the account change calls, deliberately — a
+second copy of that reasoning is how four of these bugs happened. Both listeners
+share one predicate, because they are asking one question, and its answer has
+four parts:
+
+- **Nobody is looking, nothing is read.** Signal returning while the tablet is
+  in a bag is not worth a read; coming back to it fires the other half of the
+  pair anyway.
+- **The device says there is no network.** `navigator.onLine` lies in one
+  direction only — true is a guess, false is certain — so this skips exactly the
+  pulls that could not have worked, and stops a sideline with no bars flashing
+  the label through syncing and back to offline every time the tablet is picked
+  up. The `online` event is what undoes it.
 
 - **A pull that changes nothing must not push.** Every `setPlays` runs the
   autosave, so a pull that found nothing new would send the whole book straight
@@ -686,10 +698,18 @@ reasoning is how four of these bugs happened. Three things it needs:
 - **The claim is still written every time.** `writeLocal` is outside that check,
   because it is also where storage is stamped with whose book it is.
 - **The throttle skips only a successful pull.** A coach flicking to another app
-  and back is one glance, not five reads of the document; a pull that *failed*
-  sets no stamp, so coming back in range always retries. That retry is how a
-  tablet booted with no signal — `loadedFor` unset, unable to push at all —
-  finally reconciles without being restarted.
+  and back is one glance, not five reads of the document, and a connection
+  flapping at the edge of a field is not five either. A pull that *failed* sets
+  no stamp, so coming back in range always retries. That retry is how a tablet
+  booted with no signal — `loadedFor` unset, unable to push at all — finally
+  reconciles without being restarted.
+
+Verified through the app's own label, which is the only honest witness here:
+Firestore's SDK reopens its own channel on both of these events, so counting
+network calls says nothing about whether the app pulled. A foreground with the
+throttle expired reads `saved → saving → saved`; a second one inside the window
+does not move at all; one with `navigator.onLine` forced false does not move
+either; and an `online` event after it pulls.
 
 **The playbook screen says how old the last backup is**, past a week, in the bad
 colour past two. Silent under that: a line which is always there is a line

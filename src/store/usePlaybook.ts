@@ -290,28 +290,38 @@ export function usePlaybook() {
   }, [uid, reconcile]);
 
   /**
-   * And again every time the app comes back to the front.
+   * And again when the app comes back to the front, or the signal comes back.
    *
    * There is no listener on the document — one read at boot was the whole of
    * coming down from the cloud, so a tablet left open on the playbook screen
-   * never saw a play drawn on the phone, however long it sat there. The fix is
-   * the one `store/update.ts` already uses to ask whether there is a new build:
-   * the moment a coach returns to the app is the moment they are about to read
-   * what is on it. A resumed install does not remount, so this is the only
-   * signal there is.
+   * never saw a play drawn on the phone, however long it sat there. Both
+   * signals here are the ones `store/update.ts` already listens to in order to
+   * ask whether there is a new build, and for the same reasons: a resumed
+   * install does not remount, so `visibilitychange` is the only word the app
+   * gets that a coach has come back to it, and `online` is the only word it
+   * gets that the field has signal again.
    *
-   * It also retries a pull that failed. A tablet booted on a field with no
-   * signal has `loadedFor` unset and cannot push at all; coming back to the app
-   * in range is what finally reconciles it.
+   * They share one predicate rather than being two handlers, because they are
+   * asking one question — is this worth a read right now — and the answer has
+   * four parts.
    */
   useEffect(() => {
     if (!uid) return;
-    const onVisible = () => {
+    const maybePull = () => {
+      /*
+       * Nobody is looking. A signal that comes back while the tablet is in a
+       * bag is not worth a read: the coach cannot see the screen, and coming
+       * back to it fires the other half of this pair anyway.
+       */
       if (document.visibilityState !== 'visible') return;
-      // A coach flicking between this and the roster app is one glance, not a
-      // reason to read the document five times. A failed pull sets no stamp, so
-      // this never throttles a retry.
-      if (Date.now() - pulledAt.current < FOREGROUND_PULL_MS) return;
+      /*
+       * The device says there is no network. `navigator.onLine` lies in one
+       * direction only — true is a guess, false is certain — so this skips
+       * exactly the pulls that could not have worked, and stops a sideline with
+       * no bars flashing the label through syncing and back to offline every
+       * time a coach picks the tablet up. The `online` event is what undoes it.
+       */
+      if (!navigator.onLine) return;
       /*
        * Deliberately not a guard inside `reconcile` itself. A pull kicked off
        * by signing in has to run whatever else is in the air — bailing there
@@ -320,10 +330,21 @@ export function usePlaybook() {
        * stranded a playbook in the first place.
        */
       if (pulling.current) return;
+      /*
+       * A coach flicking between this and the roster app is one glance, not a
+       * reason to read the document five times, and a connection flapping at
+       * the edge of a field is not five either. A pull that failed sets no
+       * stamp, so this never throttles the retry that matters.
+       */
+      if (Date.now() - pulledAt.current < FOREGROUND_PULL_MS) return;
       void reconcile(uid);
     };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    document.addEventListener('visibilitychange', maybePull);
+    window.addEventListener('online', maybePull);
+    return () => {
+      document.removeEventListener('visibilitychange', maybePull);
+      window.removeEventListener('online', maybePull);
+    };
   }, [uid, reconcile]);
 
   // Debounced autosave. Local first and synchronously, so a crash or a closed
