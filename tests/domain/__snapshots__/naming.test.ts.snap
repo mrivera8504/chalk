@@ -1,0 +1,26 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the defensive name > reads every shipped coverage back off the zones it laid down 1`] = `
+[
+  [
+    "cover-0",
+    "5-2 Cover 0",
+  ],
+  [
+    "cover-1",
+    "5-2 Cover 1",
+  ],
+  [
+    "cover-2",
+    "5-2 Cover 2",
+  ],
+  [
+    "cover-2-man",
+    "5-2 2 Man",
+  ],
+  [
+    "cover-3",
+    "5-2 Cover 3",
+  ],
+]
+`;

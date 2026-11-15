@@ -1,0 +1,60 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`cells > resolve to the same numbers they always have 1`] = `
+{
+  "landscape 1": {
+    "board": [
+      36,
+      91.68,
+      720,
+      440.32,
+    ],
+    "nameSize": 43.5,
+  },
+  "landscape 4": {
+    "board": [
+      36,
+      79.5,
+      169.5,
+      496.5,
+    ],
+    "nameSize": 15.24,
+  },
+  "landscape 9": {
+    "board": [
+      36,
+      86.54,
+      230.67,
+      136.12,
+    ],
+    "nameSize": 20.74,
+  },
+  "portrait 1": {
+    "board": [
+      36,
+      91.68,
+      540,
+      620.32,
+    ],
+    "nameSize": 43.5,
+  },
+  "portrait 4": {
+    "board": [
+      36,
+      90.26,
+      263,
+      310.74,
+    ],
+    "nameSize": 23.64,
+  },
+  "portrait 9": {
+    "board": [
+      36,
+      79.64,
+      170.67,
+      203.03,
+    ],
+    "nameSize": 15.34,
+  },
+}
+`;

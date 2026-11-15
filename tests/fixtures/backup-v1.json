@@ -1,0 +1,890 @@
+{
+  "kind": "chalk-backup",
+  "version": 1,
+  "exportedAt": 1700001000000,
+  "plays": [
+    {
+      "id": "sweep",
+      "name": "",
+      "sectionId": "unfiled",
+      "players": [
+        {
+          "id": "lg",
+          "label": "LG",
+          "side": "offense",
+          "x": -1.8,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "c",
+          "label": "C",
+          "side": "offense",
+          "x": 0,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "rg",
+          "label": "RG",
+          "side": "offense",
+          "x": 1.8,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "te",
+          "label": "TE",
+          "side": "offense",
+          "x": 3.6,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square",
+          "jersey": 88
+        },
+        {
+          "id": "wb",
+          "label": "WB",
+          "side": "offense",
+          "x": -5,
+          "y": 1.8,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "star"
+        },
+        {
+          "id": "qb",
+          "label": "QB",
+          "side": "offense",
+          "x": 0,
+          "y": 1.6,
+          "onLine": false,
+          "onLineLocked": false,
+          "backNumber": 1,
+          "shape": "circle"
+        },
+        {
+          "id": "rb",
+          "label": "RB",
+          "side": "offense",
+          "x": 0,
+          "y": 5,
+          "onLine": false,
+          "onLineLocked": false,
+          "backNumber": 2,
+          "shape": "circle"
+        },
+        {
+          "id": "de1",
+          "label": "E",
+          "side": "defense",
+          "x": -3.6,
+          "y": -1.7,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "x"
+        },
+        {
+          "id": "dt",
+          "label": "N",
+          "side": "defense",
+          "x": 0,
+          "y": -1.7,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "x"
+        },
+        {
+          "id": "de2",
+          "label": "E",
+          "side": "defense",
+          "x": 3.6,
+          "y": -1.7,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "x"
+        },
+        {
+          "id": "w",
+          "label": "W",
+          "side": "defense",
+          "x": -2,
+          "y": -4.5,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        },
+        {
+          "id": "m",
+          "label": "M",
+          "side": "defense",
+          "x": 2,
+          "y": -4.5,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        },
+        {
+          "id": "cb",
+          "label": "C",
+          "side": "defense",
+          "x": -7,
+          "y": -6,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        },
+        {
+          "id": "fs",
+          "label": "S",
+          "side": "defense",
+          "x": 0,
+          "y": -11,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        }
+      ],
+      "assignments": [
+        {
+          "id": "a1",
+          "playerId": "rb",
+          "kind": "carry",
+          "path": [
+            {
+              "x": 0,
+              "y": 5
+            },
+            {
+              "x": 5.2250000000000005,
+              "y": 5.9,
+              "cx": 2.0900000000000003,
+              "cy": 6.35
+            },
+            {
+              "x": 9.5,
+              "y": 3.4,
+              "cx": 8.2,
+              "cy": 5.5
+            },
+            {
+              "x": 9.9,
+              "y": -7
+            }
+          ],
+          "preset": "wide-right",
+          "hand": "right"
+        },
+        {
+          "id": "a2",
+          "playerId": "te",
+          "kind": "route",
+          "path": [
+            {
+              "x": 3.6,
+              "y": 0
+            },
+            {
+              "x": 3.6,
+              "y": -7
+            },
+            {
+              "x": 8.1,
+              "y": -7.4
+            }
+          ],
+          "preset": "out",
+          "hand": "right"
+        },
+        {
+          "id": "a3",
+          "playerId": "wb",
+          "kind": "route",
+          "path": [
+            {
+              "x": -5,
+              "y": 1.8
+            },
+            {
+              "x": -5,
+              "y": -7.000000000000001
+            },
+            {
+              "x": -0.5,
+              "y": -7.400000000000001
+            }
+          ],
+          "preset": "in",
+          "hand": "left",
+          "color": "var(--route-4)"
+        },
+        {
+          "id": "a4",
+          "playerId": "rg",
+          "kind": "block",
+          "targetPlayerId": "dt",
+          "path": [
+            {
+              "x": 1.247470004062139,
+              "y": -0.5218338850524246
+            },
+            {
+              "x": 0.5525299959378612,
+              "y": -1.1781661149475755
+            }
+          ]
+        },
+        {
+          "id": "a5",
+          "playerId": "lg",
+          "kind": "pull",
+          "targetPlayerId": "de2",
+          "path": [
+            {
+              "x": -1.8,
+              "y": 0.76
+            },
+            {
+              "x": -0.5,
+              "y": 1.5,
+              "cx": -1.475,
+              "cy": 1.5
+            },
+            {
+              "x": 2.5,
+              "y": 1.5
+            },
+            {
+              "x": 3.4,
+              "y": -0.94,
+              "cx": 3.15,
+              "cy": 1.5
+            }
+          ]
+        },
+        {
+          "id": "a6",
+          "playerId": "c",
+          "kind": "combo",
+          "targetPlayerId": "dt",
+          "climbToPlayerId": "m",
+          "path": [
+            {
+              "x": 0,
+              "y": -0.76
+            },
+            {
+              "x": 0,
+              "y": -0.94
+            },
+            {
+              "x": 1.6277549780108007,
+              "y": -3.8374038608592254,
+              "cx": 0,
+              "cy": -2.3887019304296127
+            }
+          ]
+        },
+        {
+          "id": "a7",
+          "playerId": "qb",
+          "kind": "motion",
+          "path": [
+            {
+              "x": 0,
+              "y": 1.6
+            },
+            {
+              "x": -2,
+              "y": 2.4
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        [
+          {
+            "x": -8,
+            "y": -3
+          },
+          {
+            "x": -6,
+            "y": -5,
+            "cx": -8,
+            "cy": -5
+          },
+          {
+            "x": -4,
+            "y": -5,
+            "w": 0.24
+          }
+        ]
+      ],
+      "notes": "Kick out the end.",
+      "coachingPoint": "Patience to the edge.",
+      "tags": [
+        "run"
+      ],
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000,
+      "suggestedName": "26 All the way right",
+      "backNumber": 2,
+      "hole": 6,
+      "ballCarrierId": "rb",
+      "hideDefense": false,
+      "vision": {
+        "x": 6,
+        "y": -8
+      },
+      "focuses": [
+        {
+          "playerId": "te",
+          "dx": 0,
+          "dy": -6
+        }
+      ]
+    },
+    {
+      "id": "cover3",
+      "name": "",
+      "sectionId": "unfiled",
+      "players": [
+        {
+          "id": "lg",
+          "label": "LG",
+          "side": "offense",
+          "x": -1.8,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "c",
+          "label": "C",
+          "side": "offense",
+          "x": 0,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "rg",
+          "label": "RG",
+          "side": "offense",
+          "x": 1.8,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "te",
+          "label": "TE",
+          "side": "offense",
+          "x": 3.6,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "wb",
+          "label": "WB",
+          "side": "offense",
+          "x": -5,
+          "y": 1.8,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "circle"
+        },
+        {
+          "id": "qb",
+          "label": "QB",
+          "side": "offense",
+          "x": 0,
+          "y": 1.6,
+          "onLine": false,
+          "onLineLocked": false,
+          "backNumber": 1,
+          "shape": "circle"
+        },
+        {
+          "id": "rb",
+          "label": "RB",
+          "side": "offense",
+          "x": 0,
+          "y": 5,
+          "onLine": false,
+          "onLineLocked": false,
+          "backNumber": 2,
+          "shape": "circle"
+        },
+        {
+          "id": "de1",
+          "label": "E",
+          "side": "defense",
+          "x": -3.6,
+          "y": -1.7,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "x"
+        },
+        {
+          "id": "dt",
+          "label": "N",
+          "side": "defense",
+          "x": 0,
+          "y": -1.7,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "x"
+        },
+        {
+          "id": "de2",
+          "label": "E",
+          "side": "defense",
+          "x": 3.6,
+          "y": -1.7,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "x"
+        },
+        {
+          "id": "w",
+          "label": "W",
+          "side": "defense",
+          "x": -2,
+          "y": -4.5,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        },
+        {
+          "id": "m",
+          "label": "M",
+          "side": "defense",
+          "x": 2,
+          "y": -4.5,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        },
+        {
+          "id": "cb",
+          "label": "C",
+          "side": "defense",
+          "x": -7,
+          "y": -6,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        },
+        {
+          "id": "fs",
+          "label": "S",
+          "side": "defense",
+          "x": 0,
+          "y": -11,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        }
+      ],
+      "assignments": [
+        {
+          "id": "d1",
+          "playerId": "w",
+          "kind": "blitz",
+          "preset": "blitz-a",
+          "hand": "left",
+          "path": [
+            {
+              "x": -2,
+              "y": -4.5
+            },
+            {
+              "x": -0.9,
+              "y": 0,
+              "cx": -1.45,
+              "cy": -2.25
+            },
+            {
+              "x": -0.79,
+              "y": 2.4
+            }
+          ]
+        },
+        {
+          "id": "d2",
+          "playerId": "de2",
+          "kind": "stunt",
+          "preset": "stunt-crash",
+          "targetPlayerId": "dt",
+          "path": [
+            {
+              "x": 3.6,
+              "y": -1.7
+            },
+            {
+              "x": -1.8,
+              "y": 0.2,
+              "cx": 1.8,
+              "cy": -1.02
+            },
+            {
+              "x": -2.16,
+              "y": 1.4
+            }
+          ]
+        },
+        {
+          "id": "d3",
+          "playerId": "dt",
+          "kind": "stunt",
+          "preset": "stunt-loop",
+          "targetPlayerId": "de2",
+          "path": [
+            {
+              "x": 0,
+              "y": -1.7
+            },
+            {
+              "x": -0.4,
+              "y": -2.8
+            },
+            {
+              "x": 5.4,
+              "y": 0.2,
+              "cx": 1.8,
+              "cy": -2.4699999999999998
+            },
+            {
+              "x": 5.760000000000001,
+              "y": 1.4
+            }
+          ]
+        },
+        {
+          "id": "d4",
+          "playerId": "de1",
+          "kind": "cover",
+          "targetPlayerId": "wb",
+          "path": [
+            {
+              "x": -3.889684727556201,
+              "y": -0.9757881811094976
+            },
+            {
+              "x": -4.710315272443799,
+              "y": 1.0757881811094978
+            }
+          ]
+        }
+      ],
+      "annotations": [],
+      "notes": "",
+      "coachingPoint": "",
+      "tags": [],
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000,
+      "unit": "defense",
+      "suggestedName": "Cover 3",
+      "zones": [
+        {
+          "playerId": "cb",
+          "x": -7.333333333333334,
+          "y": -14,
+          "w": 7.333333333333333,
+          "h": 12,
+          "preset": "third",
+          "label": "Deep 1/3",
+          "color": "var(--route-3)"
+        },
+        {
+          "playerId": "fs",
+          "x": 7.333333333333332,
+          "y": -14,
+          "w": 7.333333333333333,
+          "h": 12,
+          "preset": "third",
+          "label": "Deep 1/3"
+        },
+        {
+          "playerId": "m",
+          "x": 2,
+          "y": -8,
+          "w": 8,
+          "h": 8,
+          "preset": "hook",
+          "label": "Hook"
+        }
+      ]
+    },
+    {
+      "id": "oldest",
+      "name": "Dive",
+      "sectionId": "unfiled",
+      "players": [
+        {
+          "id": "lg",
+          "label": "LG",
+          "side": "offense",
+          "x": -1.8,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "c",
+          "label": "C",
+          "side": "offense",
+          "x": 0,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "rg",
+          "label": "RG",
+          "side": "offense",
+          "x": 1.8,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "te",
+          "label": "TE",
+          "side": "offense",
+          "x": 3.6,
+          "y": 0,
+          "onLine": true,
+          "onLineLocked": false,
+          "shape": "square"
+        },
+        {
+          "id": "wb",
+          "label": "WB",
+          "side": "offense",
+          "x": -5,
+          "y": 1.8,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "circle"
+        },
+        {
+          "id": "qb",
+          "label": "QB",
+          "side": "offense",
+          "x": 0,
+          "y": 1.6,
+          "onLine": false,
+          "onLineLocked": false,
+          "backNumber": 1,
+          "shape": "circle"
+        },
+        {
+          "id": "rb",
+          "label": "RB",
+          "side": "offense",
+          "x": 0,
+          "y": 5,
+          "onLine": false,
+          "onLineLocked": false,
+          "backNumber": 2,
+          "shape": "circle"
+        }
+      ],
+      "assignments": [
+        {
+          "id": "o1",
+          "playerId": "rb",
+          "kind": "route",
+          "path": [
+            {
+              "x": 0,
+              "y": 5
+            },
+            {
+              "x": 0.8,
+              "y": -1
+            },
+            {
+              "x": 1.2,
+              "y": -4
+            }
+          ],
+          "preset": "dive",
+          "hand": "right"
+        }
+      ],
+      "annotations": [],
+      "notes": "",
+      "coachingPoint": "",
+      "tags": [],
+      "createdAt": 1690000000000,
+      "updatedAt": 1690000000000,
+      "deletedAt": 1700000500000
+    }
+  ],
+  "sections": [
+    {
+      "id": "s1",
+      "name": "Run game",
+      "order": 1
+    }
+  ],
+  "formations": [
+    {
+      "id": "f-mine",
+      "name": "My 4-3",
+      "side": "defense",
+      "players": [
+        {
+          "id": "de1",
+          "label": "E",
+          "side": "defense",
+          "x": -3.6,
+          "y": -1.7,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "x"
+        },
+        {
+          "id": "dt",
+          "label": "N",
+          "side": "defense",
+          "x": 0,
+          "y": -1.7,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "x"
+        },
+        {
+          "id": "de2",
+          "label": "E",
+          "side": "defense",
+          "x": 3.6,
+          "y": -1.7,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "x"
+        },
+        {
+          "id": "w",
+          "label": "W",
+          "side": "defense",
+          "x": -2,
+          "y": -4.5,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        },
+        {
+          "id": "m",
+          "label": "M",
+          "side": "defense",
+          "x": 2,
+          "y": -4.5,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        },
+        {
+          "id": "cb",
+          "label": "C",
+          "side": "defense",
+          "x": -7,
+          "y": -6,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        },
+        {
+          "id": "fs",
+          "label": "S",
+          "side": "defense",
+          "x": 0,
+          "y": -11,
+          "onLine": false,
+          "onLineLocked": false,
+          "shape": "triangle"
+        }
+      ],
+      "builtIn": false
+    }
+  ],
+  "routes": [
+    {
+      "id": "r-mine",
+      "name": "Whip",
+      "group": "pass",
+      "points": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 2,
+          "y": -3
+        }
+      ]
+    }
+  ],
+  "roster": [
+    {
+      "id": "k1",
+      "name": "Sam",
+      "jersey": 12,
+      "positions": [
+        "QB"
+      ]
+    }
+  ],
+  "settings": {
+    "playersPerSide": 8,
+    "minOnLine": 4,
+    "evenHolesSide": "right",
+    "fieldLengthYards": 70,
+    "onLineToleranceYards": 1,
+    "routeColors": [
+      "#7fd4ff",
+      "#86e5a0",
+      "#c4a7ff",
+      "#ff9ecb",
+      "#d6e86b",
+      "#79e0d8"
+    ],
+    "carryColor": "#ffb37a",
+    "blockColor": "#f2dfa0",
+    "zoneColor": "#8ab4ff",
+    "drawerSide": "right",
+    "fieldSurface": "grass",
+    "losMagnetYards": 0.5,
+    "snapStepYards": 0.25,
+    "showHoles": true,
+    "showDefense": false,
+    "penOnly": false,
+    "pressureWidth": false,
+    "squareUpStrokes": false,
+    "routeDepths": {
+      "short": 4,
+      "medium": 7,
+      "deep": 13
+    }
+  },
+  "foundationId": "builtin-balanced",
+  "foundationDefenseId": "f-mine"
+}

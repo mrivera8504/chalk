@@ -1,0 +1,52 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ink for white paper > prints the shipped palette exactly as it did on the confirmed sheet 1`] = `
+{
+  "#79e0d8": "#34cbc2",
+  "#7fd4ff": "#4cc3f9",
+  "#86e5a0": "#33d171",
+  "#8ab4ff": "#8db4f9",
+  "#c4a7ff": "#c3a9fa",
+  "#d6e86b": "#b0c12e",
+  "#f2dfa0": "#d7b42e",
+  "#ff9ecb": "#fa9ac7",
+  "#ffb37a": "#faa360",
+}
+`;
+
+exports[`the paper palette > is the same palette it always was for the shipped tokens 1`] = `
+{
+  "--ball": "#ddb22e",
+  "--ball-line": "#ffffff",
+  "--board-chalk": "#000000",
+  "--def-fill": "rgba(255, 255, 255, 0.9)",
+  "--def-line": "#000000",
+  "--def-text": "#000000",
+  "--focus": "#1f2937",
+  "--hole": "rgba(0, 0, 0, 0.45)",
+  "--hover": "#34cdaa",
+  "--ink-blitz": "#f97567",
+  "--ink-block": "#d7b42e",
+  "--ink-carry": "#faa360",
+  "--ink-cover": "#84bbfa",
+  "--ink-motion": "#b9a9fa",
+  "--ink-option": "#9fb4bf",
+  "--ink-route": "#4cc3f9",
+  "--jersey": "#334155",
+  "--los": "rgba(0, 0, 0, 0.55)",
+  "--off-fill": "#ffffff",
+  "--off-line": "#000000",
+  "--off-text": "#000000",
+  "--route-0": "#4cc3f9",
+  "--route-1": "#33d171",
+  "--route-2": "#c3a9fa",
+  "--route-3": "#fa9ac7",
+  "--route-4": "#b0c12e",
+  "--route-5": "#34cbc2",
+  "--select": "#5ab8f9",
+  "--turf": "#ffffff",
+  "--turf-line": "rgba(0, 0, 0, 0.16)",
+  "--vision": "#1f2937",
+  "--zone": "#8db4f9",
+}
+`;
