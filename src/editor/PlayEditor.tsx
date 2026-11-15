@@ -6,7 +6,7 @@ import {
   countOnLine,
   eligibleReceivers,
 } from '../domain/legality';
-import { describeAssignment, makeBlock } from '../domain/presets/blocks';
+import { describeAssignment } from '../domain/presets/blocks';
 import { refreshPaths } from '../domain/regenerate';
 import { computeGaps } from '../domain/gaps';
 import { defaultDefense } from '../domain/presets/formations';
@@ -17,9 +17,8 @@ import {
 } from '../domain/presets/defense';
 import { freeZone, type ZonePreset } from '../domain/presets/zones';
 import { applyCoverage, type CoveragePreset } from '../domain/presets/coverages';
-import { makeCover, makeStunt, stuntPartner } from '../domain/presets/links';
+import { makeCover, stuntPartner } from '../domain/presets/links';
 import {
-  PLAYER_R,
   drawnSides,
   isBlockKind,
   isLinkKind,
@@ -38,21 +37,10 @@ import {
   type Zone,
 } from '../domain/types';
 import { LiveInkCanvas, type InkHandle, type InkPoint } from '../render/LiveInkCanvas';
-import { simplify, snapEnd, straighten, toSmoothPath, widthFromPressure } from '../render/smooth';
-import { defaultFocus, insideFocus } from '../render/FocusSquare';
-import { insideZone, onCorner, resizeFrom, zoneCorner } from '../render/Zone';
-import { insideCone } from '../render/VisionCone';
+import { defaultFocus } from '../render/FocusSquare';
 import {
   VIEW,
   clamp,
-  nearestAssignment,
-  nearestPlayer,
-  pickAt,
-  pickRadius,
-  pxToYards,
-  yardsToPx,
-  toYards,
-  type Yards,
 } from '../render/geometry';
 import {
   mirrorAbout,
@@ -89,16 +77,12 @@ import { newId } from '../store/usePlaybook';
 import {
   BlockTool,
   isPairTool,
-  tapBlock,
-  tapCover,
-  tapStunt,
   type Pending,
   type Tool,
 } from './BlockTool';
 import { Drawer } from './Drawer';
 import { SettingsPanel } from './SettingsPanel';
 import { NotesPanel } from './NotesPanel';
-import { eraseAt } from '../domain/erase';
 import { useSettings, getSettings, boardVars } from '../store/settings';
 import { DefensePanel } from './DefensePanel';
 import { FormationPicker } from './FormationPicker';
@@ -112,29 +96,14 @@ import { BoardLayers } from './BoardLayers';
 import { LineInspector } from './LineInspector';
 import { QuickBar } from './QuickBar';
 import { readDrawerOpen, writeDrawerOpen } from './drawerPrefs';
+import { createPointer, type Pointer } from './pointer';
 import {
-  CHATTER_MS,
-  DRAG_SLOP_PX,
-  INK_IDLE_MS,
-  INK_MIN_SPAN,
-  INK_OWNER_YARDS,
-  INK_TOLERANCE,
   PAN_ID,
-  ROUTE_GRAB,
-  VISION_ID,
-  beyondSlop,
-  dragTarget,
-  isContactBounce,
-  panOffset,
-  slideRoute,
   type DragState,
   type Drop,
   type Selection,
   type Snapshot,
 } from './gesture';
-
-let inkCounter = 0;
-const inkId = () => `k${Date.now().toString(36)}${(inkCounter++).toString(36)}`;
 
 /**
  * Offense only; the defense goes on the board when it is asked for. Reset goes
@@ -340,6 +309,15 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   const gestureRemembered = useRef(false);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
   const lastDrop = useRef<Drop | null>(null);
+  /**
+   * The pointer handlers of the latest render.
+   *
+   * For anything that fires later than the render it was set up in: the raw
+   * pointer listener is bound once per tool, and the timer that ends a stroke
+   * runs most of a second after the last sample. Both used to call handlers
+   * captured at binding time, and so acted on the board as it was then.
+   */
+  const pointerRef = useRef<Pointer | null>(null);
 
   /** The box, scaled and slid. Yards throughout, as ever. */
   const viewBox = useMemo(() => {
@@ -591,7 +569,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     }
     const onRaw = (ev: Event) => {
       lastRawAt.current = performance.now();
-      if (stroke.current) extendStroke(ev as PointerEvent);
+      if (stroke.current) pointerRef.current?.extendStroke(ev as PointerEvent);
     };
     el.addEventListener('pointerrawupdate', onRaw);
     rawBound.current = true;
@@ -665,103 +643,6 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     if (unit === 'defense') return;
     if (showDefense && isPairTool(tool)) setTool('routes');
     setShowDefense((v) => !v);
-  }
-
-  /**
-   * Tap-tap assignment, for every tool that draws a line between two men.
-   *
-   * One function for blocks, man coverage and line games, because they are the
-   * same gesture: tap who does it, tap who it is done to, and the tool stays
-   * armed so the next pair is two taps away. What differs is only which side
-   * each tap has to land on, which is the little tap function's business.
-   */
-  function handlePairTap(player: PlayerSlot) {
-    if (!isPairTool(tool)) return;
-
-    const step =
-      tool === 'cover'
-        ? tapCover(pending, player)
-        : tool === 'stunt'
-          ? tapStunt(pending, player)
-          : tapBlock(tool, pending, player);
-
-    if (step.type === 'none') return;
-    if (step.type === 'pending') {
-      setPending(step.pending);
-      return;
-    }
-
-    const first = byId(step.blockerId);
-    const target = byId(step.targetId);
-    const climbTo = byId(step.climbToId);
-    setPending(null);
-    setSel(null);
-    if (!first || !target) return;
-
-    remember();
-
-    if (tool === 'cover') {
-      setAssignments((prev) => [
-        // One man per defender. Re-tapping him moves the coverage rather than
-        // drawing a second rope off the same player.
-        ...prev.filter((a) => !(a.playerId === first.id && a.kind === 'cover')),
-        makeCover(first, target),
-      ]);
-      return;
-    }
-
-    if (tool === 'stunt') {
-      const pair = makeStunt(first, target);
-      setAssignments((prev) => [
-        // A stunt is two lines, so both men have to be cleared of any stunt they
-        // were already in — otherwise the end loops behind two different people.
-        ...prev.filter(
-          (a) => !(a.kind === 'stunt' && (a.playerId === first.id || a.playerId === target.id)),
-        ),
-        ...pair,
-      ]);
-      return;
-    }
-
-    const next = makeBlock(tool, first, target, climbTo ?? undefined);
-    setAssignments((prev) => [
-      // One block per man. Re-tapping a blocker corrects him instead of stacking.
-      ...prev.filter((a) => !(a.playerId === first.id && isBlockKind(a.kind))),
-      next,
-    ]);
-  }
-
-  /**
-   * The pen hovers before it touches down, and the trace showed contact landing
-   * two to three yards from where it had been hovering. With no feedback there
-   * is no way to see that offset, let alone correct for it, so aim is guesswork.
-   * Draw the tip, the reach around it, and ring whoever a press would pick up.
-   *
-   * Written straight to the DOM rather than through state: hover moves arrive
-   * far faster than React should re-render. Only the ringed player, which
-   * changes rarely, goes through state.
-   */
-  function showAim(svg: SVGSVGElement, e: React.PointerEvent) {
-    // Hover arrives far faster than a frame. Coalesce, or the board re-renders
-    // on every sample and the main thread has nothing left for real contacts.
-    if (aimQueued.current) return;
-    aimQueued.current = true;
-    requestAnimationFrame(() => {
-      aimQueued.current = false;
-    });
-
-    const at = toYards(svg, e.clientX, e.clientY);
-    const radius = pickRadius(svg);
-
-    aimRef.current?.setAttribute('transform', `translate(${at.x.toFixed(2)} ${at.y.toFixed(2)})`);
-    aimRef.current?.setAttribute('opacity', '1');
-    ringRef.current?.setAttribute('r', radius.toFixed(2));
-
-    const id = nearestPlayer(visible, at, radius)?.id ?? null;
-    if (id !== hoverRef.current) {
-      hoverRef.current = id;
-      setHoverId(id);
-    }
   }
 
   function syncUndo() {
@@ -1303,691 +1184,17 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     writeFoundationId(id, unit);
   }
 
+  /*
+   * The pointer handlers live in `pointer/`, built fresh on every render at the
+   * foot of this component. These two are reached from further up — the undo
+   * buttons, the Escape key, the quick bar — so they go through the latest set.
+   */
   function dropCarried(reason: string) {
-    const held = carry.current;
-    carry.current = null;
-    tapGuard.current = performance.now() + CHATTER_MS;
-    setCarrying(null);
-    if (TRACING && held) trace(`            -> placed ${byId(held.id)?.label} (${reason})`);
-  }
-
-  function moveCarried(svg: SVGSVGElement, at: Yards, client?: { x: number; y: number }) {
-    const c = carry.current;
-    if (!c) return;
-    applyDrag(
-      svg,
-      { kind: c.kind, id: c.id, pt: c.pt, dx: c.dx, dy: c.dy, ox: 0, oy: 0, moved: true },
-      at,
-      client,
-    );
+    pointerRef.current?.dropCarried(reason);
   }
 
   function clearAim() {
-    aimRef.current?.setAttribute('opacity', '0');
-    if (hoverRef.current !== null) {
-      hoverRef.current = null;
-      setHoverId(null);
-    }
-  }
-
-  /**
-   * Move the player under a drag to a pointer position.
-   *
-   * Called from pointermove, and also from pointerdown when a bounce resumes.
-   * The pen's contacts run 2-5ms, far too short for a move event to fire inside
-   * one, and it travels while it is off the glass. So for this device the down
-   * events carry nearly all the position information there is. Using them only
-   * to choose a player, then waiting for a move that never arrives, is why a
-   * drag picked the right man and then left him standing where he was.
-   */
-  function applyDrag(
-    svg: SVGSVGElement,
-    d: DragState,
-    at: Yards,
-    /** The same point in client pixels. Only the pan needs it; see below. */
-    client?: { x: number; y: number },
-  ): boolean {
-    if (!d.moved) {
-      if (!beyondSlop(d, at, pxToYards(svg, DRAG_SLOP_PX))) return false;
-      d.moved = true;
-    }
-
-    /*
-     * Sliding the window, and it comes first because it is the one drag that
-     * changes nothing on the play.
-     *
-     * No snapshot: the view is not part of a play, so a step back over a pan
-     * would be a step that undid nothing anyone could see. No grid and no
-     * magnet either — those tidy a man onto a yard line, and this is not a man.
-     *
-     * Worked in pixels rather than in yards. Every other drag reads its target
-     * off the live matrix, but a pan *is* a change to that matrix, so yards
-     * taken from it are yards in a box that has already moved: the reading
-     * chases its own tail and the board drifts. Pen travel across the glass is
-     * the one quantity that stays still underneath the gesture, and the scale
-     * is fixed for its whole length because zoom cannot change mid-drag. The
-     * offset is set absolutely from where the grab began, never accumulated, so
-     * a frame that renders late cannot leave the board a yard adrift.
-     */
-    if (d.kind === 'pan') {
-      const from = panFrom.current;
-      const ctm = svg.getScreenCTM();
-      if (!from || !ctm || !client) return true;
-      setPan(panOffset(from, client, ctm));
-      return true;
-    }
-
-    // The first movement of a gesture is the moment there is something to step
-    // back over, and the snapshot taken here is still the pre-drag board.
-    if (!gestureRemembered.current) {
-      gestureRemembered.current = true;
-      remember();
-    }
-
-    /*
-     * Only the offense is magnetised to the line. A defender belongs head-up on
-     * the ball often enough, and snapping him flush would sit him exactly on top
-     * of the lineman he is over, which draws as one mark rather than two.
-     *
-     * Neither highlight is magnetised at all: the line of scrimmage means
-     * nothing to where a quarterback is looking, nor to the patch of grass a
-     * receiver is working into.
-     */
-    const onOffense = d.kind === 'player' && byId(d.id)?.side === 'offense';
-    const step = settings.snapStepYards;
-    const magnet = onOffense ? settings.losMagnetYards : 0;
-
-    /*
-     * A man is kept a yard inside the board so his mark and his number stay on
-     * it. A zone's corner is not a man: a deep third is a third of the field,
-     * and stopping its corner a yard short of the sideline meant the widest
-     * zone the coverage tool draws could not be redrawn at the width it was
-     * given. The corner may go to the edge; the middle of a box still may not,
-     * or the box would slide off the board entirely.
-     */
-    const { x, y } = dragTarget(d, at, { step, magnet });
-
-    if (d.kind === 'vision') {
-      setVision({ x, y });
-      return true;
-    }
-    if (d.kind === 'route-point') {
-      setAssignments((prev) =>
-        // Depth only, and the shape kept; see `slideRoute`.
-        prev.map((a) => (a.id !== d.id || d.pt === undefined ? a : slideRoute(a, d.pt, y))),
-      );
-      return true;
-    }
-    if (d.kind === 'zone' || d.kind === 'zone-size') {
-      setZones((prev) =>
-        prev.map((z) => {
-          if (z.playerId !== d.id) return z;
-          // Moving keeps the box the size it is and puts its middle under the
-          // pen; sizing pins the near corner and grows it out of that corner.
-          return d.kind === 'zone' ? { ...z, x, y } : resizeFrom(z, { x, y });
-        }),
-      );
-      return true;
-    }
-    if (d.kind === 'focus') {
-      // The far end, stored as an offset from the man so it stays with him.
-      // Dragging it out both aims the square and opens it up, since how far it
-      // reaches is also how wide it is.
-      const man = byId(d.id);
-      if (man) {
-        setFocuses((prev) =>
-          prev.map((f) => (f.playerId === d.id ? { ...f, dx: x - man.x, dy: y - man.y } : f)),
-        );
-      }
-      return true;
-    }
-
-    setPlayers((prev) =>
-      applyOnLine(
-        prev.map((p) => (p.id === d.id ? { ...p, x, y } : p)),
-        settings,
-      ),
-    );
-    return true;
-  }
-
-  function handleMove(e: React.PointerEvent) {
-    const d = drag.current;
-    const svg = svgRef.current;
-    if (!svg) return;
-
-    /*
-     * A move across a floating panel is not a move across the board.
-     *
-     * pointerdown has always been guarded, but this was not, so a carried
-     * player followed the pen onto the inspector and was dropped wherever the
-     * finger happened to land on it. Reaching for the route list flung him
-     * downfield. A genuine drag is unaffected: it holds pointer capture on the
-     * stage, so its events retarget there and never match this.
-     */
-    if (!d && (e.target as Element).closest?.('.inspector, .drawer, .quick-bar')) {
-      clearAim();
-      return;
-    }
-    if (tool === 'erase') {
-      const at = toYards(svg, e.clientX, e.clientY);
-      // Hovering counts. This pen is off the glass most of the time, and an
-      // eraser that needed contact would be an eraser that never moved.
-      if (erasing) eraseUnder(at, svg);
-      else if (e.pointerType !== 'touch') showAim(svg, e);
-      return;
-    }
-
-    if (tool === 'draw') {
-      /*
-       * Raw updates carry one sample per event and are bound natively below, so
-       * plain moves are ignored while they are arriving; handling both would
-       * double every point. But the browser advertising pointerrawupdate is not
-       * a promise that it fires for a hovering pen, and hover is how a stroke
-       * gets its shape here. If none has arrived recently, take the move.
-       */
-      const rawFlowing = rawBound.current && performance.now() - lastRawAt.current < 100;
-      if (stroke.current && !rawFlowing) extendStroke(e);
-      else if (!stroke.current && e.pointerType !== 'touch') showAim(svg, e);
-      return;
-    }
-
-    if (!d) {
-      if (carry.current) {
-        moveCarried(svg, toYards(svg, e.clientX, e.clientY), { x: e.clientX, y: e.clientY });
-        return;
-      }
-      /*
-       * Touch has no hover, so there is nothing to preview for a finger — and
-       * the ring says what a press would pick up, which while the board tool is
-       * out is nothing at all.
-       */
-      if (e.pointerType !== 'touch' && !panning) showAim(svg, e);
-      // A move with no drag underway is either hover or a lost grip. Both are
-      // worth seeing, but only occasionally, or the log is nothing else.
-      if (TRACING && e.pointerType === 'pen' && moveCount.current++ % 25 === 0) {
-        trace(`${describeEvent(e)}  [no drag underway]`);
-      }
-      return;
-    }
-
-    applyDrag(svg, d, toYards(svg, e.clientX, e.clientY), { x: e.clientX, y: e.clientY });
-    e.preventDefault();
-  }
-
-  function handleUp(e: React.PointerEvent) {
-    if (TRACING) trace(`${describeEvent(e)}  drag=${drag.current ? 'yes' : 'NONE'}`);
-
-    // A lift means nothing while drawing: this pen lifts constantly. The idle
-    // timer, or a second tap, is what ends a stroke.
-    if (tool === 'draw' || tool === 'erase') return;
-    if (!drag.current) return;
-
-    // Provisional, not final: the pen may simply have bounced. handleStageDown
-    // decides, by how soon and how near the next contact lands.
-    const svg = svgRef.current;
-    const at = svg ? toYards(svg, e.clientX, e.clientY) : null;
-    lastDrop.current = at
-      ? { ...drag.current, at: performance.now(), x: at.x, y: at.y }
-      : null;
-
-    /*
-     * Contact that ended without traveling was a tap, so lift the player and
-     * let him follow the pen. Holding contact and dragging still works and ends
-     * here as it always did, which is what a finger does; this path is for a
-     * pen that cannot hold contact at all.
-     */
-    if (!drag.current.moved && (tool === 'select' || drag.current.kind !== 'player')) {
-      carry.current = { ...drag.current, at: performance.now() };
-      setCarrying(drag.current.id);
-      if (TRACING) trace(`            -> carrying ${byId(drag.current.id)?.label}`);
-    }
-    drag.current = null;
-    try {
-      stageRef.current?.releasePointerCapture(e.pointerId);
-    } catch {
-      /* already released */
-    }
-  }
-
-  /**
-   * The stage owns hit testing rather than each player shape. Chrome applies
-   * touch adjustment to a finger but hit-tests a stylus at the exact pixel, so
-   * a mark a finger grabs first time needs the pen placed dead on it. Missing
-   * used to land on the background and clear the selection, which is why a drag
-   * appeared to deselect itself halfway.
-   */
-  /**
-   * Palm rejection: ignore touch that lands while the pen is in play.
-   *
-   * Pen-only is the stronger version of the same rule, for a hand that rests on
-   * the glass for longer than the 800ms window. It gates the ink tools alone —
-   * `accepts` is not on the path that drags a player, and a finger has to go on
-   * moving marks around whatever this is set to.
-   */
-  function accepts(e: React.PointerEvent | PointerEvent): boolean {
-    if (e.pointerType === 'pen') {
-      lastPenAt.current = performance.now();
-      return true;
-    }
-    if (e.pointerType === 'touch') {
-      if (getSettings().penOnly) return false;
-      return performance.now() - lastPenAt.current > 800;
-    }
-    return true;
-  }
-
-  function extendStroke(e: React.PointerEvent | PointerEvent) {
-    const pts = stroke.current;
-    if (!pts || !accepts(e)) return;
-
-    // One event per sample with raw updates; with plain moves the samples are
-    // batched, so unpack them or the stroke corners off at speed.
-    const native = 'getCoalescedEvents' in e ? (e as PointerEvent) : null;
-    const batch = native?.getCoalescedEvents?.() ?? null;
-    if (batch && batch.length > 1) {
-      for (const c of batch) pts.push({ x: c.clientX, y: c.clientY, p: c.pressure });
-    } else {
-      pts.push({ x: e.clientX, y: e.clientY, p: e.pressure });
-    }
-
-    const ahead = (e as PointerEvent).getPredictedEvents?.() ?? [];
-    // Preview at the width it will commit at, or the jump on release reads as
-    // the app having changed its mind about the stroke.
-    const svg = svgRef.current;
-    const yards = getSettings().pressureWidth
-      ? widthFromPressure(pts.map((q) => q.p ?? 0))
-      : undefined;
-    ink.current?.draw(
-      pts,
-      ahead.map((q) => ({ x: q.clientX, y: q.clientY })),
-      yards && svg ? yardsToPx(svg, yards) : undefined,
-    );
-
-    // Any movement, hovering or not, keeps the stroke alive.
-    if (idleTimer.current) window.clearTimeout(idleTimer.current);
-    idleTimer.current = window.setTimeout(commitStroke, INK_IDLE_MS);
-  }
-
-  /**
-   * Turn the raw samples into an assignment.
-   *
-   * Simplified first, because a pen lays down hundreds of points that describe
-   * a straight line. Then, if the coach asked for it, squared up — near-flat
-   * segments go flat and the last point settles onto a yard — and only then
-   * smoothed, so the corners that survive read as the curve the hand drew.
-   * Squaring has to happen before smoothing or it would be straightening the
-   * midpoints the smoother invented rather than the corners the hand turned at.
-   */
-  function commitStroke() {
-    const pts = stroke.current;
-    const owner = strokeOwner.current;
-    stroke.current = null;
-    strokeOwner.current = null;
-    commitTimer.current = null;
-    if (idleTimer.current) window.clearTimeout(idleTimer.current);
-    idleTimer.current = null;
-    tapGuard.current = performance.now() + CHATTER_MS;
-    ink.current?.clear();
-
-    const svg = svgRef.current;
-    if (!pts || pts.length < 2 || !svg) return;
-
-    const yards = pts.map((q) => toYards(svg, q.x, q.y));
-
-    // Furthest any sample strayed from the start. A stray contact never leaves.
-    const span = yards.reduce(
-      (far, q) => Math.max(far, Math.hypot(q.x - yards[0].x, q.y - yards[0].y)),
-      0,
-    );
-    if (span < INK_MIN_SPAN) {
-      if (TRACING) trace(`stroke discarded: ${pts.length} samples spanning ${span.toFixed(2)}yd`);
-      return;
-    }
-
-    let shaped = simplify(yards, INK_TOLERANCE);
-    if (settings.squareUpStrokes) shaped = snapEnd(straighten(shaped));
-
-    const path = toSmoothPath(shaped);
-    if (path.length < 2) return;
-
-    // One width for the whole stroke, written onto every point so that an
-    // erased fragment keeps the weight of the stroke it was cut from.
-    const width = settings.pressureWidth
-      ? widthFromPressure(pts.map((q) => q.p ?? 0))
-      : undefined;
-    const inked = width === undefined ? path : path.map((q) => ({ ...q, w: width }));
-
-    if (TRACING) trace(`stroke committed: ${pts.length} samples -> ${path.length} points`);
-
-    remember();
-    if (owner) {
-      // One drawn route per player; drawing again replaces it.
-      setAssignments((prev) => [
-        ...prev.filter((a) => !(a.playerId === owner && a.kind === 'route')),
-        { id: inkId(), playerId: owner, kind: 'route', path: inked },
-      ]);
-    } else {
-      setAnnotations((prev) => [...prev, inked]);
-    }
-  }
-
-  function handleStageDown(e: React.PointerEvent) {
-    const svg = svgRef.current;
-    if (!svg) return;
-    // The inspector and the drawer float inside the stage; taps on either are
-    // not board taps. Returning before preventDefault is what lets their
-    // buttons behave like buttons. The drawer's own wrapper is inert, so this
-    // only ever catches the panel and its tab.
-    if ((e.target as Element).closest?.('.inspector, .drawer, .quick-bar')) return;
-    e.preventDefault();
-
-    const at = toYards(svg, e.clientX, e.clientY);
-    clearAim();
-
-    // Nothing that just finished gets to be restarted by its own bounce.
-    if (performance.now() < tapGuard.current && !carry.current) {
-      if (TRACING) trace(`${describeEvent(e, at)}\n            -> bounce after a finished gesture, ignored`);
-      return;
-    }
-
-    /*
-     * Sliding the board beats every tool, because it is not one.
-     *
-     * Ahead of the pencil and the eraser deliberately: the toggle is a statement
-     * about what the next tap does, and a coach who has said "move the board"
-     * and then drawn a line across it would have caught the app lying. Nothing
-     * here picks anything up, so no mode's own rule is broken by it.
-     *
-     * Tap, move the pen, tap — the same grammar as everything else, and it
-     * comes free: the lift with no travel hands the board to `carry`, hover
-     * moves slide it, and the next tap sets it down. A finger that holds
-     * contact drags it directly, as a finger always has.
-     */
-    if (panning) {
-      if (carry.current) {
-        if (performance.now() - carry.current.at > CHATTER_MS) dropCarried('board set down');
-        return;
-      }
-      panFrom.current = { x: e.clientX, y: e.clientY, ox: pan.x, oy: pan.y };
-      drag.current = { kind: 'pan', id: PAN_ID, dx: 0, dy: 0, ox: at.x, oy: at.y, moved: false };
-      gestureRemembered.current = false;
-      try {
-        stageRef.current?.setPointerCapture(e.pointerId);
-      } catch {
-        /* not fatal */
-      }
-      if (TRACING) trace(`${describeEvent(e, at)}\n            -> grabbed the board`);
-      return;
-    }
-
-    if (tool === 'erase') {
-      if (!accepts(e)) return;
-
-      // A bounce is not a second tap. Same guard the stroke start needs.
-      if (erasing) {
-        if (performance.now() - strokeAt.current < CHATTER_MS) return;
-        setErasing(false);
-        tapGuard.current = performance.now() + CHATTER_MS;
-        return;
-      }
-
-      // One snapshot for the whole sweep, so stepping back restores every line
-      // the pen went over rather than the last few samples of it.
-      remember();
-      strokeAt.current = performance.now();
-      setErasing(true);
-      eraseUnder(at, svg);
-      return;
-    }
-
-    if (tool === 'draw') {
-      if (!accepts(e)) return;
-
-      // A second tap ends the route. One tap starts it, the pen draws the shape
-      // in between whether or not it is touching the glass.
-      if (stroke.current) {
-        // A bounce is not a second tap. Without this, the contact that follows
-        // a starting tap by 10 to 25ms ends the stroke before it has begun.
-        if (performance.now() - strokeAt.current < CHATTER_MS) {
-          if (TRACING) trace(`${describeEvent(e, at)}\n            -> bounce ignored, still drawing`);
-          return;
-        }
-        stroke.current.push({ x: e.clientX, y: e.clientY });
-        if (TRACING) trace(`${describeEvent(e, at)}\n            -> stroke finished by tap`);
-        commitStroke();
-        return;
-      }
-
-      stroke.current = [{ x: e.clientX, y: e.clientY }];
-      strokeAt.current = performance.now();
-      strokeOwner.current = nearestPlayer(visible, at, INK_OWNER_YARDS)?.id ?? null;
-      if (idleTimer.current) window.clearTimeout(idleTimer.current);
-      idleTimer.current = window.setTimeout(commitStroke, INK_IDLE_MS);
-      if (TRACING) {
-        trace(
-          `${describeEvent(e, at)}\n            -> stroke started` +
-            `${strokeOwner.current ? ` for ${byId(strokeOwner.current)?.label}` : ' (annotation)'}`,
-        );
-      }
-      return;
-    }
-
-    /*
-     * The S Pen breaks contact constantly. Traced on a Galaxy Ultra, one
-     * deliberate press arrived as five pointerdown/pointerup pairs inside
-     * 150ms, every one reporting pressure 0.00. So a bounce close in time and
-     * space to a drag that just ended is the same gesture continuing, not a new
-     * tap: resume the player already in hand rather than re-picking. Without
-     * this, a bounce landing in open grass cleared the selection mid-drag.
-     */
-    const now = performance.now();
-
-    /*
-     * Carrying beats every other interpretation of a tap. The window guards
-     * against this pen's contact bounce dropping the player the instant it was
-     * picked up, since a bounce arrives 10 to 25ms after the tap that lifted it.
-     */
-    if (carry.current) {
-      if (now - carry.current.at > CHATTER_MS) dropCarried('tapped down');
-      return;
-    }
-
-    const bounce = lastDrop.current;
-    if (tool === 'select' && isContactBounce(bounce, now, at)) {
-      const held = bounce.kind === 'player' ? byId(bounce.id) : null;
-      if (held || bounce.kind !== 'player') {
-        /*
-         * Carry the original grab offset rather than deriving a new one from
-         * the player's position. Bounces land 10-25ms apart, inside a single
-         * frame, so a re-render is not guaranteed and that position may be
-         * stale. Keeping the offset also means the player tracks the pen
-         * across the break, which is what a continuing gesture should do.
-         */
-        // Keep the original grab point too, so the slop is measured across the
-        // whole gesture rather than restarting at every bounce.
-        drag.current = {
-          kind: bounce.kind,
-          id: bounce.id,
-          pt: bounce.pt,
-          dx: bounce.dx,
-          dy: bounce.dy,
-          ox: bounce.ox,
-          oy: bounce.oy,
-          moved: bounce.moved,
-        };
-        if (held) setSel({ kind: 'player', id: held.id });
-        try {
-          stageRef.current?.setPointerCapture(e.pointerId);
-        } catch {
-          /* not fatal */
-        }
-        const moved = applyDrag(svg, drag.current, at, { x: e.clientX, y: e.clientY });
-        if (TRACING) {
-          trace(
-            `${describeEvent(e, at)}\n            -> RESUMED ${held?.label ?? bounce.kind} ` +
-              `(contact bounce, ${(now - bounce.at).toFixed(0)}ms gap)` +
-              `${moved ? ' + moved' : ', within slop'}`,
-          );
-        }
-        return;
-      }
-    }
-
-    /*
-     * A handle on the selected man's route beats everything else in Routes.
-     * They are only drawn for the man in hand, so a tap on one is deliberate,
-     * and the end of a route often lands on top of somebody else's mark.
-     */
-    const handle = tool === 'routes' ? grabRoutePoint(at, pickRadius(svg)) : null;
-    if (handle) {
-      drag.current = handle;
-      gestureRemembered.current = false;
-      try {
-        stageRef.current?.setPointerCapture(e.pointerId);
-      } catch {
-        /* not fatal */
-      }
-      if (TRACING) trace(`${describeEvent(e, at)}\n            -> grabbed route point ${handle.pt}`);
-      return;
-    }
-
-    const radius = pickRadius(svg);
-
-    /*
-     * One rule for what a tap is asking for, shared by every mode.
-     *
-     * A tap inside a player's mark is that player even when a line runs under
-     * him. Measured on the device: five taps in a row 0.22 to 0.67 yards from a
-     * guard, every one inside his mark, all selected the block line instead,
-     * which is what "the pen will not select unless I press hard" turned out to
-     * be. Pressing hard simply landed nearer his exact center than the line.
-     */
-    /*
-     * Routes mode picks lines too, but it never selects one.
-     *
-     * It used to be given nothing, so a tap on a receiver's own route landed on
-     * open grass and cleared him — and his color swatches with him. The line
-     * resolves to the man who runs it instead, which opens the picker the
-     * swatches are already in. So tapping a route is another way of tapping its
-     * player, and there is still no line inspector over the board in Routes.
-     */
-    const lines = tool === 'select' || tool === 'routes' ? shown : [];
-    const hit = pickAt(visible, lines, at, radius, PLAYER_R);
-    const p = hit?.kind === 'player' ? byId(hit.id) : null;
-
-    if (hit?.kind === 'assignment' && tool === 'routes') {
-      const owner = byId(drawn.find((a) => a.id === hit.id)?.playerId);
-      if (TRACING) {
-        trace(
-          `${describeEvent(e, at)}\n            -> a line at ${hit.distance.toFixed(2)}yd, ` +
-            `opening ${owner?.label ?? 'nobody'}`,
-        );
-      }
-      setSel(owner ? { kind: 'player', id: owner.id } : null);
-      setPending(null);
-      tapGuard.current = performance.now() + CHATTER_MS;
-      return;
-    }
-
-    if (hit?.kind === 'assignment') {
-      if (TRACING) {
-        trace(
-          `${describeEvent(e, at)}\n            -> picked a line at ${hit.distance.toFixed(2)}yd`,
-        );
-      }
-      setPending(null);
-      setSel({ kind: 'assignment', id: hit.id });
-      return;
-    }
-
-    if (TRACING) {
-      trace(
-        `${describeEvent(e, at)}\n            -> ${
-          p ? `picked ${p.label} at ${hit!.distance.toFixed(2)}yd` : 'NOTHING'
-        } (radius ${radius.toFixed(2)}yd, tool ${tool})`,
-      );
-    }
-
-    /*
-     * Routes mode selects and nothing else. The man stays exactly where he is,
-     * because choosing what he runs should never cost you the spot you spent a
-     * drag putting him on.
-     */
-    if (tool === 'routes') {
-      /*
-       * The cone is swung here too, not only in Move. It is switched on from
-       * this man's route list, and sending the coach to another mode to aim it
-       * would be the two-trips problem the route picker exists to end. Nothing
-       * about it moves a player, so the mode's own rule still holds.
-       */
-      const swing = p ? null : grabHighlight(at);
-      if (swing) {
-        drag.current = swing;
-        gestureRemembered.current = false;
-        try {
-          stageRef.current?.setPointerCapture(e.pointerId);
-        } catch {
-          /* not fatal */
-        }
-        if (TRACING) trace(`${describeEvent(e, at)}\n            -> moving the ${swing.kind}`);
-        return;
-      }
-      setSel(p ? { kind: 'player', id: p.id } : null);
-      setPending(null);
-      tapGuard.current = performance.now() + CHATTER_MS;
-      return;
-    }
-
-    if (!p) {
-      /*
-       * Nobody there — so the cone gets its turn. It lies under the board and
-       * covers a lot of grass, which is why this comes after the players and
-       * the lines rather than before them.
-       */
-      const handle = grabHighlight(at);
-      if (handle) {
-        drag.current = handle;
-        gestureRemembered.current = false;
-        setSel(null);
-        try {
-          stageRef.current?.setPointerCapture(e.pointerId);
-        } catch {
-          /* not fatal */
-        }
-        if (TRACING) trace(`${describeEvent(e, at)}\n            -> grabbed the ${handle.kind}`);
-        return;
-      }
-      setSel(null);
-      setPending(null);
-      return;
-    }
-
-    if (tool !== 'select') {
-      handlePairTap(p);
-      return;
-    }
-
-    drag.current = {
-      kind: 'player',
-      id: p.id,
-      dx: p.x - at.x,
-      dy: p.y - at.y,
-      ox: at.x,
-      oy: at.y,
-      moved: false,
-    };
-    // A bounce resuming a drag deliberately does not reset this: it is the same
-    // gesture continuing, and it must not cost a second step of undo.
-    gestureRemembered.current = false;
-    setSel({ kind: 'player', id: p.id });
-    // Capture can throw if the pointer is already gone. The drag survives
-    // without it, because every move bubbles back to this same element.
-    try {
-      stageRef.current?.setPointerCapture(e.pointerId);
-    } catch {
-      /* not fatal */
-    }
+    pointerRef.current?.clearAim();
   }
 
   /**
@@ -2007,98 +1214,6 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     // routeOf reads assignments, which is what this depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool, selectedPlayer, assignments]);
-
-  /** The handle, if the tap is within reach of it. */
-  function grabRoutePoint(at: Yards, radius: number): DragState | null {
-    let best: (typeof routeHandles)[number] | null = null;
-    let bestD = Math.max(radius, ROUTE_GRAB);
-    for (const h of routeHandles) {
-      const d = Math.hypot(h.x - at.x, h.y - at.y);
-      if (d <= bestD) {
-        best = h;
-        bestD = d;
-      }
-    }
-    if (!best) return null;
-    return {
-      kind: 'route-point',
-      id: best.id,
-      pt: best.pt,
-      dx: best.x - at.x,
-      dy: best.y - at.y,
-      ox: at.x,
-      oy: at.y,
-      moved: false,
-    };
-  }
-
-  /**
-   * A tap inside one of the highlights, which are their own grab handles.
-   *
-   * Neither has anything to aim at on purpose: a handle out at the far end read
-   * as another player among the routes, and the wash is a far bigger target,
-   * which is what this stylus needs — Chrome hit-tests it at the exact pixel.
-   *
-   * Reached only once the players and the lines have had their turn, so a
-   * highlight spread across the backfield can never be what a tap on the man
-   * standing in it picks up. The squares go first: they are small and placed
-   * deliberately, where the cone is a wide wash that would swallow them.
-   */
-  function grabHighlight(at: Yards): DragState | null {
-    const base = { ox: at.x, oy: at.y, moved: false };
-
-    /*
-     * Corners before bodies, and zones before either highlight.
-     *
-     * A corner is a small deliberate target sitting on top of the box it sizes,
-     * so it has to be asked first or it could never be hit at all. Then the
-     * boxes: a zone is placed where a coach put it, where the cone is a wide
-     * wash across the whole backfield that would otherwise swallow anything
-     * lying inside it. Same argument the squares already won against the cone.
-     */
-    for (const z of zones) {
-      if (!onCorner(z, at)) continue;
-      const c = zoneCorner(z);
-      return { kind: 'zone-size', id: z.playerId, dx: c.x - at.x, dy: c.y - at.y, ...base };
-    }
-
-    for (const z of zones) {
-      if (!insideZone(z, at)) continue;
-      // Grab it by its middle, so the box keeps its position under the pen
-      // instead of jumping its center to wherever the tap landed.
-      return { kind: 'zone', id: z.playerId, dx: z.x - at.x, dy: z.y - at.y, ...base };
-    }
-
-    for (const f of focuses) {
-      const man = byId(f.playerId);
-      if (!man || !insideFocus(man, f, at)) continue;
-      // Drag from the far end, not from where the tap landed, or grabbing the
-      // near edge would collapse the square onto the pen.
-      return {
-        kind: 'focus',
-        id: f.playerId,
-        dx: man.x + f.dx - at.x,
-        dy: man.y + f.dy - at.y,
-        ...base,
-      };
-    }
-
-    // Not drawn without a quarterback, and a cone you cannot see is one you
-    // cannot mean to grab.
-    if (vision && qb && insideCone(qb, vision, at)) {
-      return {
-        kind: 'vision',
-        id: VISION_ID,
-        // Swing it from where the focus is, not from where the tap landed, or
-        // grabbing the wide part of the wash would snap the look sideways.
-        dx: vision.x - at.x,
-        dy: vision.y - at.y,
-        ...base,
-      };
-    }
-
-    return null;
-  }
 
   /**
    * Show the quarterback's line of sight, or stop showing it.
@@ -2131,33 +1246,6 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         ? prev.filter((f) => f.playerId !== player.id)
         : [...prev, defaultFocus(player)],
     );
-  }
-
-  /**
-   * Rub out ink under the pen.
-   *
-   * Annotations erase partially, which is what the freehand layer is for. A
-   * route or a block is a single assignment and goes whole, matching what the
-   * Delete button in the inspector does, because half a block line means
-   * nothing to anyone reading the sheet.
-   */
-  function eraseUnder(at: Yards, svg: SVGSVGElement) {
-    const radius = Math.max(0.7, pxToYards(svg, 26));
-    const left = eraseAt(annotations, at, radius);
-    if (left) {
-      setAnnotations(left);
-      return;
-    }
-    const line = nearestAssignment(shown, at, radius);
-    if (line) {
-      // Whole, as Delete does — and a stunt's two halves go together, because
-      // rubbing out one of them would leave a man looping behind nobody.
-      setAssignments((prev) => {
-        const partner = stuntPartner(line, prev);
-        return prev.filter((a) => a.id !== line.id && a.id !== partner?.id);
-      });
-      setSel(null);
-    }
   }
 
   /**
@@ -2355,6 +1443,62 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     closeDrawerAfter();
   }
 
+  const pointer = createPointer({
+    tool,
+    panning,
+    erasing,
+    pending,
+    pan,
+    settings,
+    visible,
+    drawn,
+    shown,
+    annotations,
+    zones,
+    focuses,
+    vision,
+    qb,
+    routeHandles,
+    byId,
+    remember,
+    setPlayers,
+    setAssignments,
+    setAnnotations,
+    setZones,
+    setFocuses,
+    setVision,
+    setSel,
+    setPending,
+    setHoverId,
+    setCarrying,
+    setErasing,
+    setPan,
+    svgRef,
+    stageRef,
+    drag,
+    carry,
+    lastDrop,
+    tapGuard,
+    gestureRemembered,
+    panFrom,
+    moveCount,
+    ink,
+    stroke,
+    strokeOwner,
+    strokeAt,
+    idleTimer,
+    commitTimer,
+    lastPenAt,
+    lastRawAt,
+    rawBound,
+    aimRef,
+    ringRef,
+    hoverRef,
+    aimQueued,
+    live: () => pointerRef.current!,
+  });
+  pointerRef.current = pointer;
+
   return (
     <div className="editor">
       <header>
@@ -2392,10 +1536,10 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
            both take them; the panels floating over the board do not. */
         style={boardVars(boardSurface)}
         ref={stageRef}
-        onPointerDown={handleStageDown}
-        onPointerMove={handleMove}
-        onPointerUp={handleUp}
-        onPointerCancel={handleUp}
+        onPointerDown={pointer.handleStageDown}
+        onPointerMove={pointer.handleMove}
+        onPointerUp={pointer.handleUp}
+        onPointerCancel={pointer.handleUp}
         onPointerLeave={clearAim}
       >
         <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">

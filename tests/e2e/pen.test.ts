@@ -208,6 +208,32 @@ describe('freehand: tap, draw in the air, tap', () => {
     expect((await ink()).annotations).toBe(0);
   });
 
+  /*
+   * Found while the handlers were being split, and fixed there. The timer that
+   * ends a stroke when the pen goes quiet was set from the raw-update listener,
+   * which is bound once when the pencil comes out — so it committed the stroke
+   * against the board as it was then, and the undo snapshot it took was of a
+   * board from before the *previous* stroke. One step back removed both.
+   * Only on a secure origin, where raw updates fire: the deployed app, and
+   * never the LAN, which is why nobody had pinned it down.
+   */
+  it('steps back over one stroke at a time when each ended by the pen going quiet', async () => {
+    await pencil();
+    const quietStroke = async (from: { x: number; y: number }, to: { x: number; y: number }) => {
+      await penTap(page, from, 1);
+      await page.waitForTimeout(140);
+      await penHover(page, from, to, 20, true);
+      await page.waitForTimeout(900); // INK_IDLE_MS is 700
+    };
+    await quietStroke({ x: -8, y: -12 }, { x: -3, y: -16 });
+    await quietStroke({ x: 3, y: -12 }, { x: 8, y: -16 });
+    expect((await ink()).annotations).toBe(2);
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect.poll(async () => (await ink()).annotations).toBe(1);
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect.poll(async () => (await ink()).annotations).toBe(0);
+  });
+
   it('gives a stroke started on a man to that man, as his route', async () => {
     await pencil();
     const te = man(await savedPlay(page), 'TE');

@@ -221,13 +221,13 @@ So: **never require sustained contact.** Every gesture is tap to start, move the
 pen (hovering counts), tap to finish. Finger drags still work and must stay
 working.
 
-**Every gesture that finishes something must arm `tapGuard`** in
-`PlayEditor.tsx`. Otherwise the bounce after the finishing tap starts the next
+**Every gesture that finishes something must arm `tapGuard`** — a ref the
+editor owns and every module under `editor/pointer/` is handed. Otherwise the bounce after the finishing tap starts the next
 gesture. That bug appeared three times before it was fixed in one place.
 
 **One gesture is one step of undo.** A drag arrives as dozens of moves and, on
-this device, as several separate contacts. `gestureRemembered` in
-`PlayEditor.tsx` takes the snapshot at the first real movement and not again, so
+this device, as several separate contacts. `gestureRemembered`, in
+`editor/pointer/drag.ts`, takes the snapshot at the first real movement and not again, so
 stepping back undoes the whole drag rather than the last few pixels of it. It is
 reset when a fresh grab starts, and deliberately *not* reset when a contact
 bounce resumes one.
@@ -1132,19 +1132,43 @@ pen tracing has been finicky before and is not worth the time right now.
 
 ## The editor, in pieces
 
-`PlayEditor.tsx` still owns the state and the pointer handlers. What has come
-out of it so far, with nothing a coach can see changed:
+`PlayEditor.tsx` was 3,182 lines and is under 2,000. It still owns every piece
+of state and everything the panels do; what it no longer holds is how a pointer
+is read. Nothing a coach can see changed in the split, and the golden boards and
+both test suites are what say so.
 
 - `editor/gesture.ts` — the constants every pointer decision is made with, the
   shape of a thing in hand, and the decisions that need no board: is this
   contact a bounce, is the pen past the slop, where does a drag land, how far
   has the board slid, how does a route run deeper.
-- `editor/drawerPrefs.ts` — whether the drawer is open, remembered.
+- `editor/pointer/` — everything the stage does with a pointer. `index.ts` is
+  the dispatcher that `handleStageDown` and `handleMove` used to be; each tool
+  keeps its own rules beside it: `pan.ts`, `erase.ts`, `ink.ts`, and `board.ts`
+  for every tool that picks things up. `drag.ts` is where the thing in hand
+  goes, shared by all of them — which is still what gives a zone, the cone and
+  the board itself tap-move-tap, bounce-resume and one step of undo for free.
+  `grab.ts` finds route handles and the washes, `pairs.ts` is the two-tap
+  tools, `aim.ts` is the ring under a hovering pen.
 - `editor/BoardLayers.tsx` — everything drawn on the board, back to front.
-- `editor/LineInspector.tsx`, `editor/QuickBar.tsx`.
+- `editor/LineInspector.tsx`, `editor/QuickBar.tsx`, `editor/drawerPrefs.ts`.
 
-`handleStageDown`, `handleMove`, `handleUp` and `applyDrag` are still in the
-editor, and splitting them per tool is the part that is left.
+**The pointer modules are rebuilt on every render, from `EditorCtx`.**
+`createPointer(ed)` is called at the foot of the component with the state, the
+setters and the refs, so a handler sees exactly the board on screen. That is the
+same thing the handlers were when they were closures inside the component; it is
+written down now, in `pointer/context.ts`, as three kinds of thing: state, which
+is a snapshot; refs, which are live; and the setters, which are the only way
+anything changes the play.
+
+**Anything that fires later than its event goes through `ed.live()`.** A timer
+or a natively bound listener that calls a handler captured from an older render
+acts on an older board. That was a real bug and not a theoretical one: the raw
+pointer listener is bound once when the pencil comes out, the timer that ends a
+stroke was set from it, and so a stroke ended by the pen going quiet was
+committed — and its undo snapshot taken — against the board from before the
+previous stroke. One step back removed two strokes. It only happened where
+`pointerrawupdate` fires, which is a secure origin: the deployed app and never
+the LAN. `pointerRef` in the editor holds the latest handlers for exactly this.
 
 **Netlify credits are nearly out.** Test over the LAN, which costs nothing and
 hot-reloads. Deploy **once per stage**, not per fix. A push to `main` triggers a

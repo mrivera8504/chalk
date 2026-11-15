@@ -70,7 +70,7 @@ export async function onBoard(page: Page, at: Yd): Promise<void> {
 type Kind = 'pen' | 'touch';
 
 interface Step {
-  type: 'pointerdown' | 'pointermove' | 'pointerup';
+  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointerrawupdate';
   x: number;
   y: number;
   kind: Kind;
@@ -136,15 +136,29 @@ export async function penTap(page: Page, at: Yd, pairs = 5, timing: { contact?: 
   await play(page, burst(await toClient(page, at), pairs, timing.contact, timing.gap));
 }
 
-/** The pen traveling off the glass: moves at buttons=0. */
-export async function penHover(page: Page, from: Yd, to: Yd, steps = 12) {
+/**
+ * The pen traveling off the glass: moves at buttons=0.
+ *
+ * `raw` sends them as `pointerrawupdate`, which is what Chrome delivers on a
+ * secure origin — so on the deployed app, and not over the LAN — and what the
+ * pencil listens for natively when it is there.
+ */
+export async function penHover(page: Page, from: Yd, to: Yd, steps = 12, raw = false) {
   const a = await toClient(page, from);
   const b = await toClient(page, to);
   await play(
     page,
     Array.from({ length: steps }, (_, i): Step => {
       const t = (i + 1) / steps;
-      return { type: 'pointermove', x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, kind: 'pen', buttons: 0, wait: 6 };
+      return {
+        type: raw ? 'pointerrawupdate' : 'pointermove',
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+        kind: 'pen',
+        buttons: 0,
+        wait: 6,
+        captured: raw,
+      };
     }),
   );
 }
