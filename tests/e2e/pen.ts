@@ -51,6 +51,22 @@ export async function toClient(page: Page, at: Yd): Promise<{ x: number; y: numb
   }, at);
 }
 
+/**
+ * Refuse a spot that is under a panel or a button.
+ *
+ * The quick bar sits over the bottom corner of the board, and a "tap on open
+ * grass" aimed there once landed on the board-sliding toggle and passed for the
+ * wrong reason. A test that means the board says so, and is told when it is not.
+ */
+export async function onBoard(page: Page, at: Yd): Promise<void> {
+  const c = await toClient(page, at);
+  const hit = await page.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    return el?.classList.contains('stage') ? null : (el?.outerHTML.slice(0, 80) ?? 'nothing');
+  }, c);
+  if (hit) throw new Error(`(${at.x}, ${at.y}) is not open board: it is under ${hit}`);
+}
+
 type Kind = 'pen' | 'touch';
 
 interface Step {
