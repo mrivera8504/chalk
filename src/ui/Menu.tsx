@@ -5,6 +5,11 @@ import { Icon } from './Icon';
 interface Props {
   /** What the button is for, read out: 'More for Jet Sweep'. */
   label: string;
+  /**
+   * What the button shows, when it is not the three dots: the playbook's own
+   * name is the button that changes playbook.
+   */
+  trigger?: ReactNode;
   children: (close: () => void) => ReactNode;
 }
 
@@ -21,7 +26,7 @@ interface Props {
  * closes on a tap outside, on Escape, and on the back gesture, which it
  * registers for like every other thing that opens over the app.
  */
-export function Menu({ label, children }: Props) {
+export function Menu({ label, trigger, children }: Props) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
@@ -46,13 +51,13 @@ export function Menu({ label, children }: Props) {
   return (
     <div className="menu" ref={box}>
       <button
-        className="icon-button"
+        className={trigger ? 'menu-trigger' : 'icon-button'}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <Icon name="more" />
+        {trigger ?? <Icon name="more" />}
       </button>
       {open && (
         <div className="menu-sheet" role="menu">

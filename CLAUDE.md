@@ -6,8 +6,9 @@ Full spec and stage list: `docs/build-spec.md`.
 ## Where it stands
 
 **An overhaul is under way** — multi-sport, a new look, teams and sharing — in
-eight stages. Stage 0 (tests, and the editor split up) is done; stage 1 (the
-design system and the new shell) is in progress. See *Tests*, *The editor, in
+eight stages. Stage 0 (tests, and the editor split up) and stage 1 (the design
+system and the new shell) are done bar a pass on the tablet; stage 2 (the data
+layer) has its first slice in, several playbooks. See *Tests*, *The editor, in
 pieces* and *The shell* below.
 
 Stages 1-7 done: field and players, blocking tool, route and run presets with
@@ -859,6 +860,50 @@ older copy. Anything writing a book back has to merge against what is live at
 the moment it writes, per play, exactly as the app does. The same goes for
 nudging timestamps to win a comparison — doing that made a stale copy of a play
 beat a real rename of it. Do not shift stamps; fix the merge.
+
+## Several playbooks, and why nothing was migrated
+
+The overhaul's stage 2, first slice. An account can hold more than one playbook
+— `Book` in `domain/types.ts` — and the way that was added is the way
+`Play.unit` was: **absence keeps its meaning.** A play with no `bookId` is in the
+main playbook, which is every play saved before this existed. So there is no
+migration: an existing book opens with every play where it was and not one of
+them rewritten, and `tests/store/books.test.tsx` holds it to that byte for byte.
+
+**The main playbook is implied.** It is on the list without being stored, until
+it is renamed or deleted on purpose; `liveBooks()` is the one place that says
+which books there are, and it never says none. `bookOf()` is the one place that
+says which book a play or a folder is shown in: its own if that book is there,
+otherwise the first one. A play whose book was deleted on another device, or
+written by a build that has never heard of books, is **never hidden for want of
+somewhere to put it**.
+
+**A deleted book is a tombstone, and its plays go to a trash somebody can
+open.** Two copies of an account merge by union, so a book missing from one side
+is indistinguishable from one the other side has not heard of; `deletedAt` is
+what says gone on purpose. Its plays are moved into the trash of the playbook
+that is left, because a trash belonging to a book nobody can open is one nobody
+can take a play back out of. The last playbook cannot be deleted.
+
+**The list rides in the same document and the same storage key as the plays.**
+`Playbook.books` in `store/sync.ts` — optional, merged newest-wins per book like
+a play. A build from before this drops the list when it saves, and those builds
+go on existing for as long as a service worker serves them. The plays keep their
+`bookId` through it, so the worst an old build can do is lose a book's *name* on
+a device that had no copy of its own. This is still one Firestore document with
+its 1 MiB cap; per-play documents are the next slice.
+
+**Which playbook is open is the device's business.** `chalk.book.current.v1`,
+not in the book: the phone and the tablet can each be looking somewhere else.
+
+**A play is moved by naming the play it lands before**, not by an index. An
+index was an index into the whole array, and the screen shows one playbook of
+several.
+
+`Play.status` — idea, installing, game-ready — is set from the card's menu and
+filtered on the playbook screen, which offers the filter only once some play has
+one. Backups are version 2 and carry the book list; a version 1 file restores
+exactly as it always did.
 
 ## Backup, and what a backup has to carry
 

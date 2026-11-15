@@ -52,7 +52,7 @@ describe('a backup', () => {
     localStorage.clear();
 
     const { book: restored, counts } = readBackup(text);
-    expect(restored).toEqual(book());
+    expect(restored).toEqual({ ...book(), books: [] });
     expect(counts).toEqual({ plays: 3, sections: 1, formations: 1, routes: 1, roster: 1 });
     expect(custom().map((f) => f.id)).toEqual(['f-mine']);
     expect(readCustomRoutes()).toHaveLength(1);
@@ -107,6 +107,8 @@ describe('the version 1 backup file', () => {
 
   it('is still a version 1 file', () => {
     expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject({ kind: 'chalk-backup', version: 1 });
+    // And this build writes a later one, so the file above really is the old format.
+    expect(BACKUP_VERSION).toBe(2);
   });
 
   it('restores every play, live and trashed, with its id and stamp untouched', () => {

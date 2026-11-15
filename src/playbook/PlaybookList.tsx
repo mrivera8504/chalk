@@ -1,5 +1,13 @@
 import { useMemo, useState } from 'react';
-import { UNFILED_SECTION, type Play, type Section, type Side } from '../domain/types';
+import {
+  STATUS_LABEL,
+  UNFILED_SECTION,
+  type Book,
+  type Play,
+  type PlayStatus,
+  type Section,
+  type Side,
+} from '../domain/types';
 import { PageHead } from '../shell/AppShell';
 import type { SyncState } from '../store/sync';
 import { askConfirm, askText } from '../ui/dialog';
@@ -25,7 +33,17 @@ interface Props {
   onRenameSection: (id: string, name: string) => void;
   onDeleteSection: (id: string) => void;
   onSetSection: (id: string, sectionId: string) => void;
-  onMovePlay: (id: string, toIndex: number) => void;
+  /** Put a play in front of another one. */
+  onMovePlay: (id: string, beforeId: string | null) => void;
+  onSetStatus: (id: string, status: PlayStatus | undefined) => void;
+  /** Every playbook, and which one this screen is showing. */
+  books: Book[];
+  bookId: string;
+  onSelectBook: (id: string) => void;
+  onAddBook: (name: string) => void;
+  onRenameBook: (id: string, name: string) => void;
+  /** False when it is the last one, which cannot go. */
+  onDeleteBook: (id: string) => boolean;
 }
 
 /*
@@ -71,6 +89,13 @@ export function PlaybookList({
   onDeleteSection,
   onSetSection,
   onMovePlay,
+  onSetStatus,
+  books,
+  bookId,
+  onSelectBook,
+  onAddBook,
+  onRenameBook,
+  onDeleteBook,
 }: Props) {
   const [query, setQuery] = useState('');
   const [showTrash, setShowTrash] = useState(false);
@@ -96,11 +121,43 @@ export function PlaybookList({
    */
   const [unit, setUnit] = useState<Side | 'all'>('all');
   const [dragging, setDragging] = useState<string | null>(null);
+  /** Where the team is with a play, as a filter. Offered once any play says. */
+  const [status, setStatus] = useState<PlayStatus | 'all'>('all');
+  const book = books.find((b) => b.id === bookId) ?? books[0];
+
+  async function newBook() {
+    const name = await askText('New playbook', {
+      placeholder: 'JV offense',
+      label: 'Playbook name',
+      confirmLabel: 'Add playbook',
+    });
+    if (name) onAddBook(name);
+  }
+
+  async function renameBook() {
+    const name = await askText('Rename playbook', { value: book.name, label: 'Playbook name' });
+    if (name) onRenameBook(book.id, name);
+  }
+
+  async function deleteBook() {
+    const ok = await askConfirm(`Delete the playbook “${book.name}”?`, {
+      body: plays.length
+        ? `Its ${plays.length} ${plays.length === 1 ? 'play goes' : 'plays go'} to Deleted in ${
+            books.find((b) => b.id !== book.id)?.name ?? 'the other playbook'
+          }, where they can be put back. Its folders go with it.`
+        : 'It has no plays in it.',
+      confirmLabel: 'Delete playbook',
+      danger: true,
+    });
+    if (ok) onDeleteBook(book.id);
+  }
 
   /** Name, suggested name, tags and notes all match, because coaches search by feel. */
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const ofUnit = unit === 'all' ? plays : plays.filter((p) => (p.unit ?? 'offense') === unit);
+    const ofStatus = status === 'all' ? plays : plays.filter((p) => p.status === status);
+    const ofUnit =
+      unit === 'all' ? ofStatus : ofStatus.filter((p) => (p.unit ?? 'offense') === unit);
     if (!q) return ofUnit;
     return ofUnit.filter((p) =>
       [p.name, p.suggestedName ?? '', p.notes, p.coachingPoint, ...p.tags]
@@ -108,9 +165,9 @@ export function PlaybookList({
         .toLowerCase()
         .includes(q),
     );
-  }, [plays, query, unit]);
+  }, [plays, query, unit, status]);
 
-  const searching = query.trim().length > 0 || unit !== 'all';
+  const searching = query.trim().length > 0 || unit !== 'all' || status !== 'all';
 
   const grouped = useMemo(() => {
     const known = [...sections].sort((a, b) => a.order - b.order);
@@ -175,7 +232,73 @@ export function PlaybookList({
   return (
     <div className="page playbook">
       <PageHead
-        title="Playbook"
+        title={
+          /*
+           * The playbook's name is the button that changes playbook. One book
+           * and nobody needs to know there could be more; the menu is where a
+           * second one starts.
+           */
+          <Menu
+            label="Change playbook"
+            trigger={
+              <>
+                {book.name}
+                <Icon name="chevron" size={18} />
+              </>
+            }
+          >
+            {(close) => (
+              <>
+                {books.length > 1 &&
+                  books.map((b) => (
+                    <button
+                      key={b.id}
+                      role="menuitemradio"
+                      aria-checked={b.id === book.id}
+                      onClick={() => {
+                        close();
+                        onSelectBook(b.id);
+                      }}
+                    >
+                      {b.name}
+                    </button>
+                  ))}
+                {books.length > 1 && <hr />}
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    close();
+                    void newBook();
+                  }}
+                >
+                  New playbook
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    close();
+                    void renameBook();
+                  }}
+                >
+                  Rename this one
+                </button>
+                {/* The last one cannot go: a play has to be somewhere. */}
+                {books.length > 1 && (
+                  <button
+                    role="menuitem"
+                    className="danger"
+                    onClick={() => {
+                      close();
+                      void deleteBook();
+                    }}
+                  >
+                    Delete this one
+                  </button>
+                )}
+              </>
+            )}
+          </Menu>
+        }
         sub={
           <>
             <span className={`sync${NEEDS_ACTION.has(sync) ? ' bad' : ''}`}>{SYNC_LABEL[sync]}</span>
@@ -223,6 +346,22 @@ export function PlaybookList({
             ))}
           </div>
         )}
+        {/* Likewise: no status filter until some play has a status. */}
+        {plays.some((p) => p.status) && (
+          <select
+            className="status-filter"
+            aria-label="Filter by status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as PlayStatus | 'all')}
+          >
+            <option value="all">Any status</option>
+            {(Object.keys(STATUS_LABEL) as PlayStatus[]).map((k) => (
+              <option key={k} value={k}>
+                {STATUS_LABEL[k]}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {plays.length === 0 && sections.length === 0 ? (
@@ -233,7 +372,7 @@ export function PlaybookList({
       ) : grouped.length === 0 ? (
         <div className="empty">
           <strong>Nothing matches</strong>
-          <p>{query.trim() ? `No play matches “${query.trim()}”.` : 'No plays for that side of the ball.'}</p>
+          <p>{query.trim() ? `No play matches “${query.trim()}”.` : 'No plays match that filter.'}</p>
         </div>
       ) : (
         grouped.map(({ section, plays: inSection }) => (
@@ -286,10 +425,7 @@ export function PlaybookList({
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => {
                       if (dragging && dragging !== play.id) {
-                        onMovePlay(
-                          dragging,
-                          plays.findIndex((p) => p.id === play.id),
-                        );
+                        onMovePlay(dragging, play.id);
                         // Dropping a card into a folder files it there too,
                         // otherwise it lands in the middle of a list it is not
                         // a member of and jumps back on the next render.
@@ -307,6 +443,7 @@ export function PlaybookList({
                       onDelete={onDelete}
                       onSetSection={onSetSection}
                       onFileInNew={fileInNew}
+                      onSetStatus={onSetStatus}
                     />
                   </div>
                 ))}

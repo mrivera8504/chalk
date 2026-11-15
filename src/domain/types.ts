@@ -295,7 +295,78 @@ export interface Section {
   id: string;
   name: string;
   order: number;
+  /** The playbook this folder is in. Absent means the main one; see `Book`. */
+  bookId?: string;
 }
+
+/**
+ * A playbook: a named set of plays and the folders they are filed in.
+ *
+ * There was exactly one, and it had no name. There can be several now — a
+ * varsity book and a JV book, this season's and last — and the way that was
+ * added is the way `Play.unit` was: **absence keeps its meaning**. A play with
+ * no `bookId` is in the main playbook, which is every play drawn before this
+ * existed, so nothing saved is rewritten and there is no migration to go wrong.
+ *
+ * Deleted books are kept as tombstones rather than dropped, for the reason
+ * deleted plays are: two copies of an account merge by union, and a book
+ * missing from one side is indistinguishable from a book the other side has
+ * not heard of yet. The tombstone is what says "gone on purpose".
+ */
+export interface Book {
+  id: string;
+  name: string;
+  order: number;
+  updatedAt: number;
+  deletedAt?: number;
+}
+
+/** The playbook every play is in unless it says otherwise. */
+export const MAIN_BOOK = 'main';
+
+/** What the main playbook is called until somebody renames it. */
+export const MAIN_BOOK_NAME = 'Playbook';
+
+/**
+ * The playbooks a coach can see, in order.
+ *
+ * The main one is implied: it is on the list unless it has been stored (it was
+ * renamed) or deleted on purpose. And there is always at least one — a book
+ * list that came back empty would leave every play with nowhere to be shown,
+ * so the main playbook is put back rather than the app opening on nothing.
+ */
+export function liveBooks(stored: Book[]): Book[] {
+  const live = stored.filter((b) => !b.deletedAt);
+  const mainKnown = stored.some((b) => b.id === MAIN_BOOK);
+  const implied: Book = { id: MAIN_BOOK, name: MAIN_BOOK_NAME, order: 0, updatedAt: 0 };
+  const all = mainKnown ? live : [implied, ...live];
+  return (all.length ? all : [implied]).sort((a, b) => a.order - b.order);
+}
+
+/**
+ * The playbook a play or a folder is shown in.
+ *
+ * Its own, if that book is still there. Otherwise the first one: a play whose
+ * book was deleted on another device, or was written by a build that has never
+ * heard of books, must still be somewhere a coach can find it. Nothing is ever
+ * hidden for want of a book to put it in.
+ */
+export function bookOf(item: { bookId?: string }, books: Book[]): string {
+  const id = item.bookId ?? MAIN_BOOK;
+  return books.some((b) => b.id === id) ? id : books[0].id;
+}
+
+/**
+ * How far along a play is with the team. Absent means nobody has said, which
+ * is every play drawn before this existed.
+ */
+export type PlayStatus = 'idea' | 'installing' | 'ready';
+
+export const STATUS_LABEL: Record<PlayStatus, string> = {
+  idea: 'Idea',
+  installing: 'Installing',
+  ready: 'Game-ready',
+};
 
 export interface Play {
   id: string;
@@ -326,6 +397,10 @@ export interface Play {
   backNumber?: number;
   hole?: number;
   sectionId: string;
+  /** The playbook it is in. Absent means the main one; read through `bookOf`. */
+  bookId?: string;
+  /** Where the team is with it. Absent means nobody has said. */
+  status?: PlayStatus;
   formationId?: string;
   /**
    * The front, kept apart from `formationId` rather than sharing it. A defensive

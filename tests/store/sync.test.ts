@@ -30,7 +30,7 @@ describe('local storage', () => {
 
   it('survives corrupt storage', () => {
     localStorage.setItem('chalk.playbook.v1', '{not json');
-    expect(readLocal()).toEqual({ plays: [], sections: [], uid: null });
+    expect(readLocal()).toEqual({ plays: [], sections: [], books: [], uid: null });
   });
 });
 

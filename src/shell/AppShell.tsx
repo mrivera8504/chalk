@@ -61,7 +61,7 @@ export function PageHead({
   sub,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   sub?: ReactNode;
   children?: ReactNode;
 }) {

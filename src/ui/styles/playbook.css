@@ -256,6 +256,36 @@
   border: 1px solid color-mix(in srgb, var(--ui-rush) 60%, transparent);
 }
 
+/* Where the team is with it. Quiet, and told apart by more than its color:
+   the word is right there. */
+.status-tag {
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-style: normal;
+  color: var(--dim);
+  background: var(--panel-hi);
+}
+
+.status-tag.ready {
+  color: var(--ok);
+}
+
+.status-tag.installing {
+  color: var(--ui-ball);
+}
+
+.status-filter {
+  font: inherit;
+  min-height: 44px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-m);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--chalk);
+}
+
 .card-tags {
   display: flex;
   flex-wrap: wrap;

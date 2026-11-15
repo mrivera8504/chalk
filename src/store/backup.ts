@@ -6,7 +6,7 @@ import {
   writeFoundationId,
 } from '../domain/presets/formations';
 import { readCustomRoutes, writeCustomRoutes, type CustomRoute } from '../domain/presets/routes';
-import type { Formation, Play, Section } from '../domain/types';
+import type { Book, Formation, Play, Section } from '../domain/types';
 import { DEFAULT_APP_SETTINGS, getSettings, setSettings, type AppSettings } from './settings';
 import type { Playbook } from './sync';
 
@@ -21,7 +21,12 @@ import type { Playbook } from './sync';
  * only look like one until the day it was needed.
  */
 export const BACKUP_KIND = 'chalk-backup';
-export const BACKUP_VERSION = 1;
+/*
+ * 2 added the playbooks. A version 1 file has none, and restores as it always
+ * did: every play in the main playbook, which is where a play with no book
+ * recorded has always been.
+ */
+export const BACKUP_VERSION = 2;
 
 export interface Backup {
   kind: typeof BACKUP_KIND;
@@ -29,6 +34,8 @@ export interface Backup {
   exportedAt: number;
   plays: Play[];
   sections: Section[];
+  /** The named playbooks. Absent from a version 1 file. */
+  books?: Book[];
   formations: Formation[];
   routes: CustomRoute[];
   roster: RosterEntry[];
@@ -49,6 +56,7 @@ export function makeBackup(book: Playbook): Backup {
     exportedAt: Date.now(),
     plays: book.plays,
     sections: book.sections,
+    books: book.books ?? [],
     // Built-ins are not written out: they ship with the app, and a restore onto
     // a later build should get that build's set rather than a frozen copy.
     formations: readFormations().filter((f) => !f.builtIn),
@@ -127,7 +135,7 @@ export function readBackup(text: string): Restored {
   }
 
   return {
-    book: { plays, sections },
+    book: { plays, sections, books: Array.isArray(parsed.books) ? (parsed.books as Book[]) : [] },
     counts: {
       plays: plays.length,
       sections: sections.length,

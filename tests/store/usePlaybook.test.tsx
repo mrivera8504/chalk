@@ -260,7 +260,7 @@ describe('the trash', () => {
     writeLocal({ plays: [p('a'), p('b'), p('c', 1000, { deletedAt: 5 })], sections: [] }, null);
     const { result } = renderHook(() => usePlaybook());
     await settle();
-    act(() => result.current.movePlay('a', 99));
+    act(() => result.current.movePlay('a', null));
     expect(stored().plays.map((x) => x.id)).toEqual(['b', 'a', 'c']);
   });
 

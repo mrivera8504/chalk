@@ -6,7 +6,18 @@ import {
   foundationOffense,
   readFoundationId,
 } from '../domain/presets/formations';
-import { UNFILED_SECTION, type Play, type Section, type Side } from '../domain/types';
+import {
+  MAIN_BOOK,
+  MAIN_BOOK_NAME,
+  UNFILED_SECTION,
+  bookOf,
+  liveBooks,
+  type Book,
+  type Play,
+  type PlayStatus,
+  type Section,
+  type Side,
+} from '../domain/types';
 import { getSettings } from './settings';
 import { makeBackup, readBackup } from './backup';
 import {
@@ -43,6 +54,16 @@ const FOREGROUND_PULL_MS = 5000;
  * old, and that was the good case.
  */
 const BACKUP_AT_KEY = 'chalk.backup.at.v1';
+
+const CURRENT_BOOK_KEY = 'chalk.book.current.v1';
+
+function readCurrentBook(): string {
+  try {
+    return localStorage.getItem(CURRENT_BOOK_KEY) ?? MAIN_BOOK;
+  } catch {
+    return MAIN_BOOK;
+  }
+}
 
 function readBackupAt(): number | null {
   try {
@@ -88,6 +109,12 @@ function sameBook(a: Playbook, b: Playbook): boolean {
     const y = b.sections[i];
     if (x.id !== y.id || x.name !== y.name || x.order !== y.order) return false;
   }
+  const ab = a.books ?? [];
+  const bb = b.books ?? [];
+  if (ab.length !== bb.length) return false;
+  for (let i = 0; i < ab.length; i++) {
+    if (ab[i].id !== bb[i].id || ab[i].updatedAt !== bb[i].updatedAt) return false;
+  }
   return true;
 }
 
@@ -100,7 +127,11 @@ function sameBook(a: Playbook, b: Playbook): boolean {
  * and nobody to cover. The unit is written down at creation and never changed
  * afterwards — every line on the board was drawn for one of them.
  */
-export function blankPlay(sectionId = UNFILED_SECTION, unit: Side = 'offense'): Play {
+export function blankPlay(
+  sectionId = UNFILED_SECTION,
+  unit: Side = 'offense',
+  bookId: string = MAIN_BOOK,
+): Play {
   const now = Date.now();
   return {
     id: newId('p'),
@@ -116,6 +147,9 @@ export function blankPlay(sectionId = UNFILED_SECTION, unit: Side = 'offense'): 
       ? { defenseFormationId: readFoundationId('defense') ?? 'builtin-5-2' }
       : {}),
     sectionId,
+    // Only said when it is not the main one, so a play in the main playbook is
+    // stored exactly as a play has always been stored.
+    ...(bookId === MAIN_BOOK ? {} : { bookId }),
     players: applyOnLine(
       unit === 'defense' ? [...foundationOffense(), ...foundationDefense()] : foundationOffense(),
       getSettings(),
@@ -147,11 +181,37 @@ export function usePlaybook() {
    * trash is one place's problem rather than fifteen.
    */
   const [allPlays, setPlays] = useState<Play[]>(() => readLocal().plays);
-  const [sections, setSections] = useState<Section[]>(() => readLocal().sections);
-  const plays = useMemo(() => allPlays.filter((p) => !p.deletedAt), [allPlays]);
+  const [allSections, setSections] = useState<Section[]>(() => readLocal().sections);
+  /** Every playbook this account has had, tombstones included. */
+  const [storedBooks, setBooks] = useState<Book[]>(() => readLocal().books ?? []);
+  /**
+   * Which playbook is on screen. Kept on the device and not in the book: it is
+   * where this coach was looking, and the phone and the tablet can each be
+   * looking somewhere else.
+   */
+  const [wantedBook, setWantedBook] = useState<string>(readCurrentBook);
+
+  const books = useMemo(() => liveBooks(storedBooks), [storedBooks]);
+  // The one asked for, if it is still there. A book deleted on another device
+  // must not leave this one showing an empty screen with no name on it.
+  const bookId = books.some((b) => b.id === wantedBook) ? wantedBook : books[0].id;
+
+  /** Every live play in the account, whichever playbook it is in. */
+  const everyPlay = useMemo(() => allPlays.filter((p) => !p.deletedAt), [allPlays]);
+  const plays = useMemo(
+    () => everyPlay.filter((p) => bookOf(p, books) === bookId),
+    [everyPlay, books, bookId],
+  );
+  const sections = useMemo(
+    () => allSections.filter((sec) => bookOf(sec, books) === bookId),
+    [allSections, books, bookId],
+  );
   const trashed = useMemo(
-    () => allPlays.filter((p) => p.deletedAt).sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)),
-    [allPlays],
+    () =>
+      allPlays
+        .filter((p) => p.deletedAt && bookOf(p, books) === bookId)
+        .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0)),
+    [allPlays, books, bookId],
   );
   const [sync, setSync] = useState<SyncState>('local');
   const [uid, setUid] = useState<string | null>(null);
@@ -193,7 +253,7 @@ export function usePlaybook() {
    * `allPlays` inside `reconcile` would be the copy captured when the callback
    * was made. Written by the autosave effect below, which already builds it.
    */
-  const onScreen = useRef<Playbook>({ plays: allPlays, sections });
+  const onScreen = useRef<Playbook>({ plays: allPlays, sections: allSections, books: storedBooks });
   /** When one last succeeded, for the throttle below. */
   const pulledAt = useRef(0);
   const mounted = useRef(true);
@@ -244,7 +304,7 @@ export function usePlaybook() {
        * which is the stranded playbook this file was rewritten to prevent.
        * Merging loses nothing; the worst it does is carry plays across.
        */
-      const base = { plays: local.plays, sections: local.sections };
+      const base = { plays: local.plays, sections: local.sections, books: local.books ?? [] };
       const next = res.book ? mergeBooks(base, res.book) : base;
 
       loadedFor.current = forUid;
@@ -268,6 +328,7 @@ export function usePlaybook() {
       if (!sameBook(onScreen.current, next)) {
         setPlays(next.plays);
         setSections(next.sections);
+        setBooks(next.books ?? []);
       }
       pulledAt.current = Date.now();
       setSync('synced');
@@ -355,7 +416,7 @@ export function usePlaybook() {
   // Debounced autosave. Local first and synchronously, so a crash or a closed
   // tab between keystrokes costs nothing; the cloud follows when it can.
   useEffect(() => {
-    const book = { plays: allPlays, sections };
+    const book = { plays: allPlays, sections: allSections, books: storedBooks };
     onScreen.current = book;
     // Always, and before anything can fail — local storage is the floor, and
     // work drawn while auth is still resolving has to survive on its own.
@@ -370,7 +431,7 @@ export function usePlaybook() {
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
     };
-  }, [allPlays, sections, uid]);
+  }, [allPlays, allSections, storedBooks, uid]);
 
   const savePlay = useCallback((play: Play) => {
     const stamped = withSuggestion({ ...play, updatedAt: Date.now() }, getSettings());
@@ -419,8 +480,9 @@ export function usePlaybook() {
    * coach says when.
    */
   const emptyTrash = useCallback(() => {
-    setPlays((prev) => prev.filter((p) => !p.deletedAt));
-  }, []);
+    // This playbook's trash, which is the one on screen being emptied.
+    setPlays((prev) => prev.filter((p) => !(p.deletedAt && bookOf(p, books) === bookId)));
+  }, [books, bookId]);
 
   const duplicatePlay = useCallback((id: string) => {
     setPlays((prev) => {
@@ -446,11 +508,19 @@ export function usePlaybook() {
     );
   }, []);
 
-  const addSection = useCallback((name: string) => {
-    const section: Section = { id: newId('s'), name, order: Date.now() };
-    setSections((prev) => [...prev, section]);
-    return section;
-  }, []);
+  const addSection = useCallback(
+    (name: string) => {
+      const section: Section = {
+        id: newId('s'),
+        name,
+        order: Date.now(),
+        ...(bookId === MAIN_BOOK ? {} : { bookId }),
+      };
+      setSections((prev) => [...prev, section]);
+      return section;
+    },
+    [bookId],
+  );
 
   const renameSection = useCallback((id: string, name: string) => {
     setSections((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
@@ -464,35 +534,119 @@ export function usePlaybook() {
   }, []);
 
   /** Drag to reorder within the flat list; sections read their own order off it. */
-  const movePlay = useCallback((id: string, toIndex: number) => {
+  /**
+   * Put one play in front of another, or at the end of the live ones.
+   *
+   * By the play it lands before, not by a number. An index was an index into
+   * the whole book, and the screen now shows one playbook out of several, so
+   * the third card on screen is not the third play in the array.
+   */
+  const movePlay = useCallback((id: string, beforeId: string | null) => {
     setPlays((prev) => {
       const from = prev.findIndex((p) => p.id === id);
-      if (from === -1) return prev;
+      if (from === -1 || id === beforeId) return prev;
       const next = prev.slice();
       const [moved] = next.splice(from, 1);
-      // Clamped to the live run rather than the whole array, or a card dragged
-      // to the end would land among the thrown-away ones and come back deleted.
+      const at = beforeId === null ? -1 : next.findIndex((p) => p.id === beforeId);
+      // No such play, or none named: the end of the live run, ahead of the trash.
       const live = next.filter((p) => !p.deletedAt).length;
-      next.splice(Math.max(0, Math.min(live, toIndex)), 0, moved);
+      next.splice(at === -1 ? live : at, 0, moved);
       return order(next);
     });
   }, []);
 
+  const setPlayStatus = useCallback((id: string, status: PlayStatus | undefined) => {
+    setPlays((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        const { status: _was, ...rest } = p;
+        return { ...rest, ...(status ? { status } : {}), updatedAt: Date.now() };
+      }),
+    );
+  }, []);
+
+  const selectBook = useCallback((id: string) => {
+    setWantedBook(id);
+    try {
+      localStorage.setItem(CURRENT_BOOK_KEY, id);
+    } catch {
+      /* storage blocked; the session keeps working */
+    }
+  }, []);
+
+  const addBook = useCallback(
+    (name: string) => {
+      const book: Book = { id: newId('b'), name, order: Date.now(), updatedAt: Date.now() };
+      setBooks((prev) => [...prev, book]);
+      selectBook(book.id);
+      return book;
+    },
+    [selectBook],
+  );
+
+  const renameBook = useCallback((id: string, name: string) => {
+    setBooks((prev) => {
+      const now = Date.now();
+      // The main playbook is implied until something is said about it, and
+      // naming it is saying something.
+      if (!prev.some((b) => b.id === id)) {
+        return id === MAIN_BOOK ? [...prev, { id, name, order: 0, updatedAt: now }] : prev;
+      }
+      return prev.map((b) => (b.id === id ? { ...b, name, updatedAt: now } : b));
+    });
+  }, []);
+
   /**
-   * Push now instead of waiting out the debounce.
+   * Take a playbook away, and lose nothing that was in it.
    *
-   * The local copy is already written synchronously on every change, so this is
-   * only ever about the cloud. Cancels the pending timer first, or the debounce
-   * fires again a moment later and pushes the very same document twice.
+   * Its plays go to the trash of the playbook that is left to show — moved
+   * there, because a trash belonging to a book nobody can open is a trash
+   * nobody can empty or take a play back out of. Its folders go, as a folder's
+   * do when it is deleted. The book itself stays behind as a tombstone, so the
+   * tablet does not hand it back to the phone on the next sync.
+   *
+   * The last playbook cannot go: there has to be somewhere for a play to be.
    */
+  const deleteBook = useCallback(
+    (id: string) => {
+      const rest = books.filter((b) => b.id !== id);
+      if (!rest.length) return false;
+      const home = rest[0].id;
+      const now = Date.now();
+      const rehome = home === MAIN_BOOK ? {} : { bookId: home };
+      setPlays((prev) =>
+        order(
+          prev.map((p) => {
+            if (bookOf(p, books) !== id) return p;
+            const { bookId: _was, ...play } = p;
+            return { ...play, ...rehome, sectionId: UNFILED_SECTION, deletedAt: p.deletedAt ?? now, updatedAt: now };
+          }),
+        ),
+      );
+      setSections((prev) => prev.filter((sec) => bookOf(sec, books) !== id));
+      setBooks((prev) => {
+        const known = prev.some((b) => b.id === id);
+        const gone: Book = {
+          ...(prev.find((b) => b.id === id) ?? { id, name: MAIN_BOOK_NAME, order: 0 }),
+          updatedAt: now,
+          deletedAt: now,
+        };
+        return known ? prev.map((b) => (b.id === id ? gone : b)) : [...prev, gone];
+      });
+      selectBook(home);
+      return true;
+    },
+    [books, selectBook],
+  );
+
   const saveNow = useCallback(async () => {
     if (timer.current) window.clearTimeout(timer.current);
     // Same rule as the debounce: a book nobody has reconciled for this account
     // is not a book to write over that account.
     if (!uid || loadedFor.current !== uid) return;
     setSync('syncing');
-    setSync(await pushToCloud({ plays: allPlays, sections }, uid));
-  }, [allPlays, sections, uid]);
+    setSync(await pushToCloud({ plays: allPlays, sections: allSections, books: storedBooks }, uid));
+  }, [allPlays, allSections, storedBooks, uid]);
 
   /**
    * The backup file. Covers everything in local storage, not just the plays —
@@ -502,7 +656,11 @@ export function usePlaybook() {
     // The trash goes into the file too: a backup that quietly dropped what the
     // coach had not finished deciding about would be the loss this prevents.
     () => {
-      const json = JSON.stringify(makeBackup({ plays: allPlays, sections }), null, 2);
+      const json = JSON.stringify(
+        makeBackup({ plays: allPlays, sections: allSections, books: storedBooks }),
+        null,
+        2,
+      );
       const now = Date.now();
       try {
         localStorage.setItem(BACKUP_AT_KEY, String(now));
@@ -512,7 +670,7 @@ export function usePlaybook() {
       setLastBackupAt(now);
       return json;
     },
-    [allPlays, sections],
+    [allPlays, allSections, storedBooks],
   );
 
   /**
@@ -525,6 +683,7 @@ export function usePlaybook() {
       const { book, counts } = readBackup(text);
       setPlays(book.plays);
       setSections(book.sections);
+      setBooks(book.books ?? []);
       writeLocal(book, uid ?? claim.current);
       /*
        * Pushed now rather than on the debounce, because the restore screen
@@ -549,8 +708,17 @@ export function usePlaybook() {
 
   return {
     plays,
+    /** Every live play in the account, for finding one by its address. */
+    everyPlay,
     trashed,
     sections,
+    books,
+    bookId,
+    selectBook,
+    addBook,
+    renameBook,
+    deleteBook,
+    setPlayStatus,
     sync,
     lastBackupAt,
     savePlay,
@@ -569,6 +737,7 @@ export function usePlaybook() {
     reset: () => {
       setPlays(EMPTY.plays);
       setSections(EMPTY.sections);
+      setBooks([]);
     },
   };
 }

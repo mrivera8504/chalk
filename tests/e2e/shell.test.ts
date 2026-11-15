@@ -167,12 +167,55 @@ describe('a play card', () => {
 
   it('closes the menu on a tap elsewhere and on the back gesture', async () => {
     await menu('Cover 3').click();
-    await page.locator('.page-head h1').click();
+    // Not the title: that is the playbook switcher now, and opens a menu of its own.
+    await page.locator('.page-head p').click();
     expect(await page.getByRole('menu').count()).toBe(0);
     await menu('Cover 3').click();
     await page.goBack();
     await expect.poll(() => page.getByRole('menu').count()).toBe(0);
     expect(await title()).toBe('Playbook');
+  });
+});
+
+describe('playbooks', () => {
+  const switcher = () => page.getByRole('button', { name: 'Change playbook' });
+  const ask = async (text: string, confirm: string) => {
+    await page.getByRole('dialog').getByRole('textbox').fill(text);
+    await page.getByRole('dialog').getByRole('button', { name: confirm }).click();
+  };
+
+  it('adds a second one, empty, and switches back to the first with its plays intact', async () => {
+    await switcher().click();
+    await page.getByRole('menuitem', { name: 'New playbook' }).click();
+    await ask('JV offense', 'Add playbook');
+    await expect.poll(title).toBe('JV offense');
+    expect(await page.locator('.play-card').count()).toBe(0);
+
+    await switcher().click();
+    await page.getByRole('menuitemradio', { name: 'Playbook', exact: true }).click();
+    await expect.poll(title).toBe('Playbook');
+    expect(await page.locator('.play-card').count()).toBe(2);
+  });
+
+  it('starts a new play in the playbook that is open', async () => {
+    await switcher().click();
+    await page.getByRole('menuitem', { name: 'New playbook' }).click();
+    await ask('JV', 'Add playbook');
+    await page.getByRole('button', { name: 'New play', exact: true }).click();
+    await page.locator('.stage > svg').waitFor();
+    await page.getByRole('button', { name: 'Back to playbook' }).click();
+    await expect.poll(title).toBe('JV');
+    expect(await page.locator('.play-card').count()).toBe(1);
+    const made = (await stored()).plays.find((x) => !['sweep', 'cover3', 'oldest'].includes(x.id));
+    expect((made as unknown as { bookId?: string }).bookId).toBeTruthy();
+  });
+
+  it('marks where the team is with a play, and filters by it', async () => {
+    await page.getByRole('button', { name: 'More for Cover 3' }).click();
+    await page.getByLabel('Status of Cover 3').selectOption({ label: 'Game-ready' });
+    await expect.poll(() => page.locator('.status-tag').innerText()).toBe('Game-ready');
+    await page.getByLabel('Filter by status').selectOption({ label: 'Game-ready' });
+    expect(await page.locator('.play-card').count()).toBe(1);
   });
 });
 

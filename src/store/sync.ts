@@ -1,4 +1,4 @@
-import type { PathPoint, Play, Section } from '../domain/types';
+import type { Book, PathPoint, Play, Section } from '../domain/types';
 
 /**
  * Local storage is the floor, not the cache.
@@ -14,9 +14,18 @@ const KEY = 'chalk.playbook.v1';
 export interface Playbook {
   plays: Play[];
   sections: Section[];
+  /**
+   * The named playbooks, tombstones included. Optional, and absent on anything
+   * written before there could be more than one — and on anything written by a
+   * build that still thinks there is one, which will go on existing for as long
+   * as a service worker serves it. Such a build drops this list when it saves.
+   * The plays keep their `bookId` through it, so what is lost is at worst a
+   * book's name on a device that had no copy of its own, never a play.
+   */
+  books?: Book[];
 }
 
-export const EMPTY: Playbook = { plays: [], sections: [] };
+export const EMPTY: Playbook = { plays: [], sections: [], books: [] };
 
 /**
  * What is in storage, and whose it is.
@@ -39,6 +48,7 @@ export function readLocal(): StoredBook {
     return {
       plays: Array.isArray(parsed.plays) ? parsed.plays : [],
       sections: Array.isArray(parsed.sections) ? parsed.sections : [],
+      books: Array.isArray(parsed.books) ? parsed.books : [],
       // Absent on anything written before this existed. Treated as "unclaimed"
       // rather than as a mismatch, or every upgrade would look like a stranger.
       uid: typeof parsed.uid === 'string' ? parsed.uid : null,
@@ -51,7 +61,10 @@ export function readLocal(): StoredBook {
 
 export function writeLocal(book: Playbook, uid: string | null): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ plays: book.plays, sections: book.sections, uid }));
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ plays: book.plays, sections: book.sections, books: book.books ?? [], uid }),
+    );
   } catch {
     /* quota or private mode; the session still works, it just will not persist */
   }
@@ -78,7 +91,16 @@ export function mergeBooks(mine: Playbook, theirs: Playbook): Playbook {
   const sections = new Map<string, Section>();
   for (const s of [...mine.sections, ...theirs.sections]) if (s?.id) sections.set(s.id, s);
 
-  return { plays: [...plays.values()], sections: [...sections.values()] };
+  // Newest wins, per book, exactly as for a play: a rename on one device and a
+  // delete on another are both just a newer copy of that book.
+  const books = new Map<string, Book>();
+  for (const b of [...(mine.books ?? []), ...(theirs.books ?? [])]) {
+    if (!b?.id) continue;
+    const seen = books.get(b.id);
+    if (!seen || (b.updatedAt ?? 0) > (seen.updatedAt ?? 0)) books.set(b.id, b);
+  }
+
+  return { plays: [...plays.values()], sections: [...sections.values()], books: [...books.values()] };
 }
 
 /**
@@ -153,7 +175,7 @@ const DOC_REFUSE = 1_000_000;
 function measure(book: Playbook): number {
   try {
     return new TextEncoder().encode(
-      JSON.stringify({ plays: book.plays, sections: book.sections }),
+      JSON.stringify({ plays: book.plays, sections: book.sections, books: book.books ?? [] }),
     ).length;
   } catch {
     return 0;
@@ -257,6 +279,7 @@ async function keepVersion(ref: BookRef, fs: Fs, book: Playbook, why: string): P
   await setDoc(doc(versions, id), {
     plays: toCloud(book.plays),
     sections: book.sections,
+    books: book.books ?? [],
     savedAt: Date.now(),
     why,
   });
@@ -324,6 +347,7 @@ export async function pushToCloud(
     const before: Playbook = {
       plays: fromCloud(remote?.plays),
       sections: Array.isArray(remote?.sections) ? remote.sections : [],
+      books: Array.isArray(remote?.books) ? remote.books : [],
     };
 
     const losing = before.plays.length - book.plays.length;
@@ -354,6 +378,7 @@ export async function pushToCloud(
     await setDoc(ref, {
       plays: toCloud(book.plays),
       sections: book.sections,
+      books: book.books ?? [],
       updatedAt: Date.now(),
     });
     // Saved, and worth saying when the room left is running out.
@@ -385,6 +410,7 @@ export async function listVersions(uid: string): Promise<Version[]> {
         const book: Playbook = {
           plays: fromCloud(data.plays),
           sections: Array.isArray(data.sections) ? data.sections : [],
+          books: Array.isArray(data.books) ? data.books : [],
         };
         return {
           id: d.id,
@@ -411,6 +437,7 @@ export async function pullFromCloud(uid: string): Promise<PullResult> {
       book: {
         plays: fromCloud(data.plays),
         sections: Array.isArray(data.sections) ? data.sections : [],
+        books: Array.isArray(data.books) ? data.books : [],
       },
     };
   } catch (err) {

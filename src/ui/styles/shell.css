@@ -358,3 +358,48 @@ button.with-icon {
     animation: none;
   }
 }
+
+/* ---- changing playbook ---- */
+
+/* The page's title, as a button. It keeps the title's type; the chevron is
+   what says it does something. */
+.page-head h1 .menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: var(--tap);
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+.page-head h1 .menu-trigger .icon {
+  transform: rotate(90deg);
+  color: var(--dim);
+}
+
+/* Down and from the left: it hangs off a title at the top of the page. */
+.page-head h1 .menu-sheet {
+  top: calc(100% + var(--s-1));
+  bottom: auto;
+  left: 0;
+  right: auto;
+  font-family: var(--font);
+  letter-spacing: 0;
+}
+
+.menu-sheet hr {
+  width: 100%;
+  margin: 2px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.menu-sheet [aria-checked='true'] {
+  font-weight: 700;
+  color: var(--accent);
+}

@@ -6,7 +6,9 @@ import {
   drawnSides,
   playSurface,
   quarterback,
+  STATUS_LABEL,
   type Play,
+  type PlayStatus,
   type Section,
 } from '../domain/types';
 import { useSettings, boardVars } from '../store/settings';
@@ -34,6 +36,7 @@ interface Props {
   onDelete: (id: string) => void;
   onSetSection: (id: string, sectionId: string) => void;
   onFileInNew: (id: string) => void;
+  onSetStatus: (id: string, status: PlayStatus | undefined) => void;
 }
 
 /** The same renderer the editor uses, so a card can never drift from the play. */
@@ -45,6 +48,7 @@ export function PlayCard({
   onDelete,
   onSetSection,
   onFileInNew,
+  onSetStatus,
 }: Props) {
   const settings = useSettings();
   const holes = computeHoles(play.players, settings);
@@ -165,6 +169,7 @@ export function PlayCard({
                 unmarked play is an offensive one, which is what every play in
                 this book was before there was anything else to be. */}
             {play.unit === 'defense' && <em className="unit-tag">DEF</em>}
+            {play.status && <em className={`status-tag ${play.status}`}>{STATUS_LABEL[play.status]}</em>}
             {!play.name && play.suggestedName && <em>suggested name</em>}
           </span>
         </button>
@@ -196,6 +201,25 @@ export function PlayCard({
                     </option>
                   ))}
                   <option value={NEW_SECTION}>New folder</option>
+                </select>
+              </label>
+              {/* Where the team is with it. Native, like the folder above. */}
+              <label className="menu-field">
+                <span>Status</span>
+                <select
+                  value={play.status ?? ''}
+                  aria-label={`Status of ${title}`}
+                  onChange={(e) => {
+                    close();
+                    onSetStatus(play.id, (e.target.value || undefined) as PlayStatus | undefined);
+                  }}
+                >
+                  <option value="">Not set</option>
+                  {(Object.keys(STATUS_LABEL) as PlayStatus[]).map((k) => (
+                    <option key={k} value={k}>
+                      {STATUS_LABEL[k]}
+                    </option>
+                  ))}
                 </select>
               </label>
               <button

@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { PlayEditor } from './editor/PlayEditor';
-import { UNFILED_SECTION, type Side } from './domain/types';
+import { UNFILED_SECTION, bookOf, type Side } from './domain/types';
 import { PlaybookList } from './playbook/PlaybookList';
 import { blankPlay, usePlaybook } from './store/usePlaybook';
 import { DialogHost } from './ui/DialogHost';
@@ -23,8 +23,9 @@ export function App() {
     return play?.name || play?.suggestedName || 'the play';
   };
 
+  // Across every playbook: an address names a play, not the book it is in.
   const open =
-    route.screen === 'play' ? (book.plays.find((p) => p.id === route.id) ?? null) : null;
+    route.screen === 'play' ? (book.everyPlay.find((p) => p.id === route.id) ?? null) : null;
 
   /*
    * An address for a play that is not in this book — a stale link, or one
@@ -35,13 +36,23 @@ export function App() {
     if (route.screen === 'play' && !open) home();
   }, [route, open, home]);
 
+  /*
+   * A play opened by its address brings its playbook with it, so the way back
+   * out of the play lands on the list the play is actually in.
+   */
+  const openBook = open ? bookOf(open, book.books) : null;
+  const { bookId, selectBook } = book;
+  useEffect(() => {
+    if (openBook && openBook !== bookId) selectBook(openBook);
+  }, [openBook, bookId, selectBook]);
+
   // The back gesture goes where the `‹` button goes: to the playbook, not out
   // of the app. Every screen that is not the playbook is one step in from it.
   useBackLayer(route.screen !== 'book', home);
 
   const startNew = useCallback(
     (unit: Side = 'offense') => {
-      const play = blankPlay(UNFILED_SECTION, unit);
+      const play = blankPlay(UNFILED_SECTION, unit, book.bookId);
       book.savePlay(play);
       go({ screen: 'play', id: play.id });
     },
@@ -142,6 +153,16 @@ export function App() {
               });
             }}
             onMovePlay={book.movePlay}
+            onSetStatus={book.setPlayStatus}
+            books={book.books}
+            bookId={book.bookId}
+            onSelectBook={book.selectBook}
+            onAddBook={(name) => {
+              book.addBook(name);
+              toast(`Added ${name}`);
+            }}
+            onRenameBook={book.renameBook}
+            onDeleteBook={book.deleteBook}
           />
         )}
       </AppShell>
