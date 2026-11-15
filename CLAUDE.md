@@ -604,8 +604,9 @@ that happened.
 **Local storage records whose book it is.** One key held one book no matter who
 was signed in, so an anonymous device's plays were still sitting there when
 somebody signed into a real account — and the autosave pushed them straight over
-it. A stored book carrying a uid that is not the current one is never treated as
-this account's.
+it. The uid is what lets a signed-out device say which email its book will come
+back under, and what stops a push landing under an account the book on screen
+was never loaded for.
 
 **The book follows the account; auth is watched, not read once.** The pull ran
 on mount, which meant signing in never downloaded the account you signed into —
@@ -626,8 +627,17 @@ Nothing is ever pushed for a uid it does not name.
 the single newest `updatedAt` on each side and took the whole winner, so one
 play touched locally five minutes ago discarded forty from the cloud. Nothing
 about a playbook is atomic: a play is the unit that changes, so it is the unit
-that reconciles. A book from a *different* uid is replaced rather than merged,
-which is what the account screen already promised in words.
+that reconciles.
+
+**A book from a different uid merges too, and that is a decision.** It was meant
+to be replaced, and for a long while these notes said it was. It never was: the
+autosave effect has `uid` in its dependencies, so it restamps storage with the
+new uid the moment auth changes, and by the time the pull lands every book reads
+as this account's own. A test found that, and the owner chose to keep it
+(2026-11-15). Replacing would discard plays drawn anonymously the moment a coach
+signed into an existing account, leaving the only copy under a uid nobody can
+sign into again — the stranded playbook all over again. Merging loses nothing.
+The account screen says so in words now.
 
 **One anonymous sign-in per attempt, and the listener goes away.**
 `ensureSignedIn` left an `onAuthStateChanged` listener behind on every call, and
@@ -837,9 +847,9 @@ confirm says which email it will come back under rather than promising it to
 whoever signs in next.
 
 Signing into an account that already exists is the other direction entirely: the
-uid changes, and that account's playbook comes *down* over what is on screen.
-The account screen has always said so, and for a while the code did the
-opposite — see *The playbook, and how it syncs*, which is also where the
+uid changes, and that account's playbook comes *down* and is merged, play by
+play, with what is on this device. For a while the code pushed the device's book
+over the account instead — see *The playbook, and how it syncs*, which is also where the
 `ensureSignedIn` listener leak that minted 78 anonymous accounts is written up.
 
 ## Settings
@@ -1105,21 +1115,20 @@ the tablet is still the only witness to what the pen actually sends.
 
 **`it.fails` marks a defect the suite found and nobody has decided about.** It
 goes red the day the behavior changes, which is the prompt to make it an
-ordinary test. Two stand in `tests/store/usePlaybook.test.tsx`:
+ordinary test. One stands in `tests/store/usePlaybook.test.tsx`: emptying a
+trash that holds more than half the book is the exact shape the shrink guard
+refuses, so the push is blocked and the next pull merges the trash back in. Left
+for the per-play documents of stage 2, which remove the cause.
 
-- A local book stamped with another uid is **merged** on sign-in, not replaced
-  as *The playbook, and how it syncs* says. The autosave effect has `uid` in its
-  dependencies, so it restamps storage with the new uid before that account's
-  book has come down.
-- Emptying a trash that holds more than half the book is the exact shape the
-  shrink guard refuses. The push is blocked, and the next pull merges the trash
-  back in.
+The other thing that suite found — a book from another uid merging on sign-in —
+was decided rather than fixed; see *The playbook, and how it syncs*.
 
 **The bounce window and the device notes overlap.** `CHATTER_MS` is 120 and one
 press is recorded as arriving within 150. A press whose last pair lands in that
 30ms tail reads as the second tap and sets the man straight back down — pinned
 on both sides in `tests/e2e/pen.test.ts`. Whether the pen really produces that
-tail needs a trace before the number is touched.
+tail needs a trace before the number is touched, and the owner has parked that:
+pen tracing has been finicky before and is not worth the time right now.
 
 ## The editor, in pieces
 

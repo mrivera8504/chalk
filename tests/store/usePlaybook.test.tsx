@@ -97,32 +97,28 @@ describe('the book and the account', () => {
   });
 
   /*
-   * KNOWN FAILURE, found by this suite and left for the owner to decide.
-   *
-   * The notes say a book stamped with another uid is replaced on sign-in, not
-   * merged. It is merged: the autosave effect has `uid` in its dependencies, so
-   * the moment auth changes it rewrites storage stamped with the NEW uid, and
-   * by the time the pull lands the stranger's book reads as this account's own.
-   * Nothing is lost by it — but one account's plays are copied into another's
-   * and pushed there. `it.fails` goes red the day this is fixed, which is the
-   * prompt to turn it back into an ordinary test.
+   * A decision, not an accident — see *The playbook, and how it syncs*. This
+   * was meant to replace and never did; the owner chose to keep the merge,
+   * because replacing would discard plays drawn anonymously the moment a coach
+   * signed into an existing account.
    */
-  it.fails('replaces, rather than merges, a local book that belongs to another account', async () => {
+  it('merges a local book drawn under another account into the one signed into', async () => {
     writeLocal({ plays: [p('anon1'), p('anon2')], sections: [] }, 'anon-uid');
     seedCloud('real', p('real1'), p('real2'), p('real3'));
     const { result } = renderHook(() => usePlaybook());
     await signIn('real');
-    expect(result.current.plays.map((x) => x.id).sort()).toEqual(['real1', 'real2', 'real3']);
+    expect(result.current.plays.map((x) => x.id).sort()).toEqual(['anon1', 'anon2', 'real1', 'real2', 'real3']);
+    expect(stored().uid).toBe('real');
+    await autosave();
+    expect(cloudIds('real').sort()).toEqual(['anon1', 'anon2', 'real1', 'real2', 'real3']);
   });
 
-  it('restamps storage with the new account before that account\'s book has come down', async () => {
-    // The mechanism behind the failure above, pinned so a fix has to move it.
-    writeLocal({ plays: [p('anon1')], sections: [] }, 'anon-uid');
-    renderHook(() => usePlaybook());
-    await settle();
-    expect(stored().uid).toBe('anon-uid');
-    act(() => auth.listener?.('real'));
-    expect(stored()).toMatchObject({ uid: 'real', plays: [{ id: 'anon1' }] });
+  it('takes the newer copy when both hold the same play', async () => {
+    writeLocal({ plays: [p('shared', 2000, { name: 'device' })], sections: [] }, 'anon-uid');
+    seedCloud('real', p('shared', 1000, { name: 'account' }));
+    const { result } = renderHook(() => usePlaybook());
+    await signIn('real');
+    expect(result.current.plays.map((x) => x.name)).toEqual(['device']);
   });
 
   it('never writes under the uid a stranger\'s book came from', async () => {

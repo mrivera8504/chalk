@@ -52,9 +52,9 @@ export function AccountPanel({ onSaveNow, onClose }: Props) {
       /*
        * Creating an account links the email to the uid this device already has,
        * so the plays on screen stay and go up. Signing into an existing one
-       * changes uid, and the playbook that comes down is that account's — which
-       * is the opposite direction, and used to be the bug: this pushed the
-       * device's book over the account it had just signed into.
+       * changes uid, and that account's playbook comes down and is merged with
+       * what is on this device, play by play — it used to be the bug that this
+       * pushed the device's book straight over the account instead.
        */
       await onSaveNow();
       setNote(
@@ -177,9 +177,9 @@ export function AccountPanel({ onSaveNow, onClose }: Props) {
           )}
           {mode === 'in' && (
             <p className="picker-note">
-              Signing into an existing account replaces what is on screen with
-              that account's playbook. Export a JSON backup first if this device
-              has work the account does not.
+              Signing into an existing account brings that account's playbook
+              down and adds the plays on this device to it. Nothing here is
+              thrown away.
             </p>
           )}
         </div>

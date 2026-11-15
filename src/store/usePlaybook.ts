@@ -232,14 +232,19 @@ export function usePlaybook() {
 
       const local = readLocal();
       /*
-       * A book carrying another uid belongs to the account that was signed in
-       * before this one, and the account screen promises signing in replaces
-       * what is on screen. Only an unclaimed book — one drawn before auth
-       * answered, or written by a build that predates the uid being stored —
-       * merges into the account that picks it up.
+       * Whatever is on this device merges into the account, play by play —
+       * including a book drawn under another uid.
+       *
+       * This once meant to replace such a book, and never did: the autosave
+       * below restamps storage with the new uid the moment auth changes, so by
+       * the time a pull landed every book read as this account's own. That was
+       * found by a test and then kept on purpose. Replacing would throw away
+       * plays drawn anonymously the moment a coach signed into an existing
+       * account, leaving the only copy under a uid nobody can sign into again —
+       * which is the stranded playbook this file was rewritten to prevent.
+       * Merging loses nothing; the worst it does is carry plays across.
        */
-      const ours = local.uid === null || local.uid === forUid;
-      const base = ours ? { plays: local.plays, sections: local.sections } : EMPTY;
+      const base = { plays: local.plays, sections: local.sections };
       const next = res.book ? mergeBooks(base, res.book) : base;
 
       loadedFor.current = forUid;
