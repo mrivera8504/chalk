@@ -54,8 +54,6 @@ import {
   pickRadius,
   pxToYards,
   yardsToPx,
-  snap,
-  snapDepth,
   toYards,
   toPathD,
   type Yards,
@@ -114,97 +112,27 @@ import { TRACING, describeEvent, trace } from './trace';
 import { LegalityBadge } from './LegalityBadge';
 import { PrintPanel } from '../export/PrintPanel';
 import { download, playToPng, playTitle, slug, stamp } from '../export/render';
-
-/*
- * Measured from a real S Pen trace: bounce gaps ran 10-25ms, while a genuine
- * second tap was never under 200ms. The window sits well clear of both.
- */
-const CHATTER_MS = 120;
-const CHATTER_YARDS = 2.5;
-
-/*
- * A pen wobbles while it is in contact, so without a threshold every tap drags
- * the player a little. In the device trace a 103ms tap moved a guard more than
- * a yard and a half, far enough that the next tap at the same spot found empty
- * grass. Nothing moves until the pen has travelled this far, in screen pixels.
- */
-const DRAG_SLOP_PX = 12;
-
-/** How near a route handle a tap has to land, in yards. The zone grip's reach. */
-const ROUTE_GRAB = 1.1;
-
-/** Freehand tolerance, in yards. Roughly a tenth of a player's width. */
-const INK_TOLERANCE = 0.15;
-
-/**
- * A stroke ends when the pen goes quiet, not when it lifts.
- *
- * This digitizer reports contact for three to five milliseconds at a time
- * unless the pen is pressed hard, so a stroke that needs held pressure cannot
- * be drawn. Hover, by contrast, tracks perfectly: every trace carries hundreds
- * of clean hover samples at zero pressure. So contact is used only to start and
- * finish, and the shape in between is taken from wherever the pen goes.
- */
-const INK_IDLE_MS = 700;
-
-/**
- * A stroke has to actually go somewhere. Contact bounce delivers two samples a
- * few milliseconds apart, which is enough to satisfy a bare length check and
- * commit a stub that then displaces a real route.
- */
-const INK_MIN_SPAN = 0.8;
-
-/**
- * How close a stroke must begin to a player to be counted as his route, rather
- * than free annotation. Deliberately far tighter than the tap radius: that one
- * is generous so a pen can select at all, but at 2.46 yards everything below
- * the line of scrimmage falls inside somebody's claim, and since a player keeps
- * only one drawn route, every new stroke silently deleted the last.
- */
-const INK_OWNER_YARDS = PLAYER_R * 1.6;
-
-/*
- * Whether the drawer is open, remembered across plays and sessions. The editor
- * remounts for every play, and a coach who slid the tools away to see the board
- * wants them to stay away. Defaults to open, so the tools are not hidden behind
- * a tab from someone who has never seen one.
- */
-const DRAWER_KEY = 'chalk.drawer.v1';
-
-/**
- * Open on a screen with room for it, shut on one without.
- *
- * Only ever the *first* answer: the coach's own tap on the tab is written down
- * and wins from then on. A phone in portrait gives the panel 58% of the board,
- * so starting there means the first thing anybody sees is a wall of buttons
- * over the play they just opened.
- */
-function drawerDefault(): boolean {
-  try {
-    return window.matchMedia('(orientation: landscape), (min-width: 700px)').matches;
-  } catch {
-    return true;
-  }
-}
-
-function readDrawerOpen(): boolean {
-  try {
-    const saved = localStorage.getItem(DRAWER_KEY);
-    if (saved === 'closed') return false;
-    if (saved === 'open') return true;
-    return drawerDefault();
-  } catch {
-    return drawerDefault();
-  }
-}
-
-function writeDrawerOpen(open: boolean): void {
-  try {
-    localStorage.setItem(DRAWER_KEY, open ? 'open' : 'closed');
-  } catch {
-    /* storage blocked; the session keeps working */
-  }
-}
+import { readDrawerOpen, writeDrawerOpen } from './drawerPrefs';
+import {
+  CHATTER_MS,
+  DRAG_SLOP_PX,
+  INK_IDLE_MS,
+  INK_MIN_SPAN,
+  INK_OWNER_YARDS,
+  INK_TOLERANCE,
+  PAN_ID,
+  ROUTE_GRAB,
+  VISION_ID,
+  beyondSlop,
+  dragTarget,
+  isContactBounce,
+  panOffset,
+  slideRoute,
+  type DragState,
+  type Drop,
+  type Selection,
+  type Snapshot,
+} from './gesture';
 
 let inkCounter = 0;
 const inkId = () => `k${Date.now().toString(36)}${(inkCounter++).toString(36)}`;
@@ -222,59 +150,6 @@ function initialPlayers(unit: Side = 'offense'): PlayerSlot[] {
   return unit === 'defense'
     ? applyOnLine([...foundationOffense(), ...foundationDefense()], settings)
     : applyOnLine(foundationOffense(), settings);
-}
-
-type Selection = { kind: 'player' | 'assignment'; id: string } | null;
-
-/**
- * A sentinel id for the cone, which has none of its own — there is at most one
- * on a play. Player ids are minted with a prefix, so it can never collide, and
- * `byId` returns null for it without being taught anything. A focus square has
- * no sentinel: it is one per man, so it is carried by its own player's id.
- */
-const VISION_ID = '::vision';
-
-/**
- * The same trick for the board itself, which is not a thing on the play at all.
- * Panning goes through `applyDrag` like everything else that moves, so it needs
- * an id to be carried by, and this one belongs to no player either.
- */
-const PAN_ID = '::pan';
-
-interface DragState {
-  /**
-   * What is in hand. `id` is the player for a drag, for a focus square and for
-   * a zone — the man each belongs to — and the sentinel for the cone.
-   *
-   * A zone is the only thing here with two grabs. Its body moves it and its far
-   * corner sizes it, which the cone and the square do not need because for them
-   * aiming and sizing are the same gesture. A coverage has to be aimed and
-   * sized separately: a flat is shallow and wide wherever it is.
-   */
-  kind: 'player' | 'vision' | 'focus' | 'zone' | 'zone-size' | 'pan' | 'route-point';
-  /** The assignment, for a route point. */
-  id: string;
-  /** Which point of the route is in hand. Only a route point has one. */
-  pt?: number;
-  /** Grab offset, so the mark keeps its position relative to the pen. */
-  dx: number;
-  dy: number;
-  /** Where the grab began, for measuring travel against the slop. */
-  ox: number;
-  oy: number;
-  /** True once the pen has travelled far enough that this is a drag, not a tap. */
-  moved: boolean;
-}
-
-/** Everything undo has to restore. Formations and tools are not part of a play. */
-interface Snapshot {
-  players: PlayerSlot[];
-  assignments: Assignment[];
-  annotations: PathPoint[][];
-  ballCarrierId: string | null;
-  vision: Vision | null;
-  focuses: Focus[];
-  zones: Zone[];
 }
 
 interface EditorProps {
@@ -465,7 +340,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    */
   const gestureRemembered = useRef(false);
   /** Where a drag was when contact broke, so a bounce can pick it back up. */
-  const lastDrop = useRef<(DragState & { at: number; x: number; y: number }) | null>(null);
+  const lastDrop = useRef<Drop | null>(null);
 
   /** The box, scaled and slid. Yards throughout, as ever. */
   const viewBox = useMemo(() => {
@@ -1474,7 +1349,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     client?: { x: number; y: number },
   ): boolean {
     if (!d.moved) {
-      if (Math.hypot(at.x - d.ox, at.y - d.oy) < pxToYards(svg, DRAG_SLOP_PX)) return false;
+      if (!beyondSlop(d, at, pxToYards(svg, DRAG_SLOP_PX))) return false;
       d.moved = true;
     }
 
@@ -1499,14 +1374,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       const from = panFrom.current;
       const ctm = svg.getScreenCTM();
       if (!from || !ctm || !client) return true;
-      const half = { x: VIEW.halfWidth, y: (VIEW.downfield + VIEW.behind) / 2 };
-      setPan({
-        // Drag right and the field goes right, which means the window goes
-        // left. Clamped so the middle of the view stays over the field: a board
-        // you can slide off the screen entirely is a board you can lose.
-        x: clamp(from.ox - (client.x - from.x) / ctm.a, -half.x, half.x),
-        y: clamp(from.oy - (client.y - from.y) / ctm.d, -half.y, half.y),
-      });
+      setPan(panOffset(from, client, ctm));
       return true;
     }
 
@@ -1538,13 +1406,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
      * given. The corner may go to the edge; the middle of a box still may not,
      * or the box would slide off the board entirely.
      */
-    const edge = d.kind === 'zone-size' ? 0 : 1;
-    const x = clamp(snap(at.x + d.dx, step), -VIEW.halfWidth + edge, VIEW.halfWidth - edge);
-    const y = clamp(
-      snapDepth(at.y + d.dy, d.kind === 'player' ? magnet : 0, step),
-      -VIEW.downfield + edge,
-      VIEW.behind - edge,
-    );
+    const { x, y } = dragTarget(d, at, { step, magnet });
 
     if (d.kind === 'vision') {
       setVision({ x, y });
@@ -1552,22 +1414,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     }
     if (d.kind === 'route-point') {
       setAssignments((prev) =>
-        prev.map((a) => {
-          if (a.id !== d.id || d.pt === undefined || !a.path[d.pt]) return a;
-          /*
-           * The route keeps its shape and only its depth changes. Everything
-           * past where the man stands slides downfield or back together, so the
-           * stem grows or shrinks and the break is the same break a yard or
-           * three further on. Depth only: sliding it sideways would lean the
-           * stem, and a leaning stem is a different route.
-           */
-          const my = y - a.path[d.pt].y;
-          if (!my) return a;
-          const path = a.path.map((p, i) =>
-            i === 0 ? p : { ...p, y: p.y + my, ...(p.cy !== undefined ? { cy: p.cy + my } : {}) },
-          );
-          return { ...a, path, edited: true };
-        }),
+        // Depth only, and the shape kept; see `slideRoute`.
+        prev.map((a) => (a.id !== d.id || d.pt === undefined ? a : slideRoute(a, d.pt, y))),
       );
       return true;
     }
@@ -1947,12 +1795,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     }
 
     const bounce = lastDrop.current;
-    if (
-      tool === 'select' &&
-      bounce &&
-      now - bounce.at < CHATTER_MS &&
-      Math.hypot(bounce.x - at.x, bounce.y - at.y) < CHATTER_YARDS
-    ) {
+    if (tool === 'select' && isContactBounce(bounce, now, at)) {
       const held = bounce.kind === 'player' ? byId(bounce.id) : null;
       if (held || bounce.kind !== 'player') {
         /*
