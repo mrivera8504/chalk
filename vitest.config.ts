@@ -22,6 +22,8 @@ export default defineConfig({
     // foreground pull only runs for a page somebody is looking at.
     environmentOptions: { jsdom: { pretendToBeVisual: true } },
     include: ['tests/**/*.test.{ts,tsx}'],
+    // The browser tests have their own config and their own script.
+    exclude: ['tests/e2e/**'],
     setupFiles: ['tests/setup.ts'],
     restoreMocks: true,
   },
