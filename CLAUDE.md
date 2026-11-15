@@ -234,7 +234,7 @@ bounce resumes one.
 
 ## The eraser
 
-`domain/erase.ts` is pure and tested. It rubs out the points within a radius
+`domain/erase.ts` is pure, and tested in `tests/domain/erase.test.ts`. It rubs out the points within a radius
 and **splits** the stroke, which is why the annotation layer is a list of paths
 rather than one. A run that starts partway through a stroke has its control
 point stripped: a control point describes the curve arriving from the point
@@ -1064,6 +1064,78 @@ in the S Pen work came from a sentence they wrote, never from a trace alone.
     npm run dev                  # localhost
     npm run dev -- --host        # reachable from the phone on the same wifi
     npm run build                # tsc -b && vite build
+    npm test                     # the unit suite, about three seconds
+    npm run test:e2e             # the pen, in a real Chromium
+    npm run typecheck            # src and tests together
+
+## Tests
+
+There were none until the overhaul began, and these notes said `erase.ts` was
+tested when it was not. Run both suites before every deploy; `.github/workflows/test.yml`
+runs them on every push.
+
+**`tests/export/golden/*.svg` are what a play looks like, written down.** The
+exporter draws with the same components as the board and the card, so six files
+stand for all three. A diff in one is either a bug or a deliberate change to
+what a coach sees — read it as one or the other before accepting it with
+`npx vitest run -u`. The print ink snapshot is the palette a real printer
+confirmed; if it moves, print a sheet.
+
+**The fixtures have fixed ids.** The formation presets number their men from a
+module counter, so a fixture built from them changes with the order tests run
+in. `tests/fixtures/plays.ts` writes the board out by hand for that reason.
+
+**`tests/fixtures/backup-v1.json` is never regenerated.** It is the promise the
+new backup format has to keep. A fixture rebuilt from current code only proves
+the code agrees with itself.
+
+**No test can reach a real cloud.** `vitest.config.ts` aliases
+`firebase/firestore` to an in-memory shim. An alias and not `vi.mock`, because
+`sync.ts` loads Firestore lazily and twice at once, and under a module mock one
+of those two loads was handed the real library. The browser tests abort every
+request that is not to localhost, so a run mints no anonymous account.
+
+**The pen is synthetic, and timed inside the page.** `tests/e2e/pen.ts` builds
+pointer events to the shape the traces recorded. A whole burst goes in one
+`page.evaluate`, because a bounce is a bounce by landing 14ms after the last
+lift and a round trip to the runner takes longer than that. After any button
+click a test waits 200ms before touching the board, or `tapGuard` rightly reads
+it as that click's bounce. These prove the editor's decisions given that input;
+the tablet is still the only witness to what the pen actually sends.
+
+**`it.fails` marks a defect the suite found and nobody has decided about.** It
+goes red the day the behavior changes, which is the prompt to make it an
+ordinary test. Two stand in `tests/store/usePlaybook.test.tsx`:
+
+- A local book stamped with another uid is **merged** on sign-in, not replaced
+  as *The playbook, and how it syncs* says. The autosave effect has `uid` in its
+  dependencies, so it restamps storage with the new uid before that account's
+  book has come down.
+- Emptying a trash that holds more than half the book is the exact shape the
+  shrink guard refuses. The push is blocked, and the next pull merges the trash
+  back in.
+
+**The bounce window and the device notes overlap.** `CHATTER_MS` is 120 and one
+press is recorded as arriving within 150. A press whose last pair lands in that
+30ms tail reads as the second tap and sets the man straight back down — pinned
+on both sides in `tests/e2e/pen.test.ts`. Whether the pen really produces that
+tail needs a trace before the number is touched.
+
+## The editor, in pieces
+
+`PlayEditor.tsx` still owns the state and the pointer handlers. What has come
+out of it so far, with nothing a coach can see changed:
+
+- `editor/gesture.ts` — the constants every pointer decision is made with, the
+  shape of a thing in hand, and the decisions that need no board: is this
+  contact a bounce, is the pen past the slop, where does a drag land, how far
+  has the board slid, how does a route run deeper.
+- `editor/drawerPrefs.ts` — whether the drawer is open, remembered.
+- `editor/BoardLayers.tsx` — everything drawn on the board, back to front.
+- `editor/LineInspector.tsx`, `editor/QuickBar.tsx`.
+
+`handleStageDown`, `handleMove`, `handleUp` and `applyDrag` are still in the
+editor, and splitting them per tool is the part that is left.
 
 **Netlify credits are nearly out.** Test over the LAN, which costs nothing and
 hot-reloads. Deploy **once per stage**, not per fix. A push to `main` triggers a

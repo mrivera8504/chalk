@@ -37,14 +37,11 @@ import {
   type Vision,
   type Zone,
 } from '../domain/types';
-import { AssignmentPath } from '../render/AssignmentPath';
 import { LiveInkCanvas, type InkHandle, type InkPoint } from '../render/LiveInkCanvas';
 import { simplify, snapEnd, straighten, toSmoothPath, widthFromPressure } from '../render/smooth';
-import { Field } from '../render/Field';
-import { FocusSquare, defaultFocus, insideFocus } from '../render/FocusSquare';
-import { ZoneArea, insideZone, onCorner, resizeFrom, zoneCorner } from '../render/Zone';
-import { PlayerShape } from '../render/PlayerShape';
-import { VisionCone, insideCone } from '../render/VisionCone';
+import { defaultFocus, insideFocus } from '../render/FocusSquare';
+import { insideZone, onCorner, resizeFrom, zoneCorner } from '../render/Zone';
+import { insideCone } from '../render/VisionCone';
 import {
   VIEW,
   clamp,
@@ -55,7 +52,6 @@ import {
   pxToYards,
   yardsToPx,
   toYards,
-  toPathD,
   type Yards,
 } from '../render/geometry';
 import {
@@ -65,7 +61,7 @@ import {
   mirrorPlayers,
   mirrorZones,
 } from '../domain/mirror';
-import { SWATCHES, autoRouteColor } from '../domain/colors';
+import { SWATCHES } from '../domain/colors';
 import { readRoster } from '../domain/roster';
 import {
   ROUTES,
@@ -112,6 +108,9 @@ import { TRACING, describeEvent, trace } from './trace';
 import { LegalityBadge } from './LegalityBadge';
 import { PrintPanel } from '../export/PrintPanel';
 import { download, playToPng, playTitle, slug, stamp } from '../export/render';
+import { BoardLayers } from './BoardLayers';
+import { LineInspector } from './LineInspector';
+import { QuickBar } from './QuickBar';
 import { readDrawerOpen, writeDrawerOpen } from './drawerPrefs';
 import {
   CHATTER_MS,
@@ -2400,116 +2399,31 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         onPointerLeave={clearAim}
       >
         <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
-          <Field
+          <BoardLayers
             holes={holes}
             showHoles={showHoles}
             occupied={occupied}
             gaps={gaps}
             showGaps={showGaps}
+            players={players}
+            visible={visible}
+            shown={shown}
+            byId={byId}
+            zones={zones}
+            focuses={focuses}
+            vision={vision}
+            qb={qb}
+            hideOffense={hideOffense}
+            annotations={annotations}
+            sel={sel}
+            hoverId={hoverId}
+            ballCarrierId={ballCarrierId}
+            pending={pending}
+            carrying={carrying}
+            routeHandles={routeHandles}
+            aimRef={aimRef}
+            ringRef={ringRef}
           />
-
-          {/*
-            * Both highlights, immediately after the turf and before a single
-            * mark. They are a wash under the play, not over it: the routes, the
-            * blocks and the men all have to stay exactly as readable with one
-            * switched on as without.
-            */}
-          {/*
-            * Zones first of the three, because a coverage is the widest wash on
-            * the board and the other two have to stay legible on top of it.
-            */}
-          {zones.map((z) => (
-            <ZoneArea
-              key={`zone${z.playerId}`}
-              zone={z}
-              player={byId(z.playerId)}
-              selected={sel?.kind === 'player' && sel.id === z.playerId}
-            />
-          ))}
-          {/*
-            * The two washes go with the man they hang off. A focus square is an
-            * offset from a player and the cone's apex is the quarterback
-            * himself, so either one left up over a hidden offense would be a
-            * patch of light coming off nobody.
-            */}
-          {focuses.map((f) => {
-            const man = visible.find((p) => p.id === f.playerId) ?? null;
-            return man ? <FocusSquare key={`focus${f.playerId}`} player={man} focus={f} /> : null;
-          })}
-          {vision && qb && !hideOffense && <VisionCone qb={qb} vision={vision} />}
-
-          {annotations.map((path, i) => (
-            <path
-              key={`ann${i}`}
-              d={toPathD(path)}
-              fill="none"
-              stroke="var(--board-chalk)"
-              strokeWidth={path[0]?.w ?? 0.14}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity={0.75}
-            />
-          ))}
-
-          {shown.map((a) => (
-            <AssignmentPath
-              key={a.id}
-              assignment={a}
-              autoColor={autoRouteColor(a, players)}
-              selected={sel?.kind === 'assignment' && sel.id === a.id}
-            />
-          ))}
-
-          {visible.map((p) => (
-            <PlayerShape
-              key={p.id}
-              player={p}
-              selected={sel?.kind === 'player' && sel.id === p.id}
-              hovered={p.id === hoverId}
-              ball={p.id === ballCarrierId}
-              pending={
-                p.id === pending?.blockerId || p.id === pending?.targetId || p.id === carrying
-              }
-            />
-          ))}
-
-          {/*
-            * The selected man's route handles, over the players: the end of a
-            * route often stops on somebody's mark, and a handle under it is a
-            * handle nobody finds.
-            */}
-          {routeHandles.map((h) => (
-            <circle
-              key={`rh${h.pt}`}
-              cx={h.x}
-              cy={h.y}
-              r={0.42}
-              fill="var(--board-chalk)"
-              fillOpacity={carrying === h.id ? 0.7 : 0.22}
-              stroke="var(--board-chalk)"
-              strokeWidth={0.09}
-              pointerEvents="none"
-            />
-          ))}
-
-          {/* Above the players, so the tip is never hidden under a mark. */}
-          <g ref={aimRef} opacity="0" pointerEvents="none">
-            <circle
-              ref={ringRef}
-              r={1.8}
-              fill="none"
-              stroke="var(--hover)"
-              strokeWidth={0.07}
-              strokeDasharray="0.34 0.3"
-              opacity={0.45}
-            />
-            <g stroke="var(--hover)" strokeWidth={0.1} strokeLinecap="round">
-              <line x1={-0.55} x2={-0.16} y1={0} y2={0} />
-              <line x1={0.16} x2={0.55} y1={0} y2={0} />
-              <line x1={0} x2={0} y1={-0.55} y2={-0.16} />
-              <line x1={0} x2={0} y1={0.16} y2={0.55} />
-            </g>
-          </g>
         </svg>
 
         {/*
@@ -2525,60 +2439,16 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         <LiveInkCanvas key={boardSurface} ref={ink} />
 
       {selectedBlock && (
-        <div
+        <LineInspector
           className={`inspector ${inspectorSide} ${inspectorEnd(
             byId(selectedBlock.playerId)?.side,
           )}`}
-        >
-          <div className="row">
-            <strong>{describeAssignment(selectedBlock, players)}</strong>
-          </div>
-          <div className="row">
-            {(selectedBlock.kind === 'block' || selectedBlock.kind === 'pull') && (
-              <>
-                <button
-                  aria-pressed={selectedBlock.kind === 'block'}
-                  onClick={() => retype(selectedBlock.id, 'block')}
-                >
-                  Base
-                </button>
-                <button
-                  aria-pressed={selectedBlock.kind === 'pull'}
-                  onClick={() => retype(selectedBlock.id, 'pull')}
-                >
-                  Pull
-                </button>
-              </>
-            )}
-            <button className="quiet" onClick={() => deleteAssignment(selectedBlock.id)}>
-              Delete
-            </button>
-          </div>
-
-          {/*
-            * Color is per line, not per player, so a receiver running a route
-            * and carrying the ball on a reverse can read as two different
-            * things. Auto coloring is per receiver, which covers the common
-            * case; this row is for the one line that needs to stand out.
-            */}
-          <div className="row swatches">
-            {SWATCHES.map((c) => (
-              <button
-                key={c}
-                className="swatch"
-                style={{ background: c }}
-                aria-label={`Color ${c}`}
-                aria-pressed={selectedBlock.color === c}
-                onClick={() => recolor(selectedBlock.id, c)}
-              />
-            ))}
-            {selectedBlock.color !== undefined && (
-              <button className="quiet" onClick={() => recolor(selectedBlock.id, undefined)}>
-                Auto
-              </button>
-            )}
-          </div>
-        </div>
+          line={selectedBlock}
+          title={describeAssignment(selectedBlock, players)}
+          onRetype={retype}
+          onDelete={deleteAssignment}
+          onRecolor={recolor}
+        />
       )}
 
       {/*
@@ -2664,86 +2534,39 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       )}
 
       {/*
-        * The handful of actions worth reaching without opening anything, each
         * one present only while it would do something. The container is inert
         * and sits opposite the drawer, so it never competes with the tab.
         */}
-      <div className={`quick-bar ${settings.drawerSide === 'right' ? 'left' : 'right'}`}>
-        {carrying && (
-          <button className="quick place" onClick={() => dropCarried('quick bar')}>
-            {carrying === PAN_ID ? 'Set the board' : `Place ${byId(carrying)?.label ?? ''}`}
-          </button>
-        )}
-        {selectedBlock && (
-          <button className="quick" onClick={() => deleteAssignment(selectedBlock.id)}>
-            Delete line
-          </button>
-        )}
-        {canUndo && (
-          <button className="quick" onClick={stepBack} aria-label="Undo">
-            ↶
-          </button>
-        )}
-        {canRedo && (
-          <button className="quick" onClick={stepForward} aria-label="Redo">
-            ↷
-          </button>
-        )}
-
-        {/* Freehand is a thing you reach for mid-play, not a mode you set out in. */}
-        <button
-          className={tool === 'draw' ? 'quick pencil on' : 'quick pencil'}
-          aria-pressed={tool === 'draw'}
-          aria-label={tool === 'draw' ? 'Stop drawing freehand' : 'Draw freehand'}
-          onClick={() => handleTool(tool === 'draw' ? 'routes' : 'draw')}
-        >
-          ✎
-        </button>
-
-        <div className="zoom">
-          {/*
-            * Sliding the board, beside magnifying it, because they are the same
-            * kind of thing: neither one changes a line on the play. It is a
-            * toggle and not a one-shot — you slide, look, slide again — and it
-            * drops whatever is in hand on the way in, or a player picked up a
-            * moment ago would still be following the pen that is now moving the
-            * field out from under him.
-            */}
-          <button
-            className={panning ? 'quick pan on' : 'quick pan'}
-            aria-pressed={panning}
-            aria-label={panning ? 'Stop moving the board' : 'Move the board'}
-            onClick={() => {
-              if (carrying) dropCarried('board tool');
-              setPanning((v) => !v);
-            }}
-          >
-            ✥
-          </button>
-          <button
-            className="quick"
-            aria-label="Zoom in"
-            disabled={zoom >= 2.5}
-            onClick={() => setZoom((z) => Math.min(2.5, +(z * 1.25).toFixed(3)))}
-          >
-            +
-          </button>
-          <button
-            className="quick"
-            aria-label="Zoom out"
-            disabled={zoom <= 0.7}
-            onClick={() => setZoom((z) => Math.max(0.7, +(z / 1.25).toFixed(3)))}
-          >
-            −
-          </button>
-          {/* One way back to the top of the field, whichever of the two moved it. */}
-          {viewMoved && (
-            <button className="quick" aria-label="Back to the whole field" onClick={resetView}>
-              {zoom !== 1 ? `${Math.round(zoom * 100)}%` : 'Center'}
-            </button>
-          )}
-        </div>
-      </div>
+      <QuickBar
+        side={settings.drawerSide === 'right' ? 'left' : 'right'}
+        placeLabel={
+          carrying
+            ? carrying === PAN_ID
+              ? 'Set the board'
+              : `Place ${byId(carrying)?.label ?? ''}`
+            : null
+        }
+        onPlace={() => dropCarried('quick bar')}
+        onDeleteLine={selectedBlock ? () => deleteAssignment(selectedBlock.id) : null}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={stepBack}
+        onRedo={stepForward}
+        tool={tool}
+        onTool={handleTool}
+        panning={panning}
+        onTogglePan={() => {
+          // Drops whatever is in hand on the way in, or a player picked up a
+          // moment ago would still be following the pen that is now moving the
+          // field out from under him.
+          if (carrying) dropCarried('board tool');
+          setPanning((v) => !v);
+        }}
+        zoom={zoom}
+        onZoom={setZoom}
+        viewMoved={viewMoved}
+        onResetView={resetView}
+      />
 
       <Drawer
         open={drawerOpen}
