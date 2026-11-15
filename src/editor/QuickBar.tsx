@@ -1,3 +1,4 @@
+import { Icon } from '../ui/Icon';
 import type { Tool } from './BlockTool';
 
 interface Props {
@@ -26,6 +27,11 @@ interface Props {
  * The handful of actions worth reaching without opening anything, each one
  * present only while it would do something. The container is inert and sits
  * opposite the drawer, so it never competes with the tab.
+ *
+ * Drawn marks rather than typed ones. ↶, ✎ and ✥ are characters, and a
+ * character is drawn by whatever font the device falls back to: the pencil was
+ * an emoji on one tablet and an outline on the next. Every one of these still
+ * carries its `aria-label`.
  */
 export function QuickBar({
   side,
@@ -59,12 +65,12 @@ export function QuickBar({
       )}
       {canUndo && (
         <button className="quick" onClick={stepBack} aria-label="Undo">
-          ↶
+          <Icon name="undo" />
         </button>
       )}
       {canRedo && (
         <button className="quick" onClick={stepForward} aria-label="Redo">
-          ↷
+          <Icon name="redo" />
         </button>
       )}
 
@@ -75,7 +81,7 @@ export function QuickBar({
         aria-label={tool === 'draw' ? 'Stop drawing freehand' : 'Draw freehand'}
         onClick={() => handleTool(tool === 'draw' ? 'routes' : 'draw')}
       >
-        ✎
+        <Icon name="pencil" />
       </button>
 
       <div className="zoom">
@@ -93,7 +99,7 @@ export function QuickBar({
           aria-label={panning ? 'Stop moving the board' : 'Move the board'}
           onClick={onTogglePan}
         >
-          ✥
+          <Icon name="pan" />
         </button>
         <button
           className="quick"
@@ -101,7 +107,7 @@ export function QuickBar({
           disabled={zoom >= 2.5}
           onClick={() => setZoom((z) => Math.min(2.5, +(z * 1.25).toFixed(3)))}
         >
-          +
+          <Icon name="plus" />
         </button>
         <button
           className="quick"
@@ -109,7 +115,7 @@ export function QuickBar({
           disabled={zoom <= 0.7}
           onClick={() => setZoom((z) => Math.max(0.7, +(z / 1.25).toFixed(3)))}
         >
-          −
+          <Icon name="minus" />
         </button>
         {/* One way back to the top of the field, whichever of the two moved it. */}
         {viewMoved && (

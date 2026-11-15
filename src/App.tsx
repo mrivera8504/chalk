@@ -6,7 +6,8 @@ import { blankPlay, usePlaybook } from './store/usePlaybook';
 import { DialogHost } from './ui/DialogHost';
 import { UpdateBar } from './ui/UpdateBar';
 import { useBackLayer } from './ui/backstack';
-import { askConfirm } from './ui/dialog';
+import { toast } from './ui/toast';
+import { ToastHost } from './ui/ToastHost';
 import { go, useRoute } from './ui/route';
 import { AppShell } from './shell/AppShell';
 import { PrintPage, SettingsPage, TeamPage } from './shell/pages';
@@ -15,6 +16,12 @@ export function App() {
   const book = usePlaybook();
   const route = useRoute();
   const home = useCallback(() => go({ screen: 'book' }), []);
+
+  /** What a play is called in a sentence about it. */
+  const titleOf = (id: string) => {
+    const play = book.plays.find((p) => p.id === id);
+    return play?.name || play?.suggestedName || 'the play';
+  };
 
   const open =
     route.screen === 'play' ? (book.plays.find((p) => p.id === route.id) ?? null) : null;
@@ -60,6 +67,7 @@ export function App() {
     return (
       <>
         <DialogHost />
+        <ToastHost />
         <UpdateBar />
         <PlayEditor
           key={open.id}
@@ -77,6 +85,7 @@ export function App() {
   return (
     <>
       <DialogHost />
+      <ToastHost />
       <UpdateBar />
       <AppShell screen={route.screen === 'play' ? 'book' : route.screen}>
         {route.screen === 'team' ? (
@@ -97,31 +106,41 @@ export function App() {
             sections={book.sections}
             sync={book.sync}
             lastBackupAt={book.lastBackupAt}
-            onRestorePlay={book.restorePlay}
+            onRestorePlay={(id) => {
+              const play = book.trashed.find((p) => p.id === id);
+              book.restorePlay(id);
+              toast(`Put back ${play?.name || play?.suggestedName || 'the play'}`);
+            }}
             onEmptyTrash={book.emptyTrash}
             onOpen={(id) => go({ screen: 'play', id })}
             onNew={startNew}
-            onDuplicate={book.duplicatePlay}
-            onDelete={async (id) => {
-              const play = book.plays.find((p) => p.id === id);
-              const name = play?.name || play?.suggestedName || 'this play';
-              if (
-                await askConfirm(`Delete ${name}?`, {
-                  // No longer the truth it used to tell: the play goes to the
-                  // trash at the foot of the playbook and stays there until it
-                  // is emptied.
-                  body: 'It moves to Deleted, at the bottom of the playbook.',
-                  confirmLabel: 'Delete',
-                  danger: true,
-                })
-              ) {
-                book.deletePlay(id);
-              }
+            onDuplicate={(id) => {
+              book.duplicatePlay(id);
+              toast(`Duplicated ${titleOf(id)}`);
+            }}
+            /*
+             * No question first. Deleting moves the play to the trash at the
+             * foot of the playbook, so asking "are you sure?" every time was
+             * guarding a mistake that was already recoverable — and now there
+             * are two ways back from it, this Undo and the trash.
+             */
+            onDelete={(id) => {
+              const name = titleOf(id);
+              book.deletePlay(id);
+              toast(`Deleted ${name}`, { undo: () => book.restorePlay(id) });
             }}
             onAddSection={book.addSection}
             onRenameSection={book.renameSection}
             onDeleteSection={book.deleteSection}
-            onSetSection={book.setPlaySection}
+            onSetSection={(id, sectionId) => {
+              const was = book.plays.find((p) => p.id === id)?.sectionId;
+              if (was === sectionId) return;
+              book.setPlaySection(id, sectionId);
+              const folder = book.sections.find((sec) => sec.id === sectionId)?.name ?? 'Unfiled';
+              toast(`Moved to ${folder}`, {
+                undo: was === undefined ? undefined : () => book.setPlaySection(id, was),
+              });
+            }}
             onMovePlay={book.movePlay}
           />
         )}

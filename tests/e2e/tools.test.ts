@@ -24,7 +24,7 @@ beforeEach(async () => {
   page = opened.page;
   close = () => opened.context.close();
   await page.getByRole('button', { name: 'New play', exact: true }).click();
-  await page.locator('.stage svg').waitFor();
+  await page.locator('.stage > svg').waitFor();
   await settle();
 });
 afterEach(async () => {
@@ -213,7 +213,7 @@ describe('the defense', () => {
     page = opened.page;
     close = () => opened.context.close();
     await page.getByRole('button', { name: 'New defense', exact: true }).click();
-    await page.locator('.stage svg').waitFor();
+    await page.locator('.stage > svg').waitFor();
     await settle();
   };
 

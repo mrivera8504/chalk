@@ -75,7 +75,7 @@ describe('getting around', () => {
 
   it('opens a play from its card, and the back gesture closes it', async () => {
     await page.getByRole('button', { name: /^Open / }).first().click();
-    await page.locator('.stage svg').waitFor();
+    await page.locator('.stage > svg').waitFor();
     expect(await path()).toBe('/play/sweep');
     await page.goBack();
     await page.locator('.page-head').waitFor();
@@ -84,7 +84,7 @@ describe('getting around', () => {
 
   it('lands on the play its address names', async () => {
     await page.goto(process.env.CHALK_URL + 'play/cover3');
-    await page.locator('.stage svg').waitFor();
+    await page.locator('.stage > svg').waitFor();
     expect(await path()).toBe('/play/cover3');
     await page.getByRole('button', { name: 'Back to playbook' }).click();
     await expect.poll(title).toBe('Playbook');
@@ -98,7 +98,7 @@ describe('getting around', () => {
 
   it('has no navigation inside the editor, where it would sit beside the board', async () => {
     await page.getByRole('button', { name: 'New play', exact: true }).click();
-    await page.locator('.stage svg').waitFor();
+    await page.locator('.stage > svg').waitFor();
     expect(await page.getByRole('navigation').count()).toBe(0);
   });
 });
@@ -118,27 +118,51 @@ describe('a play card', () => {
     expect(await page.getByRole('menu').count()).toBe(1);
   });
 
-  /*
-   * The menu shuts and the confirm opens in the same breath, which is one back
-   * layer closing as another opens. That used to leave the app thinking it had
-   * a spare history entry it did not, and confirming walked out of the app.
-   */
-  it('deletes through a confirm, into the trash', async () => {
+  it('deletes without asking, into the trash, and offers the way back', async () => {
     await menu('Cover 3').click();
     await page.getByRole('menuitem', { name: 'Delete' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
-    const gone = (await stored()).plays.find((p) => p.id === 'cover3')!;
-    expect(gone.deletedAt).toBeGreaterThan(0);
-    await expect.poll(() => page.getByRole('button', { name: /^Deleted \(/ }).count()).toBe(1);
+    expect(await page.getByRole('dialog').count()).toBe(0);
+    expect((await stored()).plays.find((p) => p.id === 'cover3')!.deletedAt).toBeGreaterThan(0);
+    // The fixture already has one play in the trash; this makes two.
+    const trash = () => page.getByRole('button', { name: /^Deleted \(/ }).innerText();
+    await expect.poll(trash).toBe('Deleted (2)');
+
+    await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
+    expect((await stored()).plays.find((p) => p.id === 'cover3')!.deletedAt).toBeUndefined();
+    await expect.poll(trash).toBe('Deleted (1)');
+  });
+
+  it('takes the Undo under a pen burst, once', async () => {
+    await menu('Cover 3').click();
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
+    await penTapButton(page, 'Undo', 5);
+    expect((await stored()).plays.filter((p) => !p.deletedAt)).toHaveLength(2);
+  });
+
+  /*
+   * A folder's menu shuts and its confirm opens in the same breath, which is
+   * one back layer closing as another opens. That used to leave the app
+   * thinking it had a spare history entry it did not, and answering the
+   * question walked out of the app.
+   */
+  it('raises a confirm from a menu without losing its place in history', async () => {
+    await page.getByRole('button', { name: 'More for the folder Run game' }).click();
+    await page.getByRole('menuitem', { name: 'Delete folder' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete folder' }).click();
+    await expect.poll(() => page.getByRole('dialog').count()).toBe(0);
+    expect(await title()).toBe('Playbook');
     expect(await path()).toBe('/');
     // And the app is still one back gesture from closing, not zero or two.
     expect(await page.evaluate(() => history.state)).toBeNull();
+    expect(await page.getByRole('button', { name: 'More for the folder Run game' }).count()).toBe(0);
   });
 
   it('files a play in a folder from the menu', async () => {
     await menu('Cover 3').click();
     await page.getByLabel('Folder for Cover 3').selectOption({ label: 'Run game' });
     expect((await stored()).plays.find((p) => p.id === 'cover3')!.sectionId).toBe('s1');
+    await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
+    expect((await stored()).plays.find((p) => p.id === 'cover3')!.sectionId).not.toBe('s1');
   });
 
   it('closes the menu on a tap elsewhere and on the back gesture', async () => {

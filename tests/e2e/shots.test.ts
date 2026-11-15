@@ -55,8 +55,12 @@ it.skipIf(!out)('shots', async () => {
     }
     const home = page.getByRole('navigation').getByRole('link', { name: 'Playbook' });
     if (await home.count()) await home.click();
+    await page.getByRole('button', { name: /^More for (?!the folder)/ }).first().click();
+    await shot('4b-card-menu');
+    await page.getByRole('menuitem', { name: 'Duplicate' }).click();
+    await shot('4c-toast');
     await page.getByRole('button', { name: 'New play', exact: true }).click();
-    await page.locator('.stage svg').waitFor();
+    await page.locator('.stage > svg').waitFor();
     await shot('5-editor');
     const te = man(await savedPlay(page, -1), 'TE');
     await onBoard(page, te);

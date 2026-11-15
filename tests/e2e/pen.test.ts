@@ -19,7 +19,7 @@ beforeEach(async () => {
   page = opened.page;
   close = () => opened.context.close();
   await page.getByRole('button', { name: 'New play', exact: true }).click();
-  await page.locator('.stage svg').waitFor();
+  await page.locator('.stage > svg').waitFor();
 });
 afterEach(async () => {
   await close();
@@ -268,7 +268,7 @@ describe('the board does not move under the hand', () => {
 describe('sliding the board', () => {
   it('moves the window, saves nothing and costs no undo', async () => {
     const before = JSON.stringify((await savedPlay(page)).players);
-    const viewBox = () => page.locator('.stage svg').getAttribute('viewBox');
+    const viewBox = () => page.locator('.stage > svg').getAttribute('viewBox');
     const was = await viewBox();
     await page.getByRole('button', { name: 'Move the board' }).click();
     await settle();

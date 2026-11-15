@@ -53,7 +53,7 @@ export async function openApp(
 /** Where a spot on the field is on the glass, through the board's own matrix. */
 export async function toClient(page: Page, at: Yd): Promise<{ x: number; y: number }> {
   return page.evaluate(({ x, y }) => {
-    const svg = document.querySelector('.stage svg') as SVGSVGElement;
+    const svg = document.querySelector('.stage > svg') as SVGSVGElement;
     const p = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM()!);
     return { x: p.x, y: p.y };
   }, at);

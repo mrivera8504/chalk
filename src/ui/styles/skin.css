@@ -1,0 +1,170 @@
+/*
+ * The editor's chrome, in the new look.
+ *
+ * Last in the cascade and deliberately shallow. Every size in the editor was
+ * arrived at the hard way — the 264px drawer, the third of the board the route
+ * panel gets, the 40px floor under every control — and none of them is touched
+ * here. This changes what the chrome looks like, never where anything is or how
+ * big a target it makes: color, weight, corners and shadow, and nothing else.
+ */
+
+/* Buttons: a fill, and a border that only shows where there is nothing behind
+   it to stand against. An outlined box per control was a hundred little frames. */
+button {
+  border-color: color-mix(in srgb, var(--line) 50%, transparent);
+  border-radius: 10px;
+  font-weight: 500;
+  transition:
+    background var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.quiet {
+  border-color: var(--line);
+}
+
+button[aria-pressed='true'] {
+  font-weight: 600;
+}
+
+/* Not in the drawer's two-column rows: the extra weight is a few pixels, and
+   'Hole numbers' already has none to spare in a 264px panel. */
+.drawer-panel .tools button[aria-pressed='true'] {
+  font-weight: 500;
+}
+
+/* ---- the header ---- */
+
+.editor > header {
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  background: var(--bg);
+}
+
+.legality {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--line) 60%, transparent);
+  padding: 6px 12px;
+}
+
+.legality .count {
+  font-family: var(--font-display);
+}
+
+/* ---- the drawer ---- */
+
+.drawer-panel,
+.drawer-head {
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+}
+
+.drawer-panel {
+  box-shadow: var(--shadow);
+}
+
+.drawer-head strong {
+  font-family: var(--font-display);
+  font-size: var(--text-m);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--chalk);
+}
+
+.tool-group {
+  border-top-color: color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+.tool-group h4,
+.picker-group h3 {
+  font-family: var(--font);
+}
+
+.drawer-tab {
+  border-color: color-mix(in srgb, var(--line) 60%, transparent);
+  border-radius: var(--r-l) 0 0 0;
+  box-shadow: var(--shadow);
+}
+
+.drawer.left .drawer-tab {
+  border-radius: 0 var(--r-l) 0 0;
+}
+
+/* ---- over the board ---- */
+
+/*
+ * Floating, so they get what says so: a shadow, and corners. Round enough to
+ * read as a control rather than as a label somebody left on the field.
+ */
+.quick-bar .quick {
+  border-radius: var(--r-m);
+  border-color: color-mix(in srgb, var(--line) 60%, transparent);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: var(--shadow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quick-bar .quick.place {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.stage .inspector {
+  box-shadow: var(--shadow);
+}
+
+.route-picker .picker-head strong {
+  font-family: var(--font-display);
+}
+
+/* ---- dialogs ---- */
+
+.dialog-scrim {
+  background: var(--scrim);
+}
+
+.dialog {
+  border-radius: var(--r-l);
+  box-shadow: var(--shadow);
+}
+
+.dialog strong {
+  font-size: var(--text-l);
+}
+
+/* ---- a screen arriving ---- */
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/*
+ * A page, a menu and a dialog come in rather than appear. Short, and only the
+ * arriving — nothing waits on something leaving. The editor is not in this
+ * list: the board must be exactly where it is from the first frame.
+ */
+.page,
+.menu-sheet,
+.dialog {
+  animation: arrive var(--slow) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page,
+  .menu-sheet,
+  .dialog {
+    animation: none;
+  }
+}

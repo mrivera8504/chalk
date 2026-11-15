@@ -21,6 +21,12 @@ const PATHS = {
   close: 'M6 6l12 12M18 6L6 18',
   chevron: 'M9 5l7 7-7 7',
   account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 4-6 8-6s8 2 8 6',
+  undo: 'M8 5L4 9l4 4M4 9h10a6 6 0 0 1 0 12h-3',
+  redo: 'M16 5l4 4-4 4M20 9H10a6 6 0 0 0 0 12h3',
+  pencil: 'M4 20l1-5L16 4l4 4L9 19zM14 6l4 4',
+  pan: 'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',
+  minus: 'M5 12h14',
+  tools: 'M4 6h16M4 12h16M4 18h16',
 } as const;
 
 export type IconName = keyof typeof PATHS;

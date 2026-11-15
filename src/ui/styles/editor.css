@@ -100,7 +100,7 @@
  * device, makes its svg inert exactly like this. The .stage div is the only
  * thing that handles pointers, and it hit-tests by distance instead.
  */
-.stage svg {
+.stage > svg {
   position: absolute;
   inset: 0;
   width: 100%;

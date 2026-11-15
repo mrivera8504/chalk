@@ -272,6 +272,23 @@ keep chrome-only tokens out of it. Inter and Space Grotesk are two woff2 files
 in `ui/fonts/`, bundled because the app opens with no signal. Neither is used on
 the board: an exported SVG carries no fonts.
 
+**Deleting a play does not ask; it says, and offers Undo.** `ui/toast.ts` is the
+dialog store's opposite: a dialog asks before, a toast tells after. A delete only
+moves a play to the trash, so "Delete Jet Sweep?" every time was a question
+guarding a mistake that was already recoverable. Duplicate, move to a folder and
+put-back say what they did the same way. One toast at a time — two Undos on
+screen is a puzzle about which takes back what. Deleting a *folder*, emptying
+the trash and restoring a backup still ask, because those are not one tap from
+undone.
+
+**`styles/skin.css` is last in the cascade and changes no size.** It is the
+editor's chrome in the new look — fills, corners, weights, shadows — and every
+dimension the editor arrived at the hard way is left where it was. The quick
+bar's ↶ ✎ ✥ became drawn icons, because a typed character is drawn by whatever
+font the device falls back to. That put `<svg>`s inside `.stage`, so the board
+is `.stage > svg` in the stylesheet and in the tests: `.stage svg` would size
+every icon as a board.
+
 **`SHOT_DIR=/some/dir npm run test:e2e -- shots`** writes a picture of every
 screen at phone and tablet size; add `SHOT_THEME=light` for the other theme.
 Look at them after any change to the chrome.
