@@ -1,0 +1,23 @@
+/*
+ * Bundled, not linked. A font fetched from somebody's CDN is a font the app
+ * does not have on a field with no signal, and the service worker already
+ * precaches every .woff2 in the build. Latin only: 70KB for the pair.
+ *
+ * Neither is used on the board. An exported SVG carries no fonts, so every mark
+ * that has to survive export is drawn as a shape.
+ */
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/inter-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Space Grotesk Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url('../fonts/space-grotesk-latin-wght-normal.woff2') format('woff2-variations');
+}

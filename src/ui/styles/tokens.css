@@ -1,0 +1,83 @@
+:root {
+  --bg: #10161a;
+  --panel: #1a2329;
+  --panel-hi: #222e36;
+  --line: #2f3d46;
+  --chalk: #e8ede9;
+  --dim: #8b9aa3;
+
+  /*
+   * Chalk *on the board* — freehand annotations and the handles on a selected
+   * route. Its own token, not `--chalk`, because that one is the color of text
+   * in the panels: the two were the same value until the field could be white,
+   * at which point turning the board's chalk black turned every label in the
+   * app black on a dark panel too. See ui/surface.ts.
+   */
+  --board-chalk: #e8ede9;
+
+  --turf: #1e3a2b;
+  --turf-line: rgba(232, 237, 233, 0.22);
+  --los: rgba(232, 237, 233, 0.62);
+  --hole: rgba(232, 237, 233, 0.5);
+
+  --off-fill: #e8ede9;
+  --off-line: #10161a;
+  --off-text: #10161a;
+  --def-fill: rgba(16, 22, 26, 0.55);
+  --def-line: #ff9b7a;
+  --def-text: #ffd9cc;
+
+  --ink-block: #f2dfa0;
+  --ink-route: #7fd4ff;
+  --ink-carry: #ffb37a;
+  --ink-motion: #b9a8ff;
+  --ink-option: #9fb4bf;
+  /*
+   * The defense. Two inks and no more, because a defensive call is really only
+   * two decisions drawn over and over: go and get it, or give ground and cover.
+   * The rush hue is deliberately the hottest thing on the board — it is the one
+   * line on a defensive sheet that has to be countable at a glance.
+   */
+  --ink-blitz: #ff6f61;
+  /* Cool, and quieter than the zone wash it belongs with: a rope to a man and a
+     box of grass are the same decision drawn two ways, and the pale chalk this
+     started as read as a stray freehand line. */
+  --ink-cover: #9fbcdd;
+
+  /*
+   * One per receiver. Tokens rather than literals so the export can swap the
+   * whole set for ink that survives white paper. A color picked by hand is
+   * stored as one of these names, so it adapts too — and on paper it is these
+   * very values that are darkened, hue intact, rather than a fixed print
+   * palette standing in for them; see export/printInk.ts.
+   */
+  --route-0: #7fd4ff;
+  --route-1: #86e5a0;
+  --route-2: #c4a7ff;
+  --route-3: #ff9ecb;
+  --route-4: #d6e86b;
+  --route-5: #79e0d8;
+
+  --select: #4fb8ff;
+  --hover: #7fe0c4;
+  --locked: #f2c14e;
+  /* Who is getting the ball. Its own pair, not the block yellow: the star has
+     to stay legible against a white mark on screen and black ink on paper. */
+  --ball: #ffcf3d;
+  --ball-line: #10161a;
+  /* A shirt number beside a mark. Quieter than the label inside it: the
+     position is what you read at a glance, the kid is what you check. */
+  --jersey: rgba(232, 237, 233, 0.72);
+  /*
+   * The two highlights. Each is drawn at a tenth to a half of its own alpha on
+   * top of this, so these are the full-strength hue and never what lands on the
+   * board: a highlight that competed with a route would be hiding the play.
+   */
+  --vision: #ffd97d;
+  --focus: #7fe0c4;
+  /* The coverage wash. Its own hue, and not the focus teal: a focus square and
+     a zone can be on the same board, and they say different things. */
+  --zone: #8ab4ff;
+  --ok: #5fd39a;
+  --bad: #ff6b5a;
+}

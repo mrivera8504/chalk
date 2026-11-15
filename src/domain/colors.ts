@@ -10,7 +10,7 @@ import type { Assignment, PlayerSlot } from './types';
  * did, and a one-receiver play is unchanged.
  *
  * Token names, not literals, so an export headed for paper can swap the set for
- * ink dark enough to read on white. The values live in ui/tokens.css.
+ * ink dark enough to read on white. The values live in ui/styles/tokens.css.
  */
 export const ROUTE_COLORS = [
   'var(--route-0)', // cyan

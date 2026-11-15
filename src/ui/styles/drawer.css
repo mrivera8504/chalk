@@ -1,0 +1,286 @@
+/* Wraps rather than scrolls: a tool you cannot see is a tool you will not use. */
+.tools {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+}
+
+/*
+ * The sliding tool drawer.
+ *
+ * Absolute, like .inspector and for the same reason: as a flex sibling of
+ * .stage every open and close would have changed the board's height, and the
+ * board's height is the scale of every coordinate on it.
+ *
+ * It leaves from the side, not the bottom. The bottom of the view is the
+ * backfield, where the carrier and the quarterback stand, so a panel there
+ * covers the men being drawn. Closed, the panel is off the canvas entirely and
+ * only the tab is left over the field.
+ */
+.stage .drawer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  /* Inert, so taps fall through to the board everywhere the panel is not. */
+  pointer-events: none;
+}
+
+/*
+ * Settings and Notes are pages, not palettes: long forms with number fields,
+ * color rows and paragraphs of explanation, and nobody reads them while
+ * drawing. They get the room, and the tool panel stays narrow.
+ */
+.drawer-panel.wide {
+  width: min(560px, 94%);
+}
+
+.drawer.open.wide .drawer-tab {
+  right: min(560px, 94%);
+}
+
+.drawer.left.open.wide .drawer-tab {
+  left: min(560px, 94%);
+}
+
+.drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  /* Narrower than it was. 300px on a 412px phone is three quarters of the
+     board; the rows inside it are pills, not paragraphs, and they fit. */
+  width: min(264px, 52%);
+  transform: translateX(100%);
+  transition: transform 180ms ease;
+  pointer-events: auto;
+  overflow-y: auto;
+  /* .stage kills touch scrolling for the pen. The panel's lists need it back. */
+  touch-action: auto;
+  background: color-mix(in srgb, var(--panel) 95%, transparent);
+  backdrop-filter: blur(8px);
+  border-left: 1px solid var(--line);
+}
+
+.drawer.open .drawer-panel {
+  transform: none;
+}
+
+/*
+ * Mirrored for a left-hander, or for anyone whose hand covers the right edge.
+ * Only the anchoring flips; everything inside is unchanged.
+ */
+.drawer.left .drawer-panel {
+  right: auto;
+  left: 0;
+  transform: translateX(-100%);
+  border-left: 0;
+  border-right: 1px solid var(--line);
+}
+
+.drawer.left.open .drawer-panel {
+  transform: none;
+}
+
+.drawer.left .drawer-tab {
+  right: auto;
+  left: 0;
+  border-radius: 0 9px 0 0;
+  border-right: 1px solid var(--line);
+  border-left: 0;
+  transition: left 180ms ease;
+}
+
+.drawer.left.open .drawer-tab {
+  left: min(264px, 52%);
+}
+
+/*
+ * Rides the panel's edge in and out, down in the corner.
+ *
+ * It used to be pinned to the middle of the side, which put it across the line
+ * of scrimmage — the one height where something is always drawn. The bottom of
+ * the board is the strip the inspector already reasons about below: twenty
+ * yards downfield and ten behind means the LOS sits two thirds of the way down
+ * the screen, and the bottom ten yards are where nothing is ever drawn.
+ *
+ * Still one fixed place, which is the point: it is the control that reaches
+ * every other control, and a pen should never have to hunt for it. A corner is
+ * easier to find than a middle, not harder — there is an edge to run into.
+ */
+.drawer-tab {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  transition: right 180ms ease;
+  pointer-events: auto;
+  /*
+   * Wide enough for a stylus. Chrome applies touch adjustment to a finger but
+   * hit-tests a pen at the exact pixel, so the 34px this used to be was a
+   * target a finger found first time and a pen kept missing.
+   */
+  width: 52px;
+  min-height: 96px;
+  /* .stage sets touch-action: none, which this must not inherit. */
+  touch-action: manipulation;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Only the inward top corner is rounded: the other three meet an edge. */
+  border-radius: 9px 0 0 0;
+  border-right: 0;
+  border-bottom: 0;
+  color: var(--dim);
+  font-size: 18px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.drawer.open .drawer-tab {
+  right: min(264px, 52%);
+}
+
+/*
+ * The panel's one header.
+ *
+ * It used to sit above a second one belonging to whichever picker was open —
+ * two titles and two dismiss buttons, one meaning "back to the tools" and the
+ * other "slide the whole thing away". The back arrow is the first, Hide is the
+ * second, and the picker below draws no head of its own.
+ */
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px 4px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--panel) 95%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.drawer-head strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.drawer-head .drawer-back {
+  min-height: 34px;
+  padding: 4px 9px 6px;
+  font-size: 17px;
+  line-height: 1;
+  background: transparent;
+  color: var(--dim);
+}
+
+.drawer-head .quiet {
+  margin-left: auto;
+  min-height: 34px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+/* The line under the title that used to be the picker's own subtitle. */
+.drawer-sub {
+  margin: -2px 10px 4px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+/*
+ * One labeled group per thing a coach is trying to do. A flat wall of pills
+ * gave every button the same weight and told you what none of them were for.
+ */
+.tool-group {
+  padding: 2px 0 6px;
+  border-top: 1px solid var(--line);
+}
+
+.tool-group:first-of-type {
+  border-top: 0;
+}
+
+.tool-group h4 {
+  margin: 5px 10px 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* Says what the group in front of you actually does, in a coach's words. */
+.tool-note {
+  margin: 2px 12px 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--dim);
+}
+
+/* Two columns: a narrow panel makes a wrapped row of pills hard to aim at. */
+.drawer-panel .tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  padding: 4px 10px 6px;
+}
+
+.drawer-panel .tools button {
+  width: 100%;
+  min-width: 0;
+  /*
+   * 40px, which is the floor above and not a return to the 33px that had the
+   * pen missing everything. The extra four this row used to carry were there
+   * because it is a list; the list is short enough to be read at the floor.
+   */
+  min-height: 40px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  justify-content: center;
+  text-align: center;
+  /*
+   * A label longer than its cell used to run straight past the edge of the
+   * panel — 'Add defense' hung 20px into the board and read as a rendering
+   * fault. It ellipsizes now, and the labels themselves were shortened so it
+   * should never come to that.
+   */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawer-panel .tool-group .tools {
+  padding-bottom: 2px;
+}
+
+/* One control that needs the whole width to say what it is. Squeezed into half
+   a row, 'Start this play over' ellipsized to 'Start this play o…'. */
+.drawer-panel .tools.full {
+  grid-template-columns: 1fr;
+}
+
+.drawer-panel .picker {
+  background: none;
+  max-height: none;
+  border-top: 1px solid var(--line);
+}
+
+/*
+ * A capped list says so at its edge.
+ *
+ * Every panel in here is height-limited on purpose, and each one was cutting a
+ * row of buttons exactly in half at the boundary — which reads as a broken
+ * render, not as "there is more below". The mask fades the last few pixels
+ * instead, so a half-visible row looks deliberate and scrollable.
+ *
+ * The class is put on by useScrollFade, and only when the box really does
+ * overflow: a fade on a panel whose content fits just dims its last row.
+ */
+.scrolls {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+}

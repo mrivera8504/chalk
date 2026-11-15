@@ -1,0 +1,122 @@
+/*
+ * Over everything, including the drawer and the trace panel. Takes pointers
+ * itself so nothing behind it can be hit by a stray tap, and dismisses on a tap
+ * outside the card — which is what a coach expects and what the browser's own
+ * dialogs never allowed.
+ */
+.dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  touch-action: manipulation;
+  background: color-mix(in srgb, #000 55%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.dialog {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 18px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+
+.dialog strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dialog p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+
+.dialog input {
+  font: inherit;
+  /* 16px or Android zooms the page the moment this takes focus. */
+  font-size: 16px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+  color: var(--chalk);
+}
+
+.dialog input:focus-visible {
+  outline: 2px solid var(--select);
+  outline-offset: 1px;
+}
+
+/* The confirm sits where a thumb is, on the right, and is the only filled
+   button on screen while the dialog is up. */
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.dialog-buttons button {
+  min-height: 44px;
+  padding: 10px 18px;
+}
+
+.dialog-buttons button:disabled {
+  opacity: 0.45;
+}
+
+/*
+ * "A new version is ready", at the foot of whatever is on screen.
+ *
+ * Under the dialog's z-index and over everything else: it must never cover a
+ * question the coach is being asked, and must never end up behind the board it
+ * is reporting on. `touch-action` is set for the same reason the dialog sets
+ * it — this mounts over `.stage`, which is `none`, and a bar whose buttons a
+ * pen cannot press is worse than no bar at all.
+ */
+.update-bar {
+  position: fixed;
+  z-index: 45;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 20px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px 9px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  touch-action: manipulation;
+}
+
+.update-bar span {
+  font-size: 13px;
+  margin-right: 2px;
+}
+
+.update-bar button {
+  min-height: 36px;
+  padding: 7px 12px;
+}
+
+/* Reads as the action without taking the view's one primary button. */
+.update-bar .update-take {
+  border-color: var(--select);
+  color: var(--select);
+  font-weight: 600;
+}

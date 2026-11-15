@@ -1,0 +1,335 @@
+/*
+ * One control size, and it is the pen's size.
+ *
+ * Chrome gives a finger touch adjustment and hit-tests a stylus at the exact
+ * pixel — the whole reason the drawer tab had to go from 34px to 52px. Every
+ * pill in this app was still 33px tall, which is the same bug spread across a
+ * hundred buttons. 40px is the floor, 44px anywhere a pen is expected to work
+ * through a list, and the handful of genuinely secondary controls opt down by
+ * name rather than by being left behind.
+ */
+button {
+  font: inherit;
+  font-size: 13px;
+  color: var(--chalk);
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  min-height: 40px;
+  padding: 9px 13px;
+  border-radius: 8px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+button[aria-pressed='true'] {
+  background: var(--chalk);
+  color: var(--bg);
+  border-color: var(--chalk);
+}
+
+button.quiet {
+  background: transparent;
+  color: var(--dim);
+}
+
+/*
+ * The one action on a screen that the coach came to do. Exactly one per view,
+ * or it stops meaning anything: a playbook where New play and Account looked
+ * identical was a screen with no answer to "what now?".
+ */
+button.primary {
+  background: var(--select);
+  border-color: var(--select);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+/*
+ * Anything that throws work away. Quiet until it is about to be used, because a
+ * red wall trains you to ignore red — but never the same as the button beside
+ * it, which is what put Start over next to Step back in the same gray.
+ */
+button.danger {
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
+  background: transparent;
+}
+
+/* Secondary controls that sit inside a row of content rather than in a tool
+   group: a card's Copy, a folder's Rename. Small on purpose. */
+.card-tools button,
+.section-tools button,
+.chip .chip-x,
+.trace-bar button,
+.roster-row .chip-x {
+  min-height: 32px;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--select);
+  outline-offset: 2px;
+}
+
+.inspector {
+  padding: 10px 14px 14px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.inspector label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.inspector label span {
+  font-size: 11.5px;
+  color: var(--dim);
+  min-width: 42px;
+}
+
+.inspector input {
+  font: inherit;
+  width: 74px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+  color: var(--chalk);
+  text-transform: uppercase;
+}
+
+.inspector .row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inspector .row strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.swatches { flex-wrap: wrap; }
+
+.inspector .swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+
+/* The ring is outside the color, so the color itself is never obscured. */
+.inspector .swatch[aria-pressed='true'] {
+  border-color: var(--chalk);
+  outline: 1px solid var(--bg);
+}
+
+.inspector .pos {
+  font-size: 11.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Landscape.
+ *
+ * The board is taller than it is wide, so turning the phone makes it
+ * height-constrained and leaves room either side — which is exactly where the
+ * drawer already lives, so it costs nothing there. What does hurt is vertical
+ * chrome, and every pixel of header comes straight off the board.
+ */
+@media (orientation: landscape) {
+  .editor > header {
+    padding: 5px 10px;
+    gap: 8px;
+  }
+
+  .editor > header .play-name {
+    padding: 6px 9px;
+  }
+
+  /* Narrower, because in landscape the board needs the width less than the
+     portrait board needs it, and a shorter panel has to scroll otherwise. */
+  .drawer-panel {
+    width: min(300px, 46%);
+  }
+
+  .drawer.open .drawer-tab {
+    right: min(300px, 46%);
+  }
+
+  .drawer.left.open .drawer-tab {
+    left: min(300px, 46%);
+  }
+
+  /* One row of buttons rather than two: vertical space is the scarce one. */
+  .drawer-panel .tools {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /*
+   * In landscape the inspector moves to a side, not the top.
+   *
+   * The board is height-constrained the moment the phone is turned — the spare
+   * room is at the left and right edges, which is exactly why the drawer lives
+   * there. A strip across the top took 45% of a 360px-tall viewport and left
+   * the field about 180px, so the men were the size of the yard numbers.
+   *
+   * It takes the edge the drawer is not on, so the two can be open together
+   * without either covering the other.
+   */
+  .stage .inspector,
+  .stage .inspector.at-top,
+  .stage .inspector.at-bottom,
+  /* Sideways it is on the other edge entirely, so it keeps no room for the
+     tab — listed by the same selector that reserved it, or that rule's higher
+     specificity would hold the gap open out here where nothing is under it. */
+  .stage:has(.drawer.right) .inspector.at-bottom,
+  .stage:has(.drawer.left) .inspector.at-bottom {
+    top: 0;
+    bottom: 0;
+    width: min(340px, 42%);
+    max-height: none;
+    overflow: hidden;
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    padding: 6px 12px 10px;
+    border-top: 0;
+    border-bottom: 0;
+  }
+
+  /* It has a whole side here, so the end it would have taken means nothing and
+     the quick bar keeps the bottom. */
+  .stage:has(.inspector.at-bottom) .quick-bar {
+    bottom: 10px;
+    top: auto;
+  }
+
+  .stage .inspector.at-left {
+    left: 0;
+    right: auto;
+    border-right: 1px solid var(--line);
+  }
+
+  .stage .inspector.at-right {
+    right: 0;
+    left: auto;
+    border-left: 1px solid var(--line);
+  }
+
+  /* It has a whole side to itself now, so the list runs the height of it. */
+  .route-picker {
+    max-height: none;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .quick-bar {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  /*
+   * The quick bar sits on the edge the drawer is not on, which in landscape is
+   * now the edge the inspector took. Stood on top of the route list it covered
+   * the bottom row of it, so it steps across to the board when the inspector is
+   * actually open — and steps back the moment nobody is selected.
+   */
+  .stage:has(.inspector.at-left) .quick-bar.left {
+    left: calc(min(340px, 42%) + 10px);
+  }
+
+  .stage:has(.inspector.at-right) .quick-bar.right {
+    right: calc(min(340px, 42%) + 10px);
+  }
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .tool-group h4 {
+    margin-top: 5px;
+  }
+
+  /* The explanatory lines are the first thing to go when there is no room. */
+  .tool-note {
+    display: none;
+  }
+}
+
+/* ---- pointer trace, only under ?trace ---- */
+.trace {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line);
+  background: #0b1013;
+}
+
+.trace-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.trace-bar strong {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--select);
+}
+
+.trace-bar span {
+  font-size: 11px;
+  color: var(--dim);
+  margin-right: auto;
+}
+
+.trace-bar button {
+  padding: 5px 9px;
+  font-size: 11.5px;
+}
+
+/*
+ * Fixed height, not max-height. A panel that grows with the log changes the
+ * stage height, which rescales the board and moves the pick radius with it,
+ * corrupting the very numbers this panel exists to report.
+ */
+.trace-log,
+.trace-out {
+  margin: 0;
+  padding: 8px 10px;
+  height: 132px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--chalk);
+  white-space: pre;
+}
+
+.trace-out {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: #0b1013;
+  resize: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Layer 4: the live stroke. Inert, like the board; .stage owns every pointer. */
+.stage canvas.ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 1;
+}

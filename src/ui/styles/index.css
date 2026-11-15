@@ -1,0 +1,21 @@
+/*
+ * One stylesheet, in layers, in this order. The order is the cascade: it was a
+ * single 2,185-line file, and these are that file cut at its own seams, so a
+ * rule still beats exactly the rules it used to beat.
+ *
+ *   fonts      the two typefaces, bundled — the app opens with no signal
+ *   tokens     every color, size and timing the rest are written in
+ *   base       the page itself
+ *   the rest   one file per part of the app
+ */
+@import './fonts.css';
+@import './tokens.css';
+@import './base.css';
+@import './editor.css';
+@import './drawer.css';
+@import './picker.css';
+@import './quickbar.css';
+@import './controls.css';
+@import './playbook.css';
+@import './panels.css';
+@import './dialog.css';

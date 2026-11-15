@@ -149,7 +149,7 @@ function applyColors(s: AppSettings): void {
  *
  * Computed on first read rather than here, because `paperPalette` derives the
  * inks from what the stylesheet computes and this module is evaluated before
- * `ui/tokens.css` is applied. Cached so the object keeps its identity across
+ * `ui/styles/tokens.css` is applied. Cached so the object keeps its identity across
  * renders, and dropped whenever a setting changes — a new route color has to
  * reach the white board exactly as it reaches the green one.
  */

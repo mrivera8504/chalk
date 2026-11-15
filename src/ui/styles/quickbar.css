@@ -1,0 +1,74 @@
+/*
+ * The contextual controls. Inert container, live buttons: a tap that lands
+ * between them still reaches the board underneath.
+ */
+.quick-bar {
+  position: absolute;
+  bottom: 10px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.quick-bar.left {
+  left: 10px;
+}
+
+.quick-bar.right {
+  right: 10px;
+  align-items: flex-end;
+}
+
+.quick-bar .quick {
+  pointer-events: auto;
+  min-width: 46px;
+  min-height: 44px;
+  touch-action: manipulation;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--line);
+}
+
+/* The zoom pair reads as one control rather than two loose pills. */
+.quick-bar .zoom {
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.quick-bar .zoom .quick {
+  min-width: 40px;
+  padding: 8px 10px;
+  font-size: 15px;
+}
+
+.quick-bar .pencil {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.quick-bar .pencil.on {
+  border-color: var(--hover);
+  color: var(--hover);
+  background: color-mix(in srgb, var(--hover) 16%, var(--panel));
+}
+
+/* The board tool wears the same lit state as the pencil: both are switches that
+   change what the next tap on the field means. */
+.quick-bar .pan.on {
+  border-color: var(--hover);
+  color: var(--hover);
+  background: color-mix(in srgb, var(--hover) 16%, var(--panel));
+}
+
+/* Setting a carried player down is the one that is urgent. */
+.quick-bar .quick.place {
+  border-color: var(--select);
+  color: var(--select);
+}

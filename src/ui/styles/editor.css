@@ -1,0 +1,199 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /*
+   * A stylus drag over non-editable content starts a text selection on Android,
+   * which eats the gesture before any pointer handler sees it. The board is full
+   * of <text> labels, so the pen had plenty to grab. Nothing here is meant to be
+   * selected except the label field below.
+   */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.inspector input {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.editor > header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.legality {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.legality .count {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ok);
+}
+
+.legality.bad .count {
+  color: var(--bad);
+}
+
+.legality.bad {
+  border-color: var(--bad);
+}
+
+.editor > header { flex: 0 0 auto; }
+
+.stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  /*
+   * Has to live on the HTML container, not on the <svg> inside it. Chromium does
+   * not apply touch-action to SVG elements, so the inline touch-action on the
+   * svg and on each player <g> was never doing anything. docs/spen-test.html,
+   * which measured the pen working on this device, puts it on a plain div.
+   */
+  touch-action: none;
+  overflow: hidden;
+}
+
+/*
+ * The board is a picture, not a control. Every rect, line, circle and text in
+ * it used to be hit-testable, so crossing the board fired a storm of boundary
+ * events: one trace logged 190 pointerout events and not a single pointerdown.
+ * spen-test.html, the one page confirmed to take S Pen contact on the target
+ * device, makes its svg inert exactly like this. The .stage div is the only
+ * thing that handles pointers, and it hit-tests by distance instead.
+ */
+.stage svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+/*
+ * Floats over the board rather than sitting below it. As a flex sibling it
+ * changed .stage's height every time something was selected, which rescaled the
+ * whole field and moved it out from under the pen mid-drag.
+ */
+.stage .inspector {
+  position: absolute;
+  touch-action: manipulation;
+  left: 0;
+  right: 0;
+  max-height: 62%;
+  overflow-y: auto;
+  z-index: 2;
+  /* One compact row, so it covers as little of the board as it can. */
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+/*
+ * Which end it pins to, and it is whichever end the selected man is not at.
+ *
+ * It used to be downfield always, on the reasoning that the backfield is at the
+ * bottom and a panel there covers the backs. True, and only half the board: the
+ * defense stands downfield, so the same fixed end laid the panel straight over
+ * the eleven men whose jobs it had been opened to set. Nothing is ever drawn at
+ * either extreme, so the far end from the man in hand is always the clear one.
+ */
+.stage .inspector.at-top {
+  top: 0;
+  bottom: auto;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.stage .inspector.at-bottom {
+  bottom: 0;
+  top: auto;
+  border-bottom: 0;
+  border-top: 1px solid var(--line);
+  /*
+   * A third of the board, and that number is the backfield.
+   *
+   * The board is 30 yards tall — 20 downfield, 10 behind — so the line of
+   * scrimmage sits two thirds of the way DOWN the screen, and a defender stands
+   * below the middle of it even though he is downfield of the ball. A panel
+   * given 62% from the bottom cleared the deep zones and then covered the front:
+   * the men it had been opened to set.
+   *
+   * The bottom ten yards are the one strip nothing defensive is ever drawn in,
+   * so that is the panel's share. It stops on the LOS, and the list scrolls
+   * inside it rather than the box growing to fit.
+   */
+  max-height: 33%;
+  overflow: hidden;
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  padding: 0 10px 4px;
+}
+
+/*
+ * Room for the drawer tab, which sits in this corner and draws over the panel.
+ *
+ * Only in portrait, and only at the bottom: the tab is the one thing on the
+ * board that never moves, so the panel that arrives under it is the one that
+ * gives way. Turned sideways the inspector takes the edge the drawer is not on
+ * and the two never meet, which is why the landscape block below clears this.
+ */
+.stage:has(.drawer.right) .inspector.at-bottom {
+  padding-right: 60px;
+}
+
+.stage:has(.drawer.left) .inspector.at-bottom {
+  padding-left: 60px;
+}
+
+/* The one scroller is the list itself, so its sticky head keeps working and the
+   fade at the edge still means "there is more below". */
+.stage .inspector.at-bottom .route-picker {
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+
+/*
+ * The quick bar lives at the bottom, so it steps up to the top when the panel
+ * takes the bottom — the same swap it already does across in landscape, and for
+ * the same reason: stood on top of the route list it covers the bottom row of
+ * it.
+ */
+.stage:has(.inspector.at-bottom) .quick-bar {
+  bottom: auto;
+  top: 10px;
+}

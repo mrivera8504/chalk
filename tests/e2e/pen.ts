@@ -22,10 +22,14 @@ export async function launch(): Promise<Browser> {
 }
 
 /** A fresh page with a known book already in storage and no way to the cloud. */
-export async function openApp(browser: Browser, opts: { width?: number; height?: number; book?: unknown } = {}) {
+export async function openApp(
+  browser: Browser,
+  opts: { width?: number; height?: number; book?: unknown; theme?: string } = {},
+) {
   const context = await browser.newContext({
     viewport: { width: opts.width ?? 1280, height: opts.height ?? 800 },
     hasTouch: true,
+    colorScheme: opts.theme === 'light' ? 'light' : 'dark',
   });
   // Nothing in a test signs in, mints an account or writes a playbook anywhere.
   await context.route((url) => url.hostname !== 'localhost', (r) => r.abort());
@@ -193,7 +197,9 @@ export async function penTapButton(page: Page, name: string | RegExp, pairs = 4)
 export async function savedPlay(page: Page, index = 0) {
   return page.evaluate((i) => {
     const book = JSON.parse(localStorage.getItem('chalk.playbook.v1') ?? '{"plays":[]}');
-    return book.plays[i] ?? null;
+    const live = book.plays.filter((p: { deletedAt?: number }) => !p.deletedAt);
+    // A new play goes on the end of the live ones, so -1 is the one just made.
+    return (i < 0 ? live[live.length + i] : book.plays[i]) ?? null;
   }, index);
 }
 

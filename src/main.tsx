@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import './ui/tokens.css';
+import './ui/styles/index.css';
 import { installPenTaps } from './ui/penTaps';
 import { installBackGesture } from './ui/backstack';
 import { watchForUpdates } from './store/update';

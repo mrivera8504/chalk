@@ -1,0 +1,479 @@
+.picker {
+  flex: 0 0 auto;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.picker-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px 4px;
+}
+
+.picker-head strong { font-size: 13px; }
+.picker-head span { font-size: 11.5px; color: var(--dim); }
+.picker-head .quiet { margin-left: auto; }
+
+.picker-group { padding: 1px 10px 5px; }
+
+.picker-group h3 {
+  margin: 4px 0 3px;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 600;
+}
+
+.picker-row { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.drawer-panel .picker-row button {
+  min-height: 40px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+
+.picker-note {
+  margin: 0;
+  padding: 0 12px 10px;
+  font-size: 11.5px;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+/* Inline in the playbook rather than docked to an edge, so it reads as a
+   step in the page rather than something covering it. */
+/* Full height of the panel: settings is a page, not a popover. */
+.settings-panel {
+  max-height: none;
+  border-top: 1px solid var(--line);
+  background: none;
+}
+
+/*
+ * Except on the playbook, where nothing else scrolls it and the page below is
+ * the plays. Capped and scrollable there, like every other panel on that
+ * screen, with the same fade at the edge.
+ */
+.settings-panel.standalone {
+  margin: 0 14px 12px;
+  max-height: 62vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.settings-panel.standalone .picker-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
+.setting {
+  padding: 7px 0 9px;
+}
+
+.setting-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 6px;
+}
+
+.setting-label strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.setting-label span {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--dim);
+}
+
+.setting .picker-row button {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.setting-num {
+  font: inherit;
+  width: 88px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+  color: var(--chalk);
+}
+
+/* The color wells. Big enough that a pen tip is not the limiting factor. */
+.swatch-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.swatch-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--dim);
+}
+
+.swatch-slot input[type='color'] {
+  width: 38px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-hi);
+  cursor: pointer;
+}
+
+.notes-panel {
+  max-height: none;
+  border-top: 1px solid var(--line);
+  background: none;
+}
+
+.notes-line,
+.notes-body {
+  font: inherit;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-hi);
+  color: var(--chalk);
+}
+
+.notes-body {
+  resize: vertical;
+  line-height: 1.45;
+}
+
+/* The tag input keeps its Add button beside it rather than wrapping under. */
+.notes-panel .picker-row .notes-line {
+  flex: 1 1 120px;
+  width: auto;
+  min-width: 0;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 7px;
+}
+
+.tag-row .chip button {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.account-panel,
+.export-panel,
+.print-panel.standalone {
+  margin: 0 14px 12px;
+  max-height: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+/* Inside the drawer it is a layer, not a card: the panel around it already has
+   the edge, and a second border inset from it read as a box in a box. */
+.print-panel {
+  max-height: none;
+  background: none;
+}
+
+/* ---- print ---- */
+
+/*
+ * A sheet of paper, on screen.
+ *
+ * Everything inside is positioned in percentages of the page and lettered in
+ * container units, so this same markup is a thumbnail in the panel and a proof
+ * filling a tablet, with no measuring and nothing to re-render when it resizes.
+ * `container-type: size` is what makes `cqw` mean "a hundredth of this page".
+ */
+.print-page {
+  container-type: size;
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #fff;
+  color: #000;
+  border-radius: 3px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+}
+
+.print-head,
+.print-name,
+.print-notes,
+.print-board {
+  position: absolute;
+}
+
+/* The board is an image of an SVG, sized to a box already in its proportions. */
+.print-board {
+  display: block;
+}
+
+.print-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.22);
+  font-weight: 700;
+  line-height: 1.1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.print-head span {
+  font-weight: 400;
+  color: #6b6b6b;
+  font-size: 0.72em;
+}
+
+/* Centered, which is the whole point of the change: flush left, a row of three
+   read as three plays shoved leftward rather than as a row. */
+.print-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  overflow: hidden;
+}
+
+.print-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.print-notes {
+  overflow: hidden;
+  line-height: 1.35;
+}
+
+/* Narrow enough that the options above it stay on screen beside it. The proof
+   that fills the view is Full screen; this one is for glancing at. */
+.print-preview {
+  max-width: 260px;
+  margin: 2px auto 8px;
+}
+
+.print-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.print-pager button {
+  min-height: 34px;
+  padding: 4px 12px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/*
+ * The proof, over everything.
+ *
+ * Under the dialog's z-index for the same reason the update bar is: a question
+ * the coach is being asked must never end up behind a picture of a page.
+ */
+.print-full {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px;
+  touch-action: manipulation;
+  background: color-mix(in srgb, #000 78%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+/*
+ * Just a centring box.
+ *
+ * The sheet inside sizes itself, from an inline width that knows the page's own
+ * proportions — see PagePreview. It has to be inline, because the answer
+ * changes when the paper is turned, and every attempt to do it here ended in
+ * `height: 100%` inside a box whose height came from its contents, which is
+ * circular and collapsed the sheet to nothing.
+ */
+.print-full-sheet {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.print-full-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+@media (orientation: landscape) {
+  /* The options and the proof sit side by side when there is width for it,
+     so changing a setting does not mean scrolling back up to see it. */
+  .print-panel .print-preview {
+    max-width: 300px;
+  }
+}
+
+.picker-note.bad {
+  color: var(--bad);
+}
+
+.picker-note.good {
+  color: var(--ok);
+}
+
+/* The two-way toggle on the account screen reads as one control. */
+.seg button {
+  flex: 1 1 0;
+  justify-content: center;
+}
+
+.account-panel .notes-line {
+  width: 100%;
+}
+
+.chip { display: inline-flex; }
+.chip > button { border-radius: 0; }
+.chip > button:first-child { border-radius: 7px 0 0 7px; }
+.chip > button:last-child { border-radius: 0 7px 7px 0; }
+.chip > button + button { border-left: 0; }
+
+.chip .chip-x {
+  padding: 8px 9px;
+  color: var(--dim);
+}
+
+/* The foundation star. Dim until it is the one new plays open in. */
+.chip .chip-star {
+  padding: 8px 8px;
+  color: var(--line);
+}
+
+/*
+ * Opts out of the chalk-on-dark inversion every other pressed button takes. A
+ * white block beside the formation's name reads as the name being selected,
+ * which is what tapping the name next to it actually does.
+ */
+.chip .chip-star.on,
+.chip .chip-star[aria-pressed='true'] {
+  background: var(--panel-hi);
+  border-color: var(--line);
+  color: var(--locked);
+}
+
+/*
+ * The drawer's one text field. It had no rule of its own, so the label and the
+ * input sat on the same line and the box ran over the word.
+ */
+.player-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 8px;
+}
+
+.player-row label span {
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.player-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--chalk);
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 10px;
+}
+
+/*
+ * The team sheet: one row a kid, shirt first because that is what links him to
+ * a slot and what the rows are sorted by.
+ */
+.roster-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+}
+
+.roster-row input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--chalk);
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 9px 10px;
+  min-width: 0;
+}
+
+.roster-row .roster-jersey {
+  width: 62px;
+  flex: 0 0 auto;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.roster-row .roster-name { flex: 2 1 0; }
+.roster-row .roster-positions { flex: 1 1 0; }
+
+/* The drawer's slot picker, matching the text field beside it. */
+.player-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--chalk);
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 10px;
+}
+
+button:disabled { opacity: 0.4; cursor: default; }
+
+/* ---- the one dialog ---- */
