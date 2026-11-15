@@ -398,7 +398,7 @@
 .chip .chip-star[aria-pressed='true'] {
   background: var(--panel-hi);
   border-color: var(--line);
-  color: var(--locked);
+  color: var(--ui-locked);
 }
 
 /*

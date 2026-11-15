@@ -22,6 +22,11 @@
   --bar: #ffffff;
   --shadow: 0 6px 20px rgba(20, 24, 28, 0.16);
   --scrim: rgba(20, 24, 28, 0.4);
+  --ui-ball: color-mix(in oklab, var(--ball) 52%, #000);
+  --ui-zone: color-mix(in oklab, var(--zone) 55%, #000);
+  --ui-live: color-mix(in oklab, var(--hover) 48%, #000);
+  --ui-rush: color-mix(in oklab, var(--ink-blitz) 62%, #000);
+  --ui-locked: color-mix(in oklab, var(--locked) 52%, #000);
 }
 
 @media (prefers-color-scheme: light) {
@@ -39,5 +44,10 @@
     --bar: #ffffff;
     --shadow: 0 6px 20px rgba(20, 24, 28, 0.16);
     --scrim: rgba(20, 24, 28, 0.4);
+    --ui-ball: color-mix(in oklab, var(--ball) 52%, #000);
+    --ui-zone: color-mix(in oklab, var(--zone) 55%, #000);
+    --ui-live: color-mix(in oklab, var(--hover) 48%, #000);
+    --ui-rush: color-mix(in oklab, var(--ink-blitz) 62%, #000);
+    --ui-locked: color-mix(in oklab, var(--locked) 52%, #000);
   }
 }

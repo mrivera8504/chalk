@@ -43,6 +43,21 @@
   background: var(--panel);
   font-size: 11.5px;
   color: var(--dim);
+  /* One line. Wrapped, it was a three-line lozenge taller than the header. */
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/*
+ * The count says it on a phone: green is legal, red is not, and the number is
+ * the one a coach is checking. The sentence beside it needs a wider header
+ * than a phone in portrait has, and is the first thing to go — unless it is
+ * bad news, which is always shown.
+ */
+@media (max-width: 520px) {
+  .legality.good .msg {
+    display: none;
+  }
 }
 
 .legality .count {

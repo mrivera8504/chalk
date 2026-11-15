@@ -12,7 +12,8 @@ import {
 interface Props {
   /** Push the local playbook up under whichever account ends up signed in. */
   onSaveNow: () => Promise<void>;
-  onClose: () => void;
+  /** Absent when the panel has a page to itself, which brings its own header. */
+  onClose?: () => void;
 }
 
 /**
@@ -73,13 +74,19 @@ export function AccountPanel({ onSaveNow, onClose }: Props) {
 
   return (
     <div className="picker account-panel">
-      <div className="picker-head">
-        <strong>Account</strong>
-        <span>{signedIn ? account.email : 'not signed in'}</span>
-        <button className="quiet" onClick={onClose}>
-          Close
-        </button>
-      </div>
+      {onClose ? (
+        <div className="picker-head">
+          <strong>Account</strong>
+          <span>{signedIn ? account.email : 'not signed in'}</span>
+          <button className="quiet" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      ) : (
+        <p className="picker-note account-who">
+          {signedIn ? `Signed in as ${account.email}.` : 'Not signed in.'}
+        </p>
+      )}
 
       {signedIn ? (
         <div className="picker-group">

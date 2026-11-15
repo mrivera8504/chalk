@@ -23,16 +23,26 @@ const REPEAT_MS = 250;
 /** Long enough for a real click to land, short enough to feel immediate. */
 const GRACE_MS = 150;
 
-function targetButton(e: PointerEvent): HTMLButtonElement | null {
+/**
+ * Anything that waits for a click: a button, and a link.
+ *
+ * Links were not here because the app had none. The navigation bar is made of
+ * them — a tab is a place, with an address — and a link waits for the same
+ * synthesized click a button does, so without this the bar would have been the
+ * one row in the app that needed a hard press.
+ */
+type Tappable = HTMLButtonElement | HTMLAnchorElement;
+
+const isDisabled = (el: Tappable) => el instanceof HTMLButtonElement && el.disabled;
+
+function targetButton(e: PointerEvent): Tappable | null {
   const el = e.target as Element | null;
-  const button = el?.closest?.('button') ?? null;
-  return button && !(button as HTMLButtonElement).disabled
-    ? (button as HTMLButtonElement)
-    : null;
+  const hit = (el?.closest?.('button, a[href]') ?? null) as Tappable | null;
+  return hit && !isDisabled(hit) ? hit : null;
 }
 
 export function installPenTaps(): void {
-  let downOn: HTMLButtonElement | null = null;
+  let downOn: Tappable | null = null;
   let armed: { el: Element | null; at: number } = { el: null, at: 0 };
 
   // Capture, so a component that stops propagation cannot hide the tap.
@@ -71,7 +81,7 @@ export function installPenTaps(): void {
       window.setTimeout(() => {
         button.removeEventListener('click', seen, true);
         // Still in the document, still enabled, and the browser never fired.
-        if (!clicked && button.isConnected && !button.disabled) button.click();
+        if (!clicked && button.isConnected && !isDisabled(button)) button.click();
       }, GRACE_MS);
     },
     true,

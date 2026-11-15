@@ -16,10 +16,15 @@ import { PlayerShape } from '../render/PlayerShape';
 import { FocusSquare } from '../render/FocusSquare';
 import { ZoneArea } from '../render/Zone';
 import { VisionCone } from '../render/VisionCone';
-import { VIEW_BOX, toPathD } from '../render/geometry';
+import { toPathD } from '../render/geometry';
+import { viewBox, viewForPlays } from '../export/view';
+import { Menu } from '../ui/Menu';
 
 /** Not a section id, just the sentinel the folder menu uses for its last row. */
 export const NEW_SECTION = ' new';
+
+/** The frame a card's picture sits in: four across, three down. */
+const THUMB_ASPECT = 4 / 3;
 
 interface Props {
   play: Play;
@@ -68,18 +73,32 @@ export function PlayCard({
     ? play.sectionId
     : UNFILED_SECTION;
 
+  /*
+   * The window the sheet would give this play, not the whole board.
+   *
+   * The board is 22 yards by 30 because a phone is taller than it is wide, and
+   * almost no play uses all thirty: a card drawn from the full window was two
+   * thirds empty grass with the play small in the middle of it, and tall enough
+   * that a phone showed three plays a screen. `viewForPlays` is the rule the
+   * printed sheet already follows — everything the play draws, padded, never
+   * cropped, leaned toward the shape it is going into — so a card is the play
+   * at the size it deserves, and the same picture a coach gets on paper.
+   */
+  const view = viewForPlays([play], THUMB_ASPECT);
+
   return (
     <div className="play-card">
-      <button className="thumb" onClick={() => onOpen(play.id)} aria-label={`Open ${title}`}>
-        {/* Whichever surface the board is set to, so a card looks like the play
-            it opens. The properties inherit to everything drawn below. */}
-        <svg
-          viewBox={VIEW_BOX}
-          preserveAspectRatio="xMidYMid meet"
-          aria-hidden="true"
-          style={boardVars(playSurface(play, settings.fieldSurface))}
-        >
-          <Field holes={holes} showHoles={false} />
+      {/* Whichever surface the board is set to, so a card looks like the play
+          it opens. The properties inherit to everything drawn below, and to
+          the turf behind it where the window does not fill the frame. */}
+      <button
+        className="thumb"
+        onClick={() => onOpen(play.id)}
+        aria-label={`Open ${title}`}
+        style={boardVars(playSurface(play, settings.fieldSurface))}
+      >
+        <svg viewBox={viewBox(view)} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <Field holes={holes} showHoles={false} view={view} />
           {/* Under the play, exactly as on the board. */}
           {(play.zones ?? []).map((z) => (
             <ZoneArea
@@ -130,9 +149,13 @@ export function PlayCard({
       </button>
 
       {/*
-        * Name on its own line, everything else under it. Sharing a row with
-        * Copy and Delete left the name about seventy pixels on a phone, which
-        * is 'Sweep…' for every play in the book.
+        * The name, and one button for everything else.
+        *
+        * A card used to wear a folder select, Copy and Delete on its face. Those
+        * are things done to a play once in a while, and they stood between a
+        * coach and the thumbnails he was scanning — and before that they shared
+        * a row with the name, which left it seventy pixels and read 'Sweep…'
+        * for every play in the book.
         */}
       <div className="card-foot">
         <button className="card-name" onClick={() => onOpen(play.id)}>
@@ -145,47 +168,58 @@ export function PlayCard({
             {!play.name && play.suggestedName && <em>suggested name</em>}
           </span>
         </button>
-      </div>
 
-      <div className="card-actions">
-        {/*
-          * A native select, because it is one tap on a touch device and the
-          * system picker is the one control on this page a pen has never had
-          * trouble with. Always rendered, so every card in a row is the same
-          * height.
-          */}
-        <div className="card-file">
-          <select
-            value={filedIn}
-            aria-label={`Folder for ${title}`}
-            onChange={(e) => {
-              const to = e.target.value;
-              if (to === NEW_SECTION) onFileInNew(play.id);
-              else onSetSection(play.id, to);
-            }}
-          >
-            <option value={UNFILED_SECTION}>Unfiled</option>
-            {sections.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-            <option value={NEW_SECTION}>New folder</option>
-          </select>
-        </div>
-
-        <div className="card-tools">
-          <button className="quiet" onClick={() => onDuplicate(play.id)} title="Duplicate">
-            Copy
-          </button>
-          <button
-            className="quiet danger"
-            onClick={() => onDelete(play.id)}
-            title={`Delete ${title}`}
-          >
-            Delete
-          </button>
-        </div>
+        <Menu label={`More for ${title}`}>
+          {(close) => (
+            <>
+              {/*
+                * Still a native select. It is one tap on a touch device and the
+                * system picker is the one control a pen has never had trouble
+                * with — that was true on the card's face and it is true here.
+                */}
+              <label className="menu-field">
+                <span>Folder</span>
+                <select
+                  value={filedIn}
+                  aria-label={`Folder for ${title}`}
+                  onChange={(e) => {
+                    const to = e.target.value;
+                    close();
+                    if (to === NEW_SECTION) onFileInNew(play.id);
+                    else onSetSection(play.id, to);
+                  }}
+                >
+                  <option value={UNFILED_SECTION}>Unfiled</option>
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                  <option value={NEW_SECTION}>New folder</option>
+                </select>
+              </label>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  close();
+                  onDuplicate(play.id);
+                }}
+              >
+                Duplicate
+              </button>
+              <button
+                role="menuitem"
+                className="danger"
+                onClick={() => {
+                  close();
+                  onDelete(play.id);
+                }}
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </Menu>
       </div>
 
       {play.tags.length > 0 && (

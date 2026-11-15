@@ -36,13 +36,13 @@
  * would say nothing about which man is carrying.
  */
 .route-picker .picker-head .ball {
-  color: var(--ball);
+  color: var(--ui-ball);
 }
 
 .route-picker .picker-head .ball[aria-pressed='true'] {
   background: color-mix(in srgb, var(--ball) 20%, var(--panel));
-  border-color: var(--ball);
-  color: var(--ball);
+  border-color: var(--ui-ball);
+  color: var(--ui-ball);
 }
 
 /*
@@ -51,13 +51,13 @@
  * defender was carrying something.
  */
 .route-picker .picker-head .zone-toggle {
-  color: var(--zone);
+  color: var(--ui-zone);
 }
 
 .route-picker .picker-head .zone-toggle[aria-pressed='true'] {
   background: color-mix(in srgb, var(--zone) 20%, var(--panel));
-  border-color: var(--zone);
-  color: var(--zone);
+  border-color: var(--ui-zone);
+  color: var(--ui-zone);
 }
 
 /*

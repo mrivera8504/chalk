@@ -5,6 +5,11 @@ Full spec and stage list: `docs/build-spec.md`.
 
 ## Where it stands
 
+**An overhaul is under way** — multi-sport, a new look, teams and sharing — in
+eight stages. Stage 0 (tests, and the editor split up) is done; stage 1 (the
+design system and the new shell) is in progress. See *Tests*, *The editor, in
+pieces* and *The shell* below.
+
 Stages 1-7 done: field and players, blocking tool, route and run presets with
 formations and auto play-naming, freehand ink, a playbook that saves, and
 export, and an offline shell. The app installs to the home screen and opens
@@ -205,6 +210,71 @@ kind of thing.
 about the scout look, in the most prominent place on the screen, answering a
 question nobody asked. A defense reports its shape instead: how many are up on
 the ball, out of how many are on the field.
+
+## The shell: screens, addresses and themes
+
+The overhaul's stage 1. The editor is the same editor; what changed is the app
+around it.
+
+**Four places, always on screen.** Playbook, Team, Print and Settings are tabs
+in `shell/AppShell.tsx` — along the bottom on a phone, down the side once the
+screen is wide or turned over. The roster, the sheets, the account and the
+settings used to open as panels stacked on the playbook behind a ⋯, each
+pushing the plays down the page. They are the same panels: handed no `onClose`
+they draw no header, the bargain `SettingsPanel` already struck with the drawer,
+and `shell/pages.tsx` gives each a page. The editor is **not** inside the shell.
+A bar under the board would be a sibling of `.stage` that could change its
+height.
+
+**Every screen has an address, and the address is written, never navigated
+to.** `ui/route.ts` holds the route and `replaceState`s the path of whichever
+history entry is current. It never pushes one. Back belongs to
+`ui/backstack.ts`, which parks a single spare entry while anything is open; a
+router pushing entries of its own would be a second owner of the same stack, and
+the bug that file exists to fix was the app closing on a back gesture. So a tab
+other than the playbook, an open play, a menu and a dialog are all back *layers*,
+and the address follows along. `?trace` survives a route change, because losing
+it on the first tap would make the trace unusable.
+
+**A layer closing and another opening in the same breath must not push.** Our
+own `history.back()` is asynchronous, and a `pushState` made while it is in the
+air does not survive it: the traversal was aimed before the push, so it lands
+one entry lower and the new spare is gone while `parked` says it is there. The
+next close then calls `back()` on nothing and leaves the app. It took a card's
+menu raising a confirm to do it — tap Delete, the menu shuts, the dialog opens.
+`park()` waits while `removingOwn` is set and `onPop` parks again afterwards.
+
+**Links answer a light pen tap too.** `ui/penTaps.ts` covered buttons because
+the app had no links. The navigation is made of them — a tab is a place with an
+address — and a link waits for the same synthesized click a button does.
+
+**A card is the play, at the size it deserves.** `PlayCard` draws the window
+`export/view.ts` would give the play on paper — everything it draws, padded,
+never cropped — rather than the whole 22-by-30 board, which was two thirds empty
+grass and tall enough that a phone showed three plays a screen. The folder
+select, Copy and Delete came off the card's face into one `ui/Menu.tsx`; the
+folder picker in it is still a native select, for the reason it always was.
+
+**The chrome has a light theme; the board does not.** `styles/themes.css` swaps
+the chrome's tokens and nothing a play is drawn with, so a play on grass is on
+grass in both. Chosen under Settings, The app; `dark` is the default rather than
+`system`, because the app has only ever been dark and nobody asked for that to
+change. A few controls wear the color of the mark they put on the board — the
+star on the carrier button, the zone toggle, the lit pencil — and pale yellow is
+not text on white, so the chrome reads them through `--ui-ball`, `--ui-zone`
+and the rest, which the light theme darkens. **Never darken the board's own
+token to fix a control**: that changes what is drawn on the field.
+
+**The stylesheet is in layers, in cascade order.** `ui/styles/index.css` imports
+them; `tokens.css` holds the board's tokens in its first `:root` block — the
+test setup reads that block whole for the golden renders, so keep it first and
+keep chrome-only tokens out of it. Inter and Space Grotesk are two woff2 files
+in `ui/fonts/`, bundled because the app opens with no signal. Neither is used on
+the board: an exported SVG carries no fonts.
+
+**`SHOT_DIR=/some/dir npm run test:e2e -- shots`** writes a picture of every
+screen at phone and tablet size; add `SHOT_THEME=light` for the other theme.
+Look at them after any change to the chrome.
 
 ## The target device
 
@@ -1173,6 +1243,16 @@ the LAN. `pointerRef` in the editor holds the latest handlers for exactly this.
 **Netlify credits are nearly out.** Test over the LAN, which costs nothing and
 hot-reloads. Deploy **once per stage**, not per fix. A push to `main` triggers a
 build.
+
+**Firebase Hosting is set up but not switched on.** `firebase.json` and
+`.firebaserc` describe the same site Netlify serves: `dist`, every path rewritten
+to `index.html` so an address like `/play/abc` loads the app, hashed assets
+cached for a year, and the service worker and the page itself never cached. It
+covers hosting only — the Firestore rules are deliberately not in it, so a
+deploy cannot publish rules by accident. Nothing has been deployed there. To try
+it: `npm run build && npx firebase-tools deploy --only hosting`, signed in as
+the project's owner. Netlify stays live until that has been checked on the
+tablet.
 
 `public/spen-test.html` deploys with the app at `/spen-test.html` — the stylus
 diagnostic, and the reference for what this device will accept.

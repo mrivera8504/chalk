@@ -101,6 +101,21 @@
   --on-accent: #10161a;
   /* The bar a screen's navigation sits on: a shade off the page, not a panel. */
   --bar: #141c21;
+  /*
+   * Board colors, as the chrome wears them.
+   *
+   * A few controls take the color of the mark they put on the board — the star
+   * on the carrier button, the zone toggle, the lit pencil. On a dark panel the
+   * board's own color is right. On a light one it is pale text on white, so the
+   * light theme darkens these and leaves the board's tokens alone: what is
+   * drawn on the field must not change with the theme.
+   */
+  --ui-ball: var(--ball);
+  --ui-zone: var(--zone);
+  --ui-live: var(--hover);
+  --ui-rush: var(--ink-blitz);
+  --ui-locked: var(--locked);
+
   /* The shadow under anything that floats, and the dimming behind a dialog. */
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   --scrim: rgba(0, 0, 0, 0.55);

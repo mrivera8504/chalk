@@ -54,16 +54,16 @@
 }
 
 .quick-bar .pencil.on {
-  border-color: var(--hover);
-  color: var(--hover);
+  border-color: var(--ui-live);
+  color: var(--ui-live);
   background: color-mix(in srgb, var(--hover) 16%, var(--panel));
 }
 
 /* The board tool wears the same lit state as the pencil: both are switches that
    change what the next tap on the field means. */
 .quick-bar .pan.on {
-  border-color: var(--hover);
-  color: var(--hover);
+  border-color: var(--ui-live);
+  color: var(--ui-live);
   background: color-mix(in srgb, var(--hover) 16%, var(--panel));
 }
 

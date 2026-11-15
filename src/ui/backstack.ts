@@ -36,6 +36,18 @@ let removingOwn = false;
 
 function park() {
   if (parked) return;
+  /*
+   * Our own `back()` is still in the air, taking the last spare away. Pushing
+   * a new one now does not survive it: the traversal was aimed before the push,
+   * so it lands on the entry *under* the old spare and the new one is gone —
+   * while `parked` says it is there. The next layer to close then calls
+   * `back()` on a spare that does not exist, and that one leaves the app.
+   *
+   * It takes one layer closing and another opening in the same breath, which
+   * nothing did until a card's menu could raise a confirm: tap Delete, the menu
+   * shuts, the dialog opens. So wait. `onPop` parks again once ours has landed.
+   */
+  if (removingOwn) return;
   parked = true;
   history.pushState({ chalk: 'layer' }, '');
 }
@@ -58,6 +70,8 @@ function sync() {
 function onPop() {
   if (removingOwn) {
     removingOwn = false;
+    // Whatever opened while that was in the air gets its spare now.
+    sync();
     return;
   }
 

@@ -13,7 +13,8 @@ import {
 interface Props {
   roster: RosterEntry[];
   onChange: (roster: RosterEntry[]) => void;
-  onClose: () => void;
+  /** Absent when the panel has a page to itself, which brings its own header. */
+  onClose?: () => void;
 }
 
 /**
@@ -78,15 +79,17 @@ export function RosterPanel({ roster, onChange, onClose }: Props) {
 
   return (
     <div className="picker roster-panel" ref={scroller}>
-      <div className="picker-head">
-        <strong>Roster</strong>
-        <span>
-          {roster.length} {roster.length === 1 ? 'player' : 'players'}
-        </span>
-        <button className="quiet" onClick={onClose}>
-          Close
-        </button>
-      </div>
+      {onClose && (
+        <div className="picker-head">
+          <strong>Roster</strong>
+          <span>
+            {roster.length} {roster.length === 1 ? 'player' : 'players'}
+          </span>
+          <button className="quiet" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      )}
 
       <div className="picker-group">
         {sorted.map((entry) => (

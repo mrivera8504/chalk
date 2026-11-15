@@ -4,6 +4,7 @@ import { App } from './App';
 import './ui/styles/index.css';
 import { installPenTaps } from './ui/penTaps';
 import { installBackGesture } from './ui/backstack';
+import { installRoute } from './ui/route';
 import { watchForUpdates } from './store/update';
 
 // First line in the console on every device, so "which bundle is this one
@@ -16,6 +17,9 @@ installPenTaps();
 // Likewise before anything can open: the listener has to be up before there is
 // a layer for the back gesture to close.
 installBackGesture();
+
+// After it, so the address is rewritten once the gesture's own handler has run.
+installRoute();
 
 // Registers the worker, then keeps asking whether it is still the current one
 // — which a device that is never closed would otherwise never find out.

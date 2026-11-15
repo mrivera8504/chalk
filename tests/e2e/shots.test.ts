@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync } from 'node:fs';
 import { it } from 'vitest';
-import { fingerDrag, launch, man, openApp, penTap, savedPlay } from './pen';
+import { launch, man, onBoard, openApp, penTap, savedPlay } from './pen';
 
 /**
  * Pictures of every screen, for looking at — not a test of anything.
@@ -32,7 +32,14 @@ it.skipIf(!out)('shots', async () => {
   mkdirSync(out!, { recursive: true });
   const browser = await launch();
   for (const [w, h, tag] of [[412, 915, 'phone'], [1280, 800, 'tablet']] as const) {
-    const { page, context } = await openApp(browser, { width: w, height: h, book: book(), theme });
+    const { page, context } = await openApp(browser, {
+      width: w,
+      height: h,
+      book: book(),
+      theme,
+      // Shut on a phone, where it would cover the man the pen is about to tap.
+      drawer: tag === 'phone' ? 'closed' : 'open',
+    });
     const shot = async (name: string, fullPage = false) => {
       await page.waitForTimeout(350);
       await page.screenshot({ path: `${out}/${tag}-${name}.png`, fullPage });
@@ -51,11 +58,16 @@ it.skipIf(!out)('shots', async () => {
     await page.getByRole('button', { name: 'New play', exact: true }).click();
     await page.locator('.stage svg').waitFor();
     await shot('5-editor');
-    await penTap(page, man(await savedPlay(page, -1), 'TE'));
+    const te = man(await savedPlay(page, -1), 'TE');
+    await onBoard(page, te);
+    await penTap(page, te);
     await shot('6-routes');
     await page.locator('.inspector button').filter({ hasText: /^Medium out$/ }).first().click();
-    if (tag === 'phone') await page.getByRole('button', { name: 'Show the tools' }).click().catch(() => {});
-    await shot('7-tools');
+    await shot('7-route-set');
+    if (tag === 'phone') {
+      await page.getByRole('button', { name: 'Show the tools' }).click();
+      await shot('8-tools');
+    }
     await context.close();
   }
   await browser.close();

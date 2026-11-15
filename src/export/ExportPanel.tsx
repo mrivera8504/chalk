@@ -14,7 +14,8 @@ interface Props {
   onJson: () => void;
   /** Read one back. Throws with something readable when the file is not one. */
   onRestore: (text: string) => void;
-  onClose: () => void;
+  /** Absent when the panel has a page to itself, which brings its own header. */
+  onClose?: () => void;
 }
 
 type Job = 'band' | 'roster' | null;
@@ -101,15 +102,17 @@ export function ExportPanel({ plays, sections, roster, onJson, onRestore, onClos
 
   return (
     <div className="picker export-panel">
-      <div className="picker-head">
-        <strong>Export</strong>
-        <span>
-          {plays.length} {plays.length === 1 ? 'play' : 'plays'}
-        </span>
-        <button className="quiet" onClick={onClose}>
-          Close
-        </button>
-      </div>
+      {onClose && (
+        <div className="picker-head">
+          <strong>Export</strong>
+          <span>
+            {plays.length} {plays.length === 1 ? 'play' : 'plays'}
+          </span>
+          <button className="quiet" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      )}
 
       <div className="picker-group">
         <h3>Plays</h3>

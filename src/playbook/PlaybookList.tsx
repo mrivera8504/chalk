@@ -1,14 +1,10 @@
 import { useMemo, useState } from 'react';
-import { ExportPanel } from '../export/ExportPanel';
-import { AccountPanel } from './AccountPanel';
-import { RosterPanel } from './RosterPanel';
-import { readRoster, type RosterEntry } from '../domain/roster';
-import { useInstallPrompt } from '../store/install';
 import { UNFILED_SECTION, type Play, type Section, type Side } from '../domain/types';
+import { PageHead } from '../shell/AppShell';
 import type { SyncState } from '../store/sync';
 import { askConfirm, askText } from '../ui/dialog';
-import { SettingsPanel } from '../editor/SettingsPanel';
-import { useSettings } from '../store/settings';
+import { Icon } from '../ui/Icon';
+import { Menu } from '../ui/Menu';
 import { PlayCard } from './PlayCard';
 
 interface Props {
@@ -30,10 +26,6 @@ interface Props {
   onDeleteSection: (id: string) => void;
   onSetSection: (id: string, sectionId: string) => void;
   onMovePlay: (id: string, toIndex: number) => void;
-  onExport: () => void;
-  /** Put a backup file back. Throws with something readable if it is not one. */
-  onRestore: (text: string) => void;
-  onSaveNow: () => Promise<void>;
 }
 
 /*
@@ -79,9 +71,6 @@ export function PlaybookList({
   onDeleteSection,
   onSetSection,
   onMovePlay,
-  onExport,
-  onRestore,
-  onSaveNow,
 }: Props) {
   const [query, setQuery] = useState('');
   const [showTrash, setShowTrash] = useState(false);
@@ -107,21 +96,6 @@ export function PlaybookList({
    */
   const [unit, setUnit] = useState<Side | 'all'>('all');
   const [dragging, setDragging] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const [account, setAccount] = useState(false);
-  const [rostering, setRostering] = useState(false);
-  /** The once-a-season controls, folded away behind one button. */
-  const [more, setMore] = useState(false);
-  /*
-   * Settings from here as well as from inside a play. Every one of them — the
-   * colors, the pen, the board, the league rules — is the same on every play
-   * in the book, so having to open a play to reach them was asking a coach to
-   * go through a thing he did not want to change to get at a thing he did.
-   */
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const settings = useSettings();
-  const [roster, setRoster] = useState<RosterEntry[]>(readRoster);
-  const install = useInstallPrompt();
 
   /** Name, suggested name, tags and notes all match, because coaches search by feel. */
   const matches = useMemo(() => {
@@ -199,25 +173,35 @@ export function PlaybookList({
   }
 
   return (
-    <div className="playbook">
-      <header>
-        <h1>Playbook</h1>
-        <span className={`sync${NEEDS_ACTION.has(sync) ? ' bad' : ''}`}>{SYNC_LABEL[sync]}</span>
-        {/*
-          * Only once it is worth saying. A book with nothing in it has nothing
-          * to back up, and a file written this morning is not news — the line
-          * is here for the gap, not for the reassurance.
-          */}
-        {backupAge !== null && (
-          <span className={`backup-age${backupAge >= 14 ? ' stale' : ''}`}>
-            {backupAge === Infinity ? 'never backed up' : `last backup ${backupAge}d ago`}
-          </span>
-        )}
-      </header>
+    <div className="page playbook">
+      <PageHead
+        title="Playbook"
+        sub={
+          <>
+            <span className={`sync${NEEDS_ACTION.has(sync) ? ' bad' : ''}`}>{SYNC_LABEL[sync]}</span>
+            {/*
+              * Only once it is worth saying. A book with nothing in it has
+              * nothing to back up, and a file written this morning is not news —
+              * the line is here for the gap, not for the reassurance.
+              */}
+            {backupAge !== null && (
+              <span className={`backup-age${backupAge >= 14 ? ' stale' : ''}`}>
+                {backupAge === Infinity ? 'never backed up' : `last backup ${backupAge}d ago`}
+              </span>
+            )}
+          </>
+        }
+      >
+        <button className="quiet with-icon" onClick={() => void addSection()}>
+          <Icon name="folder" size={18} />
+          Add folder
+        </button>
+      </PageHead>
 
-      <div className="book-tools">
-        {/* Finding a play. */}
-        <div className="book-row">
+      {/* Finding a play. */}
+      <div className="book-find">
+        <label className="search">
+          <Icon name="search" size={18} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -225,166 +209,71 @@ export function PlaybookList({
             spellCheck={false}
             aria-label="Search"
           />
-          {/*
-            * Only there once there is something to filter. One unit's playbook
-            * showing an Offense/Defense switch is two buttons that do nothing.
-            */}
-          {plays.some((p) => p.unit === 'defense') && (
-            <div className="unit-filter">
-              {(['all', 'offense', 'defense'] as const).map((u) => (
-                <button key={u} aria-pressed={unit === u} onClick={() => setUnit(u)}>
-                  {u === 'all' ? 'All' : u === 'offense' ? 'Offense' : 'Defense'}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Starting one, and then everything else. */}
-        <div className="book-row">
-          <button className="primary" onClick={() => onNew('offense')}>
-            New play
-          </button>
-          {/*
-            * Its own button rather than a choice inside the editor: a play is one
-            * unit or the other from the moment it exists, because every line
-            * drawn on it was drawn for one of them.
-            */}
-          <button onClick={() => onNew('defense')}>New defense</button>
-          <span className="spacer" />
-          <button className="quiet" onClick={() => void addSection()}>
-            Add folder
-          </button>
-          {/*
-            * The roster, the sheets, the account and the install prompt live
-            * behind this. Every one of them is something a coach does once a
-            * season, and all four sitting in the same row as New play is what
-            * made this screen a wall of identical gray.
-            */}
-          <button
-            className="quiet"
-            aria-expanded={more}
-            aria-label={more ? 'Fewer options' : 'More options'}
-            onClick={() => setMore((v) => !v)}
-          >
-            ⋯
-          </button>
-        </div>
+        </label>
+        {/*
+          * Only there once there is something to filter. One unit's playbook
+          * showing an Offense/Defense switch is two buttons that do nothing.
+          */}
+        {plays.some((p) => p.unit === 'defense') && (
+          <div className="unit-filter">
+            {(['all', 'offense', 'defense'] as const).map((u) => (
+              <button key={u} aria-pressed={unit === u} onClick={() => setUnit(u)}>
+                {u === 'all' ? 'All' : u === 'offense' ? 'Offense' : 'Defense'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {more && (
-        <div className="book-more">
-          <button
-            className="quiet"
-            onClick={() => {
-              setExporting(false);
-              setAccount(false);
-              setSettingsOpen(false);
-              setRostering((v) => !v);
-            }}
-            aria-pressed={rostering}
-          >
-            Roster{roster.length ? ` · ${roster.length}` : ''}
-          </button>
-          <button
-            className="quiet"
-            onClick={() => {
-              setAccount(false);
-              setRostering(false);
-              setSettingsOpen(false);
-              setExporting((v) => !v);
-            }}
-            aria-pressed={exporting}
-          >
-            Export &amp; backup
-          </button>
-          <button
-            className="quiet"
-            onClick={() => {
-              setExporting(false);
-              setRostering(false);
-              setSettingsOpen(false);
-              setAccount((v) => !v);
-            }}
-            aria-pressed={account}
-          >
-            Account
-          </button>
-          <button
-            className="quiet"
-            onClick={() => {
-              setExporting(false);
-              setRostering(false);
-              setAccount(false);
-              setSettingsOpen((v) => !v);
-            }}
-            aria-pressed={settingsOpen}
-          >
-            Settings
-          </button>
-          {/* Only there when the browser has actually offered; see useInstallPrompt. */}
-          {install && (
-            <button className="quiet" onClick={install}>
-              Install
-            </button>
-          )}
-        </div>
-      )}
-
-      {account && <AccountPanel onSaveNow={onSaveNow} onClose={() => setAccount(false)} />}
-
-      {settingsOpen && (
-        <SettingsPanel settings={settings} onClose={() => setSettingsOpen(false)} />
-      )}
-
-      {rostering && (
-        <RosterPanel
-          roster={roster}
-          onChange={setRoster}
-          onClose={() => setRostering(false)}
-        />
-      )}
-
-      {exporting && (
-        <ExportPanel
-          plays={matches}
-          sections={sections}
-          roster={roster}
-          onJson={onExport}
-          onRestore={onRestore}
-          onClose={() => setExporting(false)}
-        />
-      )}
-
       {plays.length === 0 && sections.length === 0 ? (
-        <p className="empty">
-          Nothing here yet. Start a play and it saves itself as you draw.
-        </p>
+        <div className="empty">
+          <strong>No plays yet</strong>
+          <p>Start a play and it saves itself as you draw.</p>
+        </div>
       ) : grouped.length === 0 ? (
-        <p className="empty">No play matches “{query}”.</p>
+        <div className="empty">
+          <strong>Nothing matches</strong>
+          <p>{query.trim() ? `No play matches “${query.trim()}”.` : 'No plays for that side of the ball.'}</p>
+        </div>
       ) : (
         grouped.map(({ section, plays: inSection }) => (
           <section key={section.id}>
-            <h2>
-              {section.name} <span>{inSection.length}</span>
+            <div className="folder-head">
+              <h2>
+                {section.name} <span>{inSection.length}</span>
+              </h2>
               {/* Unfiled is not a real folder, so it has nothing to rename. */}
               {section.id !== UNFILED_SECTION && (
-                <span className="section-tools">
-                  <button className="quiet" onClick={() => void renameSection(section)}>
-                    Rename
-                  </button>
-                  <button
-                    className="quiet danger"
-                    onClick={() => void deleteSection(section, inSection.length)}
-                  >
-                    Delete
-                  </button>
-                </span>
+                <Menu label={`More for the folder ${section.name}`}>
+                  {(close) => (
+                    <>
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          close();
+                          void renameSection(section);
+                        }}
+                      >
+                        Rename
+                      </button>
+                      <button
+                        role="menuitem"
+                        className="danger"
+                        onClick={() => {
+                          close();
+                          void deleteSection(section, inSection.length);
+                        }}
+                      >
+                        Delete folder
+                      </button>
+                    </>
+                  )}
+                </Menu>
               )}
-            </h2>
+            </div>
             {inSection.length === 0 ? (
               <p className="empty-folder">
-                Empty. Put a play in it from the folder menu on its card.
+                Empty. Move a play here from the menu on its card.
               </p>
             ) : (
               <div className="card-grid">
@@ -471,6 +360,22 @@ export function PlaybookList({
           )}
         </section>
       )}
+
+      {/*
+        * Starting a play: the one thing this screen is for, so it is the one
+        * filled button on it and it stays put while the list scrolls.
+        *
+        * Two buttons rather than a choice inside the editor: a play is one unit
+        * or the other from the moment it exists, because every line drawn on
+        * it was drawn for one of them.
+        */}
+      <div className="book-new">
+        <button onClick={() => onNew('defense')}>New defense</button>
+        <button className="primary with-icon" onClick={() => onNew('offense')}>
+          <Icon name="plus" size={20} />
+          New play
+        </button>
+      </div>
     </div>
   );
 }

@@ -95,6 +95,7 @@ import { download, playToPng, playTitle, slug, stamp } from '../export/render';
 import { BoardLayers } from './BoardLayers';
 import { LineInspector } from './LineInspector';
 import { QuickBar } from './QuickBar';
+import { Icon } from '../ui/Icon';
 import { readDrawerOpen, writeDrawerOpen } from './drawerPrefs';
 import { createPointer, type Pointer } from './pointer';
 import {
@@ -1502,8 +1503,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   return (
     <div className="editor">
       <header>
-        <button className="back" onClick={onClose} aria-label="Back to playbook">
-          ‹
+        <button className="back icon-button" onClick={onClose} aria-label="Back to playbook">
+          <Icon name="back" size={22} />
         </button>
         <input
           className="play-name"

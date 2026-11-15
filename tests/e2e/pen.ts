@@ -24,7 +24,7 @@ export async function launch(): Promise<Browser> {
 /** A fresh page with a known book already in storage and no way to the cloud. */
 export async function openApp(
   browser: Browser,
-  opts: { width?: number; height?: number; book?: unknown; theme?: string } = {},
+  opts: { width?: number; height?: number; book?: unknown; theme?: string; drawer?: 'open' | 'closed' } = {},
 ) {
   const context = await browser.newContext({
     viewport: { width: opts.width ?? 1280, height: opts.height ?? 800 },
@@ -34,14 +34,18 @@ export async function openApp(
   // Nothing in a test signs in, mints an account or writes a playbook anywhere.
   await context.route((url) => url.hostname !== 'localhost', (r) => r.abort());
   const page = await context.newPage();
-  await page.addInitScript((book) => {
-    if (sessionStorage.getItem('seeded')) return;
-    sessionStorage.setItem('seeded', '1');
-    localStorage.clear();
-    if (book) localStorage.setItem('chalk.playbook.v1', JSON.stringify(book));
-    // The tools out, so a test never depends on which way the screen is turned.
-    localStorage.setItem('chalk.drawer.v1', 'open');
-  }, opts.book ?? null);
+  await page.addInitScript(
+    ({ book, drawer, theme }) => {
+      if (sessionStorage.getItem('seeded')) return;
+      sessionStorage.setItem('seeded', '1');
+      localStorage.clear();
+      if (book) localStorage.setItem('chalk.playbook.v1', JSON.stringify(book));
+      // The tools out, so a test never depends on which way the screen is turned.
+      localStorage.setItem('chalk.drawer.v1', drawer);
+      if (theme) localStorage.setItem('chalk.settings.v1', JSON.stringify({ theme }));
+    },
+    { book: opts.book ?? null, drawer: opts.drawer ?? 'open', theme: opts.theme ?? null },
+  );
   await page.goto(process.env.CHALK_URL!);
   return { context, page };
 }
