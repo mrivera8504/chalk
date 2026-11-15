@@ -1,10 +1,15 @@
 :root {
+  /*
+   * The chrome: the page, its panels, and the text on them. Dark is the app as
+   * it has always been; `themes.css` swaps these six, and the handful below
+   * them, for the light one. Nothing here is drawn on the board.
+   */
   --bg: #10161a;
   --panel: #1a2329;
   --panel-hi: #222e36;
   --line: #2f3d46;
   --chalk: #e8ede9;
-  --dim: #8b9aa3;
+  --dim: #9aa8b0;
 
   /*
    * Chalk *on the board* — freehand annotations and the handles on a selected
@@ -80,4 +85,63 @@
   --zone: #8ab4ff;
   --ok: #5fd39a;
   --bad: #ff6b5a;
+}
+
+/*
+ * Everything the chrome is measured in. Board geometry is in yards and none of
+ * its business is here.
+ *
+ * Kept out of the block above on purpose: that one is read whole by the test
+ * setup, which writes the board's tokens onto the root for the golden renders.
+ */
+:root {
+  /* The one filled button on a screen, the lit tab, the thing to do next.
+     Chalk yellow on the dark theme; a team's own color will sit here later. */
+  --accent: #ffcf3d;
+  --on-accent: #10161a;
+  /* The bar a screen's navigation sits on: a shade off the page, not a panel. */
+  --bar: #141c21;
+  /* The shadow under anything that floats, and the dimming behind a dialog. */
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --scrim: rgba(0, 0, 0, 0.55);
+
+  --font: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Space Grotesk Variable', var(--font);
+
+  /* Type. Five sizes, and a screen that needs a sixth has too many voices. */
+  --text-xs: 12px;
+  --text-s: 13px;
+  --text-m: 14px;
+  --text-l: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+
+  /* Space, on a 4px step. */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 16px;
+  --r-pill: 999px;
+
+  /* The pen's size. See controls.css: 40 is the number that is not 33. */
+  --tap: 40px;
+  --tap-l: 48px;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --fast: 120ms;
+  --slow: 240ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fast: 0ms;
+    --slow: 0ms;
+  }
 }

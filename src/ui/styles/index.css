@@ -5,11 +5,13 @@
  *
  *   fonts      the two typefaces, bundled — the app opens with no signal
  *   tokens     every color, size and timing the rest are written in
+ *   themes     the light theme's answers to the chrome tokens
  *   base       the page itself
  *   the rest   one file per part of the app
  */
 @import './fonts.css';
 @import './tokens.css';
+@import './themes.css';
 @import './base.css';
 @import './editor.css';
 @import './drawer.css';

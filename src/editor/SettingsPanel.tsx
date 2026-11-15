@@ -271,6 +271,21 @@ export function SettingsPanel({ settings, onClose }: Props) {
       </div>
 
       <div className="picker-group">
+        <h3>The app</h3>
+        <Choice
+          label="Theme"
+          hint="the screens around the board, not the field"
+          value={s.theme}
+          options={[
+            { v: 'dark' as const, label: 'Dark' },
+            { v: 'light' as const, label: 'Light' },
+            { v: 'system' as const, label: 'Device' },
+          ]}
+          onPick={(v) => setSettings({ theme: v })}
+        />
+      </div>
+
+      <div className="picker-group">
         <h3>The pen</h3>
         <Choice
           label="Tools on the"

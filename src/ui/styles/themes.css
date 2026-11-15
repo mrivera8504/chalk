@@ -1,0 +1,43 @@
+/*
+ * The light theme: the same app on a pale page.
+ *
+ * Only the chrome changes. The board keeps its own surface — grass or white is
+ * a setting about the field, and a play set to grass is grass in either theme —
+ * so nothing a play is drawn with is touched here.
+ *
+ * Chosen in Settings and written onto the root as `data-theme`. `system`
+ * follows the device, which is the only case the media query below is for.
+ */
+:root[data-theme='light'] {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --panel-hi: #eef0f3;
+  --line: #d7dce2;
+  --chalk: #14181c;
+  --dim: #5a6672;
+  --ok: #17703a;
+  --bad: #b3261e;
+  --accent: #1f4fd8;
+  --on-accent: #ffffff;
+  --bar: #ffffff;
+  --shadow: 0 6px 20px rgba(20, 24, 28, 0.16);
+  --scrim: rgba(20, 24, 28, 0.4);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme='system'] {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --panel-hi: #eef0f3;
+    --line: #d7dce2;
+    --chalk: #14181c;
+    --dim: #5a6672;
+    --ok: #17703a;
+    --bad: #b3261e;
+    --accent: #1f4fd8;
+    --on-accent: #ffffff;
+    --bar: #ffffff;
+    --shadow: 0 6px 20px rgba(20, 24, 28, 0.16);
+    --scrim: rgba(20, 24, 28, 0.4);
+  }
+}

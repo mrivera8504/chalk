@@ -14,9 +14,9 @@ button {
   color: var(--chalk);
   background: var(--panel-hi);
   border: 1px solid var(--line);
-  min-height: 40px;
+  min-height: var(--tap);
   padding: 9px 13px;
-  border-radius: 8px;
+  border-radius: var(--r-s);
   white-space: nowrap;
   flex: 0 0 auto;
   cursor: pointer;
@@ -39,9 +39,9 @@ button.quiet {
  * identical was a screen with no answer to "what now?".
  */
 button.primary {
-  background: var(--select);
-  border-color: var(--select);
-  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
   font-weight: 600;
 }
 

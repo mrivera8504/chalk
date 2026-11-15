@@ -11,6 +11,8 @@ import { paperPalette } from '../ui/surface';
  * run) are settings in exactly the same sense as the colors are — they were
  * simply frozen as a constant until there was a screen to change them on.
  */
+export type Theme = 'dark' | 'light' | 'system';
+
 export interface AppSettings extends Settings {
   /** One per receiver, in order. Written onto the root as --route-0..5. */
   routeColors: string[];
@@ -22,6 +24,12 @@ export interface AppSettings extends Settings {
    * picker; this is what the rest of them take.
    */
   zoneColor: string;
+  /**
+   * The chrome's theme: the dark app, the light one, or whichever the device is
+   * set to. The board is not part of it — grass or white is `fieldSurface`, and
+   * a play drawn on grass is on grass in both.
+   */
+  theme: Theme;
   /**
    * Which edge the tool drawer lives on. A pen is held in one hand and the
    * drawer should not be under it, so this is handedness, not decoration.
@@ -79,6 +87,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   carryColor: '#ffb37a',
   blockColor: '#f2dfa0',
   zoneColor: '#8ab4ff',
+  // Dark, not `system`: the app has only ever been dark, and a coach whose
+  // phone happens to be in light mode did not ask for it to change.
+  theme: 'dark',
   drawerSide: 'right',
   fieldSurface: 'grass',
   losMagnetYards: 0.5,
@@ -134,6 +145,21 @@ function applyColors(s: AppSettings): void {
   root.style.setProperty('--ink-carry', s.carryColor);
   root.style.setProperty('--ink-block', s.blockColor);
   root.style.setProperty('--zone', s.zoneColor);
+  applyTheme(s.theme);
+}
+
+/** The page behind the status bar, per theme, for the browser's own chrome. */
+const PAGE = { dark: '#10161a', light: '#f4f5f7' };
+
+function applyTheme(theme: Theme): void {
+  const root = document.documentElement;
+  root.dataset.theme = theme;
+  const light =
+    theme === 'light' ||
+    (theme === 'system' && window.matchMedia?.('(prefers-color-scheme: light)').matches);
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute('content', light ? PAGE.light : PAGE.dark);
 }
 
 /**

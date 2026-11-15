@@ -10,8 +10,25 @@ body,
   height: 100%;
   background: var(--bg);
   color: var(--chalk);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-size: 14px;
+  font-family: var(--font);
+  font-size: var(--text-m);
   line-height: 1.45;
   overscroll-behavior: none;
 }
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+}
+
+/*
+ * Where the keyboard is. Only for a keyboard: a pen tap on a button should not
+ * leave a ring behind it, and `:focus-visible` is the browser's own answer to
+ * which is which.
+ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
