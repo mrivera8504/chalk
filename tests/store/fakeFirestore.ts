@@ -14,6 +14,8 @@ export interface FakeCloud {
   reads: string[];
   /** Set to make the next calls fail the way an unreachable cloud does. */
   failWith: { code: string; message: string } | null;
+  /** Paths the rules refuse, for a project whose new rules are not published. */
+  deny?: (path: string) => boolean;
 }
 
 export function makeCloud(): FakeCloud {
@@ -37,12 +39,19 @@ export function fakeFirestore(cloud: FakeCloud) {
     collection: (parent: { path: string }, name: string) => ref(`${parent.path}/${name}`),
     getDoc: async (r: { path: string }) => {
       fail();
+      if (cloud.deny?.(r.path)) {
+        throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
+      }
       cloud.reads.push(r.path);
       const data = cloud.docs.get(r.path);
       return { exists: () => data !== undefined, data: () => structuredClone(data) };
     },
-    setDoc: async (r: { path: string }, data: Record<string, unknown>) => {
+    setDoc: async (r: { path: string }, data: Record<string, unknown>, opts?: { merge?: boolean }) => {
       fail();
+      if (cloud.deny?.(r.path)) {
+        throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
+      }
+      if (opts?.merge) data = { ...(cloud.docs.get(r.path) ?? {}), ...data };
       if (nestedArray(data)) {
         throw Object.assign(new Error('Function setDoc() called with invalid data. Nested arrays are not supported'), {
           code: 'invalid-argument',
@@ -51,10 +60,17 @@ export function fakeFirestore(cloud: FakeCloud) {
       cloud.docs.set(r.path, structuredClone(data));
       cloud.writes.push({ op: 'set', path: r.path });
     },
-    getDocs: async (c: { path: string }) => {
+    where: (field: string, op: string, value: unknown) => ({ field, op, value }),
+    query: (c: { path: string }, w?: { field: string; value: number }) => ({ path: c.path, w }),
+    getDocs: async (c: { path: string; w?: { field: string; value: number } }) => {
       fail();
+      if (cloud.deny?.(c.path)) {
+        throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
+      }
+      cloud.reads.push(c.path);
       const docs = [...cloud.docs.entries()]
         .filter(([p]) => p.startsWith(`${c.path}/`) && !p.slice(c.path.length + 1).includes('/'))
+        .filter(([, d]) => !c.w || (d[c.w.field] as number) > c.w.value)
         .map(([p, data]) => ({ id: p.slice(c.path.length + 1), data: () => structuredClone(data) }));
       return { docs };
     },
@@ -72,3 +88,6 @@ export function fakeFirestore(cloud: FakeCloud) {
 export const current: { cloud: FakeCloud } = { cloud: makeCloud() };
 
 export const mainPath = (uid: string) => `users/${uid}/playbook/main`;
+export const teamPath = (uid: string) => `teams/${uid}`;
+/** The rules as they stand before the owner publishes the new ones. */
+export const oldRules = (path: string) => !path.startsWith('users/');

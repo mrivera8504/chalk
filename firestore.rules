@@ -1,8 +1,33 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // The single-document playbook, and everything else a coach keeps under
+    // their own uid. Unchanged: a build from before teams still reads and
+    // writes here, and the old document stays as the copy to go back to.
     match /users/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // One document per play, under a team.
+    //
+    // A coach's own team has their uid for its id, so it can be created and
+    // found with no lookup. Anyone else has to be on the team document's
+    // `members` map — which is how an assistant will be let in later, and
+    // which nobody can add themselves to, because only a member can write it.
+    match /teams/{teamId} {
+      function isMember() {
+        return request.auth != null && (
+          request.auth.uid == teamId ||
+          request.auth.uid in get(/databases/$(database)/documents/teams/$(teamId)).data.members
+        );
+      }
+
+      allow read, write: if isMember();
+
+      match /{document=**} {
+        allow read, write: if isMember();
+      }
     }
   }
 }

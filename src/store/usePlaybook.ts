@@ -20,6 +20,7 @@ import {
 } from '../domain/types';
 import { getSettings } from './settings';
 import { makeBackup, readBackup } from './backup';
+import * as cloud2 from './cloud2';
 import {
   EMPTY,
   mergeBooks,
@@ -56,6 +57,43 @@ const FOREGROUND_PULL_MS = 5000;
 const BACKUP_AT_KEY = 'chalk.backup.at.v1';
 
 const CURRENT_BOOK_KEY = 'chalk.book.current.v1';
+
+/**
+ * What this device knows about one account's per-play cloud.
+ *
+ * `known` is each play's stamp as last seen up there, which is how a push tells
+ * a play it has changed from one it has not. `legacySeen` is the stamp of the
+ * old single document when it was last merged in: a device still on an old
+ * build goes on writing that document, so it is read every time — but merged
+ * only when it has moved, or every folder deleted since the migration would
+ * come back out of it on every sync.
+ */
+interface Sync2 {
+  known: Record<string, number>;
+  legacySeen: number;
+}
+
+const sync2Key = (uid: string) => `chalk.sync2.${uid}`;
+
+function readSync2(uid: string): Sync2 {
+  try {
+    const raw = JSON.parse(localStorage.getItem(sync2Key(uid)) ?? '{}') as Partial<Sync2>;
+    return { known: raw.known ?? {}, legacySeen: raw.legacySeen ?? 0 };
+  } catch {
+    return { known: {}, legacySeen: 0 };
+  }
+}
+
+function writeSync2(uid: string, st: Sync2): void {
+  try {
+    localStorage.setItem(sync2Key(uid), JSON.stringify(st));
+  } catch {
+    /* worst case a play is sent twice */
+  }
+}
+
+/** A clock on another device can be behind. Ask for this much more than we need. */
+const PULL_SLACK_MS = 5 * 60 * 1000;
 
 function readCurrentBook(): string {
   try {
@@ -227,6 +265,17 @@ export function usePlaybook() {
    * not name.
    */
   const loadedFor = useRef<string | null>(null);
+  /**
+   * Which cloud this account is on: the single document, or one per play.
+   *
+   * Decided on every reconcile by asking, never assumed — the new shape needs
+   * rules the owner has to publish, and until they are live the answer is the
+   * old one and the app behaves exactly as it always has.
+   */
+  const mode = useRef<'v1' | 'v2' | null>(null);
+  const sync2 = useRef<Sync2>({ known: {}, legacySeen: 0 });
+  /** When this session last asked the per-play cloud what had changed. */
+  const pulledSince = useRef(0);
   /** Whose book local storage holds, for the stretch before auth answers. */
   const claim = useRef<string | null>(readLocal().uid);
 
@@ -281,11 +330,21 @@ export function usePlaybook() {
     pulling.current = true;
     setSync('syncing');
     try {
-      const res = await pullFromCloud(forUid);
+      const stale = () => !mounted.current || uidNow.current !== forUid;
+      const asked = Date.now();
+
+      const shape = await cloud2.probe(forUid);
       // Signed out, or signed in as somebody else, while this was in the air.
-      if (!mounted.current || uidNow.current !== forUid) return;
-      if (!res.ok) {
+      if (stale()) return;
+      if (typeof shape === 'object') {
         // Unreachable is not empty. Leave loadedFor unset so nothing is pushed.
+        setSync(shape.failed);
+        return;
+      }
+
+      const res = await pullFromCloud(forUid);
+      if (stale()) return;
+      if (!res.ok) {
         setSync(res.state);
         return;
       }
@@ -304,8 +363,59 @@ export function usePlaybook() {
        * which is the stranded playbook this file was rewritten to prevent.
        * Merging loses nothing; the worst it does is carry plays across.
        */
-      const base = { plays: local.plays, sections: local.sections, books: local.books ?? [] };
-      const next = res.book ? mergeBooks(base, res.book) : base;
+      const base: Playbook = { plays: local.plays, sections: local.sections, books: local.books ?? [] };
+      let next: Playbook;
+
+      if (shape === 'denied') {
+        // The new rules are not live. The single document, as ever.
+        mode.current = 'v1';
+        next = res.book ? mergeBooks(base, res.book) : base;
+      } else {
+        const st = readSync2(forUid);
+        let merged = base;
+        // The old document, when it has something we have not already taken.
+        if (res.book && (shape === 'fresh' || (res.stamp ?? 0) > st.legacySeen)) {
+          merged = mergeBooks(merged, res.book);
+        }
+        st.legacySeen = Math.max(st.legacySeen, res.stamp ?? 0);
+
+        if (shape === 'fresh') {
+          const moved = await cloud2.migrate(forUid, merged);
+          if (stale()) return;
+          if (moved === 'synced') {
+            st.known = Object.fromEntries(merged.plays.map((p) => [p.id, p.updatedAt]));
+            mode.current = 'v2';
+          } else {
+            // It did not take. Nothing was switched over, the old document is
+            // untouched, and this session carries on with it.
+            mode.current = 'v1';
+          }
+        } else {
+          const got = await cloud2.pull(forUid, pulledSince.current);
+          if (stale()) return;
+          if (!got.ok) {
+            setSync(got.state);
+            return;
+          }
+          merged = mergeBooks(merged, got.book);
+          // Emptied from the trash on another device: gone here too, unless
+          // this copy was touched after it went.
+          merged = {
+            ...merged,
+            plays: merged.plays.filter((p) => !((got.purged[p.id] ?? -1) >= (p.updatedAt ?? 0))),
+          };
+          const now = new Map(merged.plays.map((p) => [p.id, p.updatedAt]));
+          for (const p of got.book.plays) {
+            if (now.get(p.id) === p.updatedAt) st.known[p.id] = p.updatedAt;
+          }
+          for (const id of Object.keys(got.purged)) delete st.known[id];
+          pulledSince.current = asked - PULL_SLACK_MS;
+          mode.current = 'v2';
+        }
+        sync2.current = st;
+        writeSync2(forUid, st);
+        next = merged;
+      }
 
       loadedFor.current = forUid;
       claim.current = forUid;
@@ -426,12 +536,21 @@ export function usePlaybook() {
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
       setSync('syncing');
-      void pushToCloud(book, uid).then(setSync);
+      void sendUp(book, uid).then(setSync);
     }, AUTOSAVE_MS);
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
     };
   }, [allPlays, allSections, storedBooks, uid]);
+
+  /** Push to whichever cloud this account is on. */
+  const sendUp = useCallback(async (book: Playbook, toUid: string): Promise<SyncState> => {
+    if (mode.current !== 'v2') return pushToCloud(book, toUid);
+    const sent = await cloud2.push(toUid, book, sync2.current.known);
+    sync2.current.known = sent.known;
+    writeSync2(toUid, sync2.current);
+    return sent.state;
+  }, []);
 
   const savePlay = useCallback((play: Play) => {
     const stamped = withSuggestion({ ...play, updatedAt: Date.now() }, getSettings());
@@ -454,7 +573,14 @@ export function usePlaybook() {
    */
   const deletePlay = useCallback((id: string) => {
     setPlays((prev) =>
-      order(prev.map((p) => (p.id === id ? { ...p, deletedAt: Date.now() } : p))),
+      order(
+        prev.map((p) =>
+          // Stamped, because a delete is an edit. Two copies of a play merge by
+          // the newer stamp, and a delete that left the stamp alone tied with
+          // the live copy on every other device and lost.
+          p.id === id ? { ...p, deletedAt: Date.now(), updatedAt: Date.now() } : p,
+        ),
+      ),
     );
   }, []);
 
@@ -464,7 +590,7 @@ export function usePlaybook() {
         prev.map((p) => {
           if (p.id !== id) return p;
           const { deletedAt: _gone, ...live } = p;
-          return live;
+          return { ...live, updatedAt: Date.now() };
         }),
       ),
     );
@@ -481,8 +607,20 @@ export function usePlaybook() {
    */
   const emptyTrash = useCallback(() => {
     // This playbook's trash, which is the one on screen being emptied.
-    setPlays((prev) => prev.filter((p) => !(p.deletedAt && bookOf(p, books) === bookId)));
-  }, [books, bookId]);
+    const going = allPlays.filter((p) => p.deletedAt && bookOf(p, books) === bookId);
+    const ids = new Set(going.map((p) => p.id));
+    setPlays((prev) => prev.filter((p) => !ids.has(p.id)));
+    /*
+     * And out of the cloud, by name. With one document per play nothing leaves
+     * by being left out of a write, so this is said outright — and remembered
+     * there, which is what stops another device handing the trash back.
+     */
+    if (uid && loadedFor.current === uid && mode.current === 'v2') {
+      for (const id of ids) delete sync2.current.known[id];
+      writeSync2(uid, sync2.current);
+      void cloud2.purge(uid, going).then((state) => state !== 'synced' && setSync(state));
+    }
+  }, [allPlays, books, bookId, uid]);
 
   const duplicatePlay = useCallback((id: string) => {
     setPlays((prev) => {
@@ -645,8 +783,8 @@ export function usePlaybook() {
     // is not a book to write over that account.
     if (!uid || loadedFor.current !== uid) return;
     setSync('syncing');
-    setSync(await pushToCloud({ plays: allPlays, sections: allSections, books: storedBooks }, uid));
-  }, [allPlays, allSections, storedBooks, uid]);
+    setSync(await sendUp({ plays: allPlays, sections: allSections, books: storedBooks }, uid));
+  }, [allPlays, allSections, storedBooks, uid, sendUp]);
 
   /**
    * The backup file. Covers everything in local storage, not just the plays —
@@ -699,7 +837,13 @@ export function usePlaybook() {
       // what the coach just confirmed in as many words. What it replaces is
       // kept as a version first, so this is still undoable.
       if (uid && loadedFor.current === uid) {
-        void pushToCloud(book, uid, { force: true }).then(setSync);
+        if (mode.current === 'v2') {
+          sync2.current.known = Object.fromEntries(book.plays.map((p) => [p.id, p.updatedAt]));
+          writeSync2(uid, sync2.current);
+          void cloud2.replaceAll(uid, book).then(setSync);
+        } else {
+          void pushToCloud(book, uid, { force: true }).then(setSync);
+        }
       }
       return counts;
     },
@@ -719,6 +863,9 @@ export function usePlaybook() {
     renameBook,
     deleteBook,
     setPlayStatus,
+    /** Past copies of one play. Empty until the account is on per-play documents. */
+    revisions: (playId: string) =>
+      uid && mode.current === 'v2' ? cloud2.listRevisions(uid, playId) : Promise.resolve([]),
     sync,
     lastBackupAt,
     savePlay,

@@ -2,7 +2,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Play } from '../../src/domain/types';
 import { play } from '../fixtures/plays';
-import { current, mainPath, makeCloud, type FakeCloud } from './fakeFirestore';
+import { current, mainPath, makeCloud, oldRules, type FakeCloud } from './fakeFirestore';
 
 /** Auth, as a switch the test holds. */
 const auth = { listener: null as ((uid: string | null) => void) | null };
@@ -54,6 +54,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   cloud = current.cloud = makeCloud();
+  // The project as it is today: the new rules are not published, so the app
+  // must behave exactly as it did before there was a second cloud shape.
+  cloud.deny = oldRules;
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
   vi.setSystemTime(new Date('2026-11-15T12:00:00Z'));
   vi.spyOn(console, 'warn').mockImplementation(() => {});

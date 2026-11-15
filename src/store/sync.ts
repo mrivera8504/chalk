@@ -116,7 +116,7 @@ export function mergeBooks(mine: Playbook, theirs: Playbook): Playbook {
  */
 type CloudStroke = { points: PathPoint[] };
 
-function toCloud(plays: Play[]): unknown[] {
+export function toCloud(plays: Play[]): unknown[] {
   return plays.map((p) =>
     Array.isArray(p.annotations)
       ? { ...p, annotations: p.annotations.map((points): CloudStroke => ({ points })) }
@@ -124,7 +124,7 @@ function toCloud(plays: Play[]): unknown[] {
   );
 }
 
-function fromCloud(plays: unknown): Play[] {
+export function fromCloud(plays: unknown): Play[] {
   if (!Array.isArray(plays)) return [];
   return plays.map((p: Play) =>
     Array.isArray(p?.annotations)
@@ -206,7 +206,7 @@ let lastVersionAt = 0;
  * book over a real one.
  */
 export type PullResult =
-  | { ok: true; book: Playbook | null }
+  | { ok: true; book: Playbook | null; /** When that document was last written. */ stamp?: number }
   | { ok: false; state: SyncState };
 
 /** Reported once per session; repeating it every 800ms helps nobody. */
@@ -221,7 +221,7 @@ let warned = false;
  * matter how good the signal got. That is the same silent degradation the sync
  * label exists to prevent, one layer further down.
  */
-function explain(err: unknown): SyncState {
+export function explain(err: unknown): SyncState {
   const code = (err as { code?: string })?.code ?? '';
   const text = String((err as { message?: string })?.message ?? err);
 
@@ -431,9 +431,10 @@ export async function pullFromCloud(uid: string): Promise<PullResult> {
     const [ref, { getDoc }] = await Promise.all([bookDoc(uid), import('firebase/firestore')]);
     const snap = await getDoc(ref);
     if (!snap.exists()) return { ok: true, book: null };
-    const data = snap.data() as Partial<Playbook>;
+    const data = snap.data() as Partial<Playbook> & { updatedAt?: number };
     return {
       ok: true,
+      stamp: typeof data.updatedAt === 'number' ? data.updatedAt : 0,
       book: {
         plays: fromCloud(data.plays),
         sections: Array.isArray(data.sections) ? data.sections : [],

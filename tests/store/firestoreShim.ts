@@ -18,3 +18,5 @@ export const getDoc = call('getDoc');
 export const setDoc = call('setDoc');
 export const getDocs = call('getDocs');
 export const deleteDoc = call('deleteDoc');
+export const query = call('query');
+export const where = call('where');
