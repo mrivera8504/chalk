@@ -53,7 +53,7 @@ export default defineConfig({
       manifest: {
         name: 'Chalk',
         short_name: 'Chalk',
-        description: 'Pen-first play designer for 7-man youth tackle football.',
+        description: 'Pen-first play designer for football, basketball, soccer and more.',
         theme_color: '#10161a',
         background_color: '#10161a',
         display: 'standalone',
@@ -61,13 +61,15 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         icons: [
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-256.png', sizes: '256x256', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          // Its own file: the art drawn inside the circle a phone may crop to.
+          { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
         // pdf-lib and the firebase chunk both clear the 2MB default.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',

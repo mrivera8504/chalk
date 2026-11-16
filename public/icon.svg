@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Chalk: an O, an X and the route between them. Every sport draws its plays in these. -->
+  <rect width="512" height="512" fill="#1f3a2e"/>
+  <circle cx="168" cy="340" r="56" fill="none" stroke="#e8ece9" stroke-width="26"/>
+  <path d="M318 200 l84 84 M402 200 l-84 84" stroke="#e8ece9" stroke-width="26" stroke-linecap="round"/>
+  <path d="M212 294 C 250 230, 250 170, 330.0 120.0" fill="none" stroke="#ffcf3d" stroke-width="22" stroke-linecap="round"/>
+  <path d="M355.4 104.1 L334.0 152.9 L302.2 102.0 Z" fill="#ffcf3d" stroke="#ffcf3d" stroke-width="10" stroke-linejoin="round"/>
+</svg>
