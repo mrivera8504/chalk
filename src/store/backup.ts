@@ -1,4 +1,4 @@
-import { readDepth, writeDepth, type DepthChart } from '../domain/depth';
+import { readDepth, readSetCharts, writeDepth, writeSetCharts, type DepthChart, type SetCharts } from '../domain/depth';
 import { readPractices, writePractices, type Practice } from '../domain/practice';
 import { readRoster, writeRoster, type RosterEntry } from '../domain/roster';
 import {
@@ -44,6 +44,8 @@ export interface Backup {
   /** Absent from a file written before there were practices. */
   practices?: Practice[];
   depth?: DepthChart;
+  /** Absent from a file written before a set could have its own substitutions. */
+  depthSets?: SetCharts;
   settings: AppSettings;
   foundationId: string | null;
   /*
@@ -69,6 +71,7 @@ export function makeBackup(book: Playbook): Backup {
     roster: readRoster(),
     practices: readPractices(),
     depth: readDepth(),
+    depthSets: readSetCharts(),
     settings: getSettings(),
     foundationId: readFoundationId(),
     foundationDefenseId: readFoundationId('defense'),
@@ -129,6 +132,9 @@ export function readBackup(text: string): Restored {
   if (Array.isArray(parsed.practices)) writePractices(parsed.practices as Practice[]);
   if (parsed.depth && typeof parsed.depth === 'object' && !Array.isArray(parsed.depth)) {
     writeDepth(parsed.depth as DepthChart);
+  }
+  if (parsed.depthSets && typeof parsed.depthSets === 'object' && !Array.isArray(parsed.depthSets)) {
+    writeSetCharts(parsed.depthSets as SetCharts);
   }
   if ('foundationId' in parsed) {
     writeFoundationId(typeof parsed.foundationId === 'string' ? parsed.foundationId : null);

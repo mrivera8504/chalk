@@ -3,7 +3,7 @@ import { MAIN_BOOK, bookOf, liveBooks, type Book, type Play, type Section } from
 import { makeBackup } from './backup';
 import { sameBook, useBookEdits } from './bookEdits';
 import * as cloud2 from './cloud2';
-import { mergeBooks, type Playbook, type SyncState } from './sync';
+import { mergeBooks, type Playbook, type SyncState, type Version } from './sync';
 
 /**
  * A team this coach was invited onto: somebody else's playbook, kept apart
@@ -306,6 +306,14 @@ export function useTeamBook(
     }
   }, [st.plays, books, bookId, setPlays, teamId, uid, scope]);
 
+  const bookHistory = useCallback(
+    async () => ({
+      purged: teamId && uid ? await cloud2.listPurged(teamId) : [],
+      versions: [] as Version[],
+    }),
+    [teamId, uid],
+  );
+
   const exportJson = useCallback(
     () => JSON.stringify(makeBackup({ plays: st.plays, sections: st.sections, books: st.books }), null, 2),
     [st],
@@ -320,6 +328,7 @@ export function useTeamBook(
     bookId,
     selectBook,
     ...edits,
+    bookHistory,
     revisions: (playId: string) => (teamId && uid ? cloud2.listRevisions(teamId, playId) : Promise.resolve([])),
     sync,
     uid,

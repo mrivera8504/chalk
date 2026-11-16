@@ -245,3 +245,37 @@ export function inkForPaper(css: string, minContrast = INK_CONTRAST): string {
   }
   return toHex(shade(lo, maxChroma(lo, h) * CEILING));
 }
+
+/**
+ * A team's color, made fit to be the app's accent on one theme's page.
+ *
+ * The accent is worn as text (the lit tab, the team strip) as well as a fill,
+ * so it has to read against the page: a navy team on the dark theme, or a gold
+ * one on the light theme, would vanish. Same rule as the ink — the hue never
+ * moves; lightness steps toward the far side of the page until the color
+ * reads at 4.5:1, with chroma held inside sRGB as it goes. A color that
+ * already reads is returned as chosen. The text on a filled accent is black or
+ * white, whichever it is darker or lighter than.
+ */
+export function accentFor(css: string, page: 'dark' | 'light'): { accent: string; onAccent: string } | null {
+  const rgb = parseHex(css);
+  if (!rgb) return null;
+  const pageLum = page === 'dark' ? luminance(parseHex('#10161a')!) : luminance(parseHex('#f4f5f7')!);
+  const contrast = (c: Rgb) => {
+    const a = luminance(c);
+    return (Math.max(a, pageLum) + 0.05) / (Math.min(a, pageLum) + 0.05);
+  };
+  let out = rgb;
+  if (contrast(rgb) < TEXT_CONTRAST) {
+    const { l, c, h } = rgbToOklch(rgb);
+    const step = page === 'dark' ? 0.01 : -0.01;
+    for (let L = l; L >= 0 && L <= 1; L += step) {
+      // Rounded to the hex it will be written as before it is judged, or the
+      // last step can pass by a hair and the color written fail by one.
+      const next = parseHex(toHex(oklchToRgb({ l: L, c: Math.min(c, maxChroma(L, h)), h })))!;
+      out = next;
+      if (contrast(next) >= TEXT_CONTRAST) break;
+    }
+  }
+  return { accent: toHex(out), onAccent: luminance(out) > 0.18 ? '#10161a' : '#ffffff' };
+}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useBackLayer } from '../ui/backstack';
 import {
   STATUS_LABEL,
   UNFILED_SECTION,
@@ -59,6 +60,9 @@ interface Props {
   onRenameBook: (id: string, name: string) => void;
   /** False when it is the last one, which cannot go. */
   onDeleteBook: (id: string) => boolean;
+  /** Several plays at once, from Select. One toast and one Undo for the lot. */
+  onMoveMany?: (ids: string[], sectionId: string) => void;
+  onDeleteMany?: (ids: string[]) => void;
   /** The team whose playbook this is, when it is not the coach's own. */
   team?: string;
   onOwnBook?: () => void;
@@ -144,7 +148,26 @@ export function PlaybookList({
   onDeleteBook,
   team,
   onOwnBook,
+  onMoveMany,
+  onDeleteMany,
 }: Props) {
+  /**
+   * The plays ticked in Select, or null when not selecting.
+   *
+   * While selecting, a tap on a card ticks it instead of opening it, and the
+   * new-play buttons give way to what can be done to the ticked ones. The back
+   * gesture leaves the mode before it leaves the screen.
+   */
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  useBackLayer(picked !== null, () => setPicked(null));
+  const togglePick = (id: string) =>
+    setPicked((prev) => {
+      if (!prev) return prev;
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [query, setQuery] = useState('');
   const [showTrash, setShowTrash] = useState(false);
 
@@ -424,6 +447,15 @@ export function PlaybookList({
           <Icon name="folder" size={18} />
           Add folder
         </button>
+        {(onMoveMany || onDeleteMany) && plays.length > 1 && (
+          <button
+            className="quiet"
+            aria-pressed={picked !== null}
+            onClick={() => setPicked(picked ? null : new Set())}
+          >
+            {picked ? 'Done' : 'Select'}
+          </button>
+        )}
         {/* A place with its own address, so the sideline survives a reload. */}
         {plays.length > 0 && (
           <button className="quiet" onClick={() => go({ screen: 'gameday' })}>
@@ -570,7 +602,18 @@ export function PlaybookList({
                       }
                       setDragging(null);
                     }}
-                    className={dragging === play.id ? 'card-drag' : undefined}
+                    className={
+                      [dragging === play.id && 'card-drag', picked?.has(play.id) && 'card-picked']
+                        .filter(Boolean)
+                        .join(' ') || undefined
+                    }
+                    onClickCapture={(e) => {
+                      if (!picked) return;
+                      // Selecting: a tap anywhere on the card ticks it.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      togglePick(play.id);
+                    }}
                   >
                     <PlayCard
                       play={play}
@@ -655,6 +698,45 @@ export function PlaybookList({
         />
       )}
 
+      {picked ? (
+        <div className="book-new book-picked">
+          <span className="picked-count">
+            {picked.size} {picked.size === 1 ? 'play' : 'plays'}
+          </span>
+          {onMoveMany && (
+            <select
+              aria-label="Move the selected plays to a folder"
+              value=""
+              disabled={!picked.size}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                onMoveMany([...picked], e.target.value);
+                setPicked(null);
+              }}
+            >
+              <option value="">Move to…</option>
+              <option value={UNFILED_SECTION}>Unfiled</option>
+              {sections.map((sec) => (
+                <option key={sec.id} value={sec.id}>
+                  {sec.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {onDeleteMany && (
+            <button
+              className="danger"
+              disabled={!picked.size}
+              onClick={() => {
+                onDeleteMany([...picked]);
+                setPicked(null);
+              }}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      ) : (
       <div className="book-new">
         {/*
           * A court has no second unit to draw for: a basketball play is a set
@@ -668,6 +750,7 @@ export function PlaybookList({
           New play
         </button>
       </div>
+      )}
     </div>
   );
 }

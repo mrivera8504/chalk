@@ -4,6 +4,7 @@ import type { Play, Section } from '../domain/types';
 import { SettingsPanel } from '../editor/SettingsPanel';
 import { ExportPanel } from '../export/ExportPanel';
 import { AccountPanel } from '../playbook/AccountPanel';
+import { BookHistoryPanel } from '../playbook/BookHistoryPanel';
 import { CoachesPanel } from '../playbook/CoachesPanel';
 import { DepthPanel } from '../playbook/DepthPanel';
 import { PracticePanel } from '../playbook/PracticePanel';
@@ -61,9 +62,11 @@ interface PrintProps {
   sections: Section[];
   onJson: () => void;
   onRestore: (text: string) => void;
+  /** The whole book's history in the cloud, when there is an account to ask. */
+  history?: ComponentProps<typeof BookHistoryPanel>;
 }
 
-export function PrintPage({ plays, sections, onJson, onRestore }: PrintProps) {
+export function PrintPage({ plays, sections, onJson, onRestore, history }: PrintProps) {
   // Read when the page opens, so a roster edited a moment ago is the one printed.
   const [roster] = useState<RosterEntry[]>(readRoster);
   return (
@@ -79,6 +82,12 @@ export function PrintPage({ plays, sections, onJson, onRestore }: PrintProps) {
         onJson={onJson}
         onRestore={onRestore}
       />
+      {history && (
+        <>
+          <PageHead title="History" sub="What the cloud kept of this playbook" />
+          <BookHistoryPanel {...history} />
+        </>
+      )}
     </div>
   );
 }

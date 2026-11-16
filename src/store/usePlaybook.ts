@@ -27,6 +27,7 @@ import {
   EMPTY,
   mergeBooks,
   type Playbook,
+  listVersions,
   pullFromCloud,
   pushToCloud,
   readLocal,
@@ -165,6 +166,9 @@ export function blankPlay(
     ...(unit === 'defense'
       ? { defenseFormationId: readFoundationId('defense', kind) ?? baseFrontId(kind) }
       : {}),
+    // And the offense's set, when one is starred: the depth chart can then fill
+    // this play from that set's substitutions.
+    ...(readFoundationId('offense', kind) ? { formationId: readFoundationId('offense', kind)! } : {}),
     // Only said when it is not seven-man, for the same reason as the book.
     ...(kind ? { variant: kind } : {}),
     ...(drill ? { drill: true } : {}),
@@ -605,6 +609,15 @@ export function usePlaybook() {
     }
   }, [allPlays, books, bookId, uid]);
 
+  /** What the cloud remembers of the whole book: emptied plays, and earlier copies. */
+  const bookHistory = useCallback(
+    async () => ({
+      purged: uid && mode.current === 'v2' ? await cloud2.listPurged(uid) : [],
+      versions: uid ? await listVersions(uid) : [],
+    }),
+    [uid],
+  );
+
   const saveNow = useCallback(async () => {
     if (timer.current) window.clearTimeout(timer.current);
     // Same rule as the debounce: a book nobody has reconciled for this account
@@ -688,6 +701,8 @@ export function usePlaybook() {
     bookId,
     selectBook,
     ...edits,
+    /** What the cloud remembers of the whole book: emptied plays, and earlier copies. */
+    bookHistory,
     /** Past copies of one play. Empty until the account is on per-play documents. */
     revisions: (playId: string) =>
       uid && mode.current === 'v2' ? cloud2.listRevisions(uid, playId) : Promise.resolve([]),

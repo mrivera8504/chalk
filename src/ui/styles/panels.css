@@ -505,9 +505,11 @@ button:disabled { opacity: 0.4; cursor: default; }
 /* The team page's three views, and the two lists that are new to it. */
 .team-views {
   margin: 0 16px 8px;
-  /* Four views on one row at phone width: narrower targets, never shorter. */
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Four views on one row at phone width: each as wide as its word, never shorter. */
+  display: flex;
+}
+.team-views button {
+  flex: 1 1 auto;
 }
 .team-views button {
   padding-left: 4px;
@@ -666,4 +668,25 @@ button:disabled { opacity: 0.4; cursor: default; }
 .coach-role {
   font-size: 11px;
   color: var(--dim);
+}
+
+/* Depth chart for one set: rows the set has not changed show the base order, dimmed. */
+.depth-for {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--dim);
+}
+.depth-for select {
+  flex: 1 1 auto;
+  min-height: 40px;
+}
+.depth-row.inherited ol {
+  opacity: 0.55;
+}
+.depth-reset {
+  grid-column: 2;
+  justify-self: start;
+  min-height: 32px;
 }

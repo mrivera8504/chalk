@@ -53,6 +53,12 @@ export interface TeamMeta {
   sections: Section[];
   /** Play id to when it was emptied from the trash. */
   purged: Record<string, number>;
+  /**
+   * What the team pays for. Always `free` for now, and absent means free, so
+   * the teams migrated before this field existed need no rewrite. It is here so
+   * that limits can be put on a plan later without a second migration.
+   */
+  plan?: 'free';
 }
 
 async function inChunks<T>(items: T[], run: (item: T) => Promise<unknown>): Promise<void> {
@@ -115,6 +121,7 @@ export async function migrate(uid: string, book: Playbook): Promise<SyncState> {
       books: book.books ?? [],
       sections: book.sections,
       purged: {},
+      plan: 'free',
       schema: 2,
       migratedFrom: `users/${uid}/playbook/main`,
       migratedAt: Date.now(),
@@ -297,6 +304,23 @@ export async function listRevisions(uid: string, playId: string): Promise<Revisi
         return { savedAt: data.savedAt ?? Number(d.id), play: playIn(data.play) };
       })
       .sort((a, b) => b.savedAt - a.savedAt);
+  } catch {
+    return [];
+  }
+}
+
+/** The last copy of each play emptied from the trash, newest first. */
+export async function listPurged(uid: string): Promise<{ play: Play; purgedAt: number }[]> {
+  try {
+    const { fs, db } = await open();
+    const all = await fs.getDocs(fs.collection(fs.doc(db, 'teams', uid), 'purged'));
+    return all.docs
+      .map((d) => {
+        const data = d.data() as { play?: unknown; purgedAt?: number };
+        return { play: playIn(data.play), purgedAt: data.purgedAt ?? 0 };
+      })
+      .filter((x) => x.play?.id)
+      .sort((a, b) => b.purgedAt - a.purgedAt);
   } catch {
     return [];
   }

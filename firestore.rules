@@ -71,11 +71,35 @@ service cloud.firestore {
         || leaving();
       allow delete: if isOwner();
 
-      // At least one segment below the team. `{document=**}` alone also
-      // matches zero segments — the team document itself — which let any
-      // member rewrite `members`. The emulator found that; reading the rules
-      // had not.
-      match /{sub}/{document=**} {
+      // What a play may be. Generous — every limit is several times the
+      // biggest play a coach has drawn — because a refused write jams the sync
+      // for that play. The point is that a bad client cannot fill a document
+      // with a megabyte of nonsense, not to police a coach's drawing.
+      function playOk() {
+        let p = request.resource.data;
+        return p.get('players', []).size() <= 100
+          && p.get('assignments', []).size() <= 600
+          && p.get('annotations', []).size() <= 3000
+          && p.get('frames', []).size() <= 50
+          && p.get('marks', []).size() <= 200
+          && p.get('name', '').size() <= 300
+          && p.get('notes', '').size() <= 50000
+          && p.get('coachingPoint', '').size() <= 10000;
+      }
+
+      // The three collections a team holds, named. A catch-all here would also
+      // match the team document itself — in rules version 2 `{document=**}`
+      // matches zero segments — which once let any member rewrite `members`.
+      // The emulator found that; reading the rules had not.
+      match /plays/{playId} {
+        allow read, delete: if isMember();
+        allow create, update: if isMember() && playOk();
+
+        match /revisions/{stamp} {
+          allow read, write: if isMember();
+        }
+      }
+      match /purged/{playId} {
         allow read, write: if isMember();
       }
     }

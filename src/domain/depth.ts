@@ -31,6 +31,42 @@ export function writeDepth(chart: DepthChart): void {
 }
 
 /**
+ * Substitutions for one set: a chart that only says what differs.
+ *
+ * Keyed by formation id. A position a set says nothing about takes the base
+ * chart's order, so a Jumbo set that brings a lineman in at TE2 is one row,
+ * not a copy of the whole chart that goes stale the day a starter changes.
+ * Its own key, so the base chart keeps the shape every backup already holds.
+ */
+export type SetCharts = Record<string, DepthChart>;
+
+const SETS_KEY = 'chalk.depth.sets.v1';
+
+export function readSetCharts(): SetCharts {
+  try {
+    const raw = localStorage.getItem(SETS_KEY);
+    const sets = raw ? (JSON.parse(raw) as SetCharts) : {};
+    return sets && typeof sets === 'object' && !Array.isArray(sets) ? sets : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writeSetCharts(sets: SetCharts): void {
+  try {
+    localStorage.setItem(SETS_KEY, JSON.stringify(sets));
+  } catch {
+    /* storage blocked; the session keeps working */
+  }
+}
+
+/** The chart a play in this set is filled from: its substitutions over the base. */
+export function chartFor(base: DepthChart, sets: SetCharts, formationId?: string): DepthChart {
+  const own = formationId ? sets[formationId] : undefined;
+  return own ? { ...base, ...own } : base;
+}
+
+/**
  * Put the chart's kids into a board's slots: the starters, or a string below.
  *
  * Nobody is put in two slots on one board. Where the man the chart names for a

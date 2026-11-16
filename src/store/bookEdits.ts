@@ -326,7 +326,35 @@ export function useBookEdits({ setPlays, setSections, setBooks, books, bookId, s
     [books, selectBook],
   );
 
+  /**
+   * Put plays back from the cloud's history: ones emptied from the trash, or
+   * missing since an earlier copy of the book.
+   *
+   * Only ever adds. A play still in the book, live or in the trash, is left
+   * exactly as it is, so bringing back an old copy can never roll a play back
+   * over newer work — the one way a rescue has cost a coach plays before.
+   * Stamped now, because a purge is remembered by its time and a copy older
+   * than that would be taken straight back out by the next sync.
+   */
+  const bringBack = useCallback(
+    (plays: Play[]) => {
+      const now = Date.now();
+      setPlays((prev) => {
+        const have = new Set(prev.map((p) => p.id));
+        const fresh = plays
+          .filter((p) => p?.id && !have.has(p.id))
+          .map((p) => {
+            const { deletedAt: _gone, ...live } = p;
+            return { ...live, updatedAt: now };
+          });
+        return order([...prev, ...fresh]);
+      });
+    },
+    [setPlays],
+  );
+
   return {
+    bringBack,
     savePlay,
     deletePlay,
     restorePlay,

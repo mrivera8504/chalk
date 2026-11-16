@@ -307,3 +307,37 @@ describe('restoring a backup', () => {
     expect(ids(r.current.plays)).toEqual(['z']);
   });
 });
+
+describe('the whole book’s history', () => {
+  it('lists a play emptied from the trash, and puts it back for good', async () => {
+    cloud.docs.set(teamPath('u1'), { name: 'My team', members: { u1: 'owner' }, books: [], sections: [], purged: {}, schema: 2 });
+    for (const x of [p('a'), p('b')]) cloud.docs.set(playPath('u1', x.id), { ...x });
+    const r = await device();
+    act(() => r.current.deletePlay('b'));
+    await autosave();
+    act(() => r.current.emptyTrash());
+    await settle();
+    expect(cloudPlays('u1')).toEqual(['a']);
+
+    let hist: Awaited<ReturnType<typeof r.current.bookHistory>> | null = null;
+    await act(async () => {
+      hist = await r.current.bookHistory();
+    });
+    expect(hist!.purged.map((x) => x.play.id)).toEqual(['b']);
+
+    act(() => r.current.bringBack(hist!.purged.map((x) => x.play)));
+    await autosave();
+    expect(ids(r.current.plays)).toEqual(['a', 'b']);
+    expect(cloudPlays('u1')).toEqual(['a', 'b']);
+    // The purge is still on record; a copy stamped after it is not taken back out.
+    await front();
+    expect(ids(r.current.plays)).toEqual(['a', 'b']);
+  });
+
+  it('never replaces a play that is still in the book', async () => {
+    const r = await device();
+    act(() => r.current.savePlay(p('a', 1, { name: 'New name' })));
+    act(() => r.current.bringBack([p('a', 1, { name: 'Old name' })]));
+    expect(r.current.plays.find((x) => x.id === 'a')?.name).toBe('New name');
+  });
+});

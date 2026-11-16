@@ -96,7 +96,8 @@
  */
 :root {
   /* The one filled button on a screen, the lit tab, the thing to do next.
-     Chalk yellow on the dark theme; a team's own color will sit here later. */
+     Chalk yellow on the dark theme. A team's color replaces it when one is
+     set, made to read on the page — see accentFor() in export/printInk.ts. */
   --accent: #ffcf3d;
   --on-accent: #10161a;
   /* The bar a screen's navigation sits on: a shade off the page, not a panel. */

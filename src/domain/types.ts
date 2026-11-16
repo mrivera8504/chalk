@@ -524,6 +524,14 @@ export interface Play {
    * Read through `playSurface`, which is the only place it is interpreted.
    */
   surface?: FieldSurface;
+  /**
+   * Which part of a pitch the play is about: the attacking half or third.
+   * Absent is the whole pitch, which is what every soccer play drawn before
+   * this was. Means nothing off a pitch. The board, the card, the sheet and
+   * the video all draw this window, so a set piece in the final third prints
+   * the size it was drawn.
+   */
+  pitchView?: 'half' | 'third';
   players: PlayerSlot[];
   assignments: Assignment[];
   /**

@@ -1,3 +1,4 @@
+import { pitchWindow, type PitchView } from './soccer/pitch';
 import { basketball } from './basketball';
 import { football } from './football';
 import { soccer } from './soccer';
@@ -32,6 +33,15 @@ export function anyVariant(id: string | undefined): Variant {
 /** The board's window for a play of this kind. */
 export function viewOf(variant: string | undefined): SportModule['view'] {
   return sportOf(variant).view;
+}
+
+/**
+ * The board's window for one play: its kind's, cut to the part of the pitch
+ * the play says it is about. Only a pitch has parts; anything else is its
+ * kind's window whatever the play says.
+ */
+export function viewFor(variant: string | undefined, pitchView?: PitchView): SportModule['view'] {
+  return surfaceOf(variant) === 'pitch' ? pitchWindow(pitchView) : viewOf(variant);
 }
 
 /** What a play is drawn on. Each has its own lines; football's has its rules too. */

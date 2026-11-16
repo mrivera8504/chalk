@@ -14,7 +14,7 @@ import { framesOf, nextFrame, withFrames, type Frame } from '../domain/frames';
 import { MARK_NAMES, mirrorMarks, placeFor, type BoardMark, type MarkKind } from '../domain/marks';
 import { SOCCER_ACTIONS } from '../domain/presets/soccer';
 import { GOAL } from '../sports/soccer/pitch';
-import { anyVariant, surfaceOf, viewOf } from '../sports';
+import { anyVariant, surfaceOf, viewFor } from '../sports';
 import { Playback } from './Playback';
 import { canRecordVideo, playToVideo } from '../export/video';
 import { rulesFor, variantKey } from '../sports/football';
@@ -81,7 +81,7 @@ import {
   writeFoundationId,
 } from '../domain/presets/formations';
 import { askChoice, askConfirm, askText } from '../ui/dialog';
-import { fillFromDepth, readDepth } from '../domain/depth';
+import { chartFor, fillFromDepth, readDepth, readSetCharts } from '../domain/depth';
 import { toast } from '../ui/toast';
 import { useBackLayer } from '../ui/backstack';
 import { UndoStack } from '../store/undo';
@@ -206,6 +206,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    */
   const unit: Side = play.unit ?? 'offense';
   /** The front, remembered apart from the offense's formation. */
+  /** The offense's set, so the depth chart can fill this play from its own substitutions. */
+  const [formationId, setFormationId] = useState<string | undefined>(play.formationId);
   const [defenseFormationId, setDefenseFormationId] = useState<string | undefined>(
     play.defenseFormationId,
   );
@@ -249,7 +251,23 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    */
   const ground = surfaceOf(play.variant);
   const hoops = ground !== 'field';
-  const view = viewOf(play.variant);
+  /** Which part of a pitch this play is about; undefined is the whole pitch. */
+  const [pitchView, setPitchView] = useState<Play['pitchView']>(() => play.pitchView);
+  const view = viewFor(play.variant, pitchView);
+  /*
+   * The whole of what the play is drawn on. The part of a pitch only says
+   * where the board is centered: a phone held upright is limited by its width,
+   * and a pitch is the same width whichever part is chosen, so the rest of the
+   * pitch shows above and below and has to be grass a man can be dragged onto.
+   * Turned sideways, the part fills the height and the board is magnified.
+   */
+  const fullView = viewFor(play.variant);
+  /*
+   * And held to the top of the board rather than its middle, so the goal is
+   * at the top of the screen with the rest of the pitch running down below
+   * it, instead of the part floating in the middle of empty space.
+   */
+  const align = pitchView ? 'xMidYMin meet' : 'xMidYMid meet';
   /* The starred set for this unit. The two sides star independently. */
   const [foundationId, setFoundationId] = useState<string | null>(() =>
     readFoundationId(play.unit ?? 'offense', play.variant),
@@ -578,6 +596,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       zones: zones.length ? zones : undefined,
       marks: marks.length ? marks : undefined,
       unit: play.unit,
+      formationId,
       defenseFormationId,
       scoutPlayId,
       hideOffense: hideOffense || undefined,
@@ -596,6 +615,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
        * the setting the first time it was opened.
        */
       surface,
+      pitchView,
       notes,
       coachingPoint,
       tags,
@@ -610,11 +630,13 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     focuses,
     zones,
     marks,
+    formationId,
     defenseFormationId,
     scoutPlayId,
     hideOffense,
     showDefense,
     surface,
+    pitchView,
     notes,
     coachingPoint,
     tags,
@@ -805,7 +827,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * second or third string, on the side the play is about. One step of undo.
    */
   async function fillFromChart() {
-    const chart = readDepth();
+    // The set's own substitutions over the base chart, where it has any.
+    const chart = chartFor(readDepth(), readSetCharts(), unit === 'defense' ? defenseFormationId : formationId);
     if (!Object.keys(chart).length) {
       toast('The depth chart is empty. Fill it in on the Team page.');
       return;
@@ -1379,6 +1402,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     setFocuses((prev) => prev.filter((fc) => next.some((p) => p.id === fc.playerId)));
     if (!next.some((p) => p.id === ballCarrierId)) setBallCarrierId(null);
     if (f.side === 'defense') setDefenseFormationId(f.id);
+    else setFormationId(f.id);
     setSel(null);
     closeDrawerAfter();
   }
@@ -1405,6 +1429,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     const all = [...allFormations, next];
     setFormations(all);
     writeFormations(all);
+    // The board is that set now, so a depth chart for it applies here.
+    if (unit === 'defense') setDefenseFormationId(next.id);
+    else setFormationId(next.id);
   }
 
   function deleteFormation(id: string) {
@@ -1603,12 +1630,16 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * sheet where it can take a file — which is where a video is going — and
    * saved otherwise.
    */
-  async function exportVideo() {
+  async function exportVideo(kind: 'video' | 'gif' = 'video') {
     const current = livePlay();
     const title = playTitle(current);
     setExporting(true);
     try {
-      const { blob, ext } = await playToVideo(withFrames(current, allSteps));
+      const whole = withFrames(current, allSteps);
+      const { blob, ext } =
+        kind === 'gif'
+          ? { blob: await (await import('../export/gif')).playToGif(whole), ext: 'gif' }
+          : await playToVideo(whole);
       // Every step from the first, whichever one happens to be on screen.
       const file = new File([blob], `${slug(title, 'play')}.${ext}`, { type: blob.type });
       if (navigator.canShare?.({ files: [file] })) {
@@ -1621,7 +1652,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       }
       download(new Uint8Array(await blob.arrayBuffer()), file.name, blob.type);
     } catch {
-      toast('Could not record a video on this device.');
+      toast(kind === 'gif' ? 'Could not make a GIF on this device.' : 'Could not record a video on this device.');
     } finally {
       setExporting(false);
     }
@@ -1656,6 +1687,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       /* Likewise from the board, so a sheet printed straight after the toggle
          is the board the coach is looking at and not the one before it. */
       surface,
+      pitchView,
     };
   }
 
@@ -1710,7 +1742,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   }
 
   const pointer = createPointer({
-    view,
+    view: fullView,
     marks,
     setMarks,
     tool,
@@ -1823,15 +1855,15 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         onPointerCancel={pointer.handleUp}
         onPointerLeave={clearAim}
       >
-        <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
+        <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio={align}>
           <BoardLayers
             marks={marks}
             surface={ground}
             fieldView={{
-              x: -view.halfWidth,
-              y: -view.downfield,
-              w: view.halfWidth * 2,
-              h: view.downfield + view.behind,
+              x: -fullView.halfWidth,
+              y: -fullView.downfield,
+              w: fullView.halfWidth * 2,
+              h: fullView.downfield + fullView.behind,
             }}
             holes={holes}
             showHoles={!hoops && showHoles}
@@ -1874,12 +1906,13 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           <Playback
             frames={allSteps}
             viewBox={viewBox}
+            align={align}
             surface={ground}
             fieldView={{
-              x: -view.halfWidth,
-              y: -view.downfield,
-              w: view.halfWidth * 2,
-              h: view.downfield + view.behind,
+              x: -fullView.halfWidth,
+              y: -fullView.downfield,
+              w: fullView.halfWidth * 2,
+              h: fullView.downfield + fullView.behind,
             }}
             shows={(p) => (p.side === 'defense' ? showDefense : !hideOffense)}
             onStep={(i) => {
@@ -2287,6 +2320,10 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                     {exporting ? 'Working…' : 'Save video'}
                   </button>
                 )}
+                {/* Plays inline and loops in any chat, email or slide, where a video may not. */}
+                <button disabled={exporting} onClick={() => void exportVideo('gif')}>
+                  {exporting ? 'Working…' : 'Save GIF'}
+                </button>
                 {/*
                   * What this one play is drawn on.
                   *
@@ -2303,6 +2340,33 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                   {boardSurface === 'white' ? 'White field' : 'Grass field'}
                 </button>
               </div>
+              {/*
+                * A pitch is long, and a set piece in the final third drawn on
+                * the whole of it is drawn small. The window is the play's, so
+                * the card and the sheet show the same part.
+                */}
+              {ground === 'pitch' && (
+                <div className="picker-row seg" role="group" aria-label="Part of the pitch">
+                  {(
+                    [
+                      [undefined, 'Whole pitch'],
+                      ['half', 'Attacking half'],
+                      ['third', 'Final third'],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <button
+                      key={label}
+                      aria-pressed={pitchView === v}
+                      onClick={() => {
+                        setPitchView(v);
+                        resetView();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
               {surface && (
                 <p className="tool-note">
                   This play keeps its own field, whatever Settings says.{' '}

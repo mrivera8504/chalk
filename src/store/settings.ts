@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { DEFAULT_SETTINGS, type FieldSurface, type Settings } from '../domain/types';
 import { DEFAULT_ROUTE_DEPTHS, setRouteDepths, type RouteDepths } from '../domain/presets/routes';
 import { paperPalette } from '../ui/surface';
+import { accentFor } from '../export/printInk';
 
 /**
  * Everything adjustable, in one place.
@@ -157,18 +158,32 @@ function applyColors(s: AppSettings): void {
   root.style.setProperty('--ink-carry', s.carryColor);
   root.style.setProperty('--ink-block', s.blockColor);
   root.style.setProperty('--zone', s.zoneColor);
-  applyTheme(s.theme);
+  applyTheme(s.theme, s.teamColor);
 }
 
 /** The page behind the status bar, per theme, for the browser's own chrome. */
 const PAGE = { dark: '#10161a', light: '#f4f5f7' };
 
-function applyTheme(theme: Theme): void {
+function applyTheme(theme: Theme, teamColor: string): void {
   const root = document.documentElement;
   root.dataset.theme = theme;
   const light =
     theme === 'light' ||
     (theme === 'system' && window.matchMedia?.('(prefers-color-scheme: light)').matches);
+  /*
+   * The team's color is the chrome's accent — the filled button, the lit tab —
+   * made to read on this theme's page. Only `--accent`: the board's tokens are
+   * never touched, so a team in red does not turn anything on the field red.
+   * Blank leaves the theme's own accent.
+   */
+  const team = teamColor ? accentFor(teamColor, light ? 'light' : 'dark') : null;
+  if (team) {
+    root.style.setProperty('--accent', team.accent);
+    root.style.setProperty('--on-accent', team.onAccent);
+  } else {
+    root.style.removeProperty('--accent');
+    root.style.removeProperty('--on-accent');
+  }
   document
     .querySelector('meta[name="theme-color"]')
     ?.setAttribute('content', light ? PAGE.light : PAGE.dark);

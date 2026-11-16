@@ -37,3 +37,21 @@ export const PITCH_VIEW = {
   downfield: PITCH.halfLength + 1.3,
   behind: PITCH.halfLength + 1.3,
 };
+
+/** Which part of the pitch a play is drawn on. Absent on a play means the whole. */
+export type PitchView = 'half' | 'third';
+
+/**
+ * The attacking half, or the attacking third, of the pitch.
+ *
+ * Full width always: a team's shape is read across the pitch, and the touchline
+ * is where a winger is. Only the depth is cut, from the goal being attacked
+ * back to the halfway line or the line a third of the way down. `behind` goes
+ * negative for the third, because its near edge is still upfield of the
+ * center spot — the window's own arithmetic is fine with that.
+ */
+export function pitchWindow(which: PitchView | undefined): typeof PITCH_VIEW {
+  if (which === 'half') return { ...PITCH_VIEW, behind: 1.3 };
+  if (which === 'third') return { ...PITCH_VIEW, behind: -PITCH.halfLength / 3 + 1.3 };
+  return PITCH_VIEW;
+}

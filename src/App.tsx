@@ -352,6 +352,15 @@ export function App() {
             sections={book.sections}
             onJson={exportBook}
             onRestore={book.importJson}
+            history={
+              own.uid
+                ? {
+                    have: new Set([...book.everyPlay, ...book.trashed].map((p) => p.id)),
+                    load: book.bookHistory,
+                    onBringBack: book.bringBack,
+                  }
+                : undefined
+            }
           />
         ) : route.screen === 'settings' ? (
           <SettingsPage onSaveNow={book.saveNow} />
@@ -395,6 +404,25 @@ export function App() {
               const folder = book.sections.find((sec) => sec.id === sectionId)?.name ?? 'Unfiled';
               toast(`Moved to ${folder}`, {
                 undo: was === undefined ? undefined : () => book.setPlaySection(id, was),
+              });
+            }}
+            onMoveMany={(ids, sectionId) => {
+              const was = new Map(ids.map((id) => [id, book.plays.find((p) => p.id === id)?.sectionId]));
+              for (const id of ids) book.setPlaySection(id, sectionId);
+              const folder = book.sections.find((sec) => sec.id === sectionId)?.name ?? 'Unfiled';
+              toast(`Moved ${ids.length} ${ids.length === 1 ? 'play' : 'plays'} to ${folder}`, {
+                undo: () => {
+                  for (const [id, from] of was) if (from !== undefined) book.setPlaySection(id, from);
+                },
+              });
+            }}
+            onDeleteMany={(ids) => {
+              // To the trash, like one: so no question first, and one Undo for the lot.
+              for (const id of ids) book.deletePlay(id);
+              toast(`Deleted ${ids.length} ${ids.length === 1 ? 'play' : 'plays'}`, {
+                undo: () => {
+                  for (const id of ids) book.restorePlay(id);
+                },
               });
             }}
             onMovePlay={book.movePlay}

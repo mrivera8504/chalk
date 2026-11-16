@@ -11,6 +11,8 @@ import { PlayerShape } from '../render/PlayerShape';
 interface Props {
   frames: Frame[];
   viewBox: string;
+  /** The board's own alignment, so a running play lands on the marks it started from. */
+  align?: string;
   surface: Surface;
   fieldView: { x: number; y: number; w: number; h: number };
   /** Whether a man is on the board at all: a hidden side stays hidden. */
@@ -31,7 +33,7 @@ interface Props {
  * Inert, like everything else drawn on the board: the stage underneath still
  * takes the pointer, and a tap anywhere stops the play.
  */
-export function Playback({ frames: stored, viewBox, surface, fieldView, shows, onStep, onDone }: Props) {
+export function Playback({ frames: stored, viewBox, align = 'xMidYMid meet', surface, fieldView, shows, onStep, onDone }: Props) {
   const [ms, setMs] = useState(0);
   /*
    * Every line rebuilt from its men, once, before anybody moves along one. A
@@ -69,7 +71,7 @@ export function Playback({ frames: stored, viewBox, surface, fieldView, shows, o
   });
 
   return (
-    <svg className="playback" viewBox={viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    <svg className="playback" viewBox={viewBox} preserveAspectRatio={align} aria-hidden="true">
       <Field holes={[]} showHoles={false} view={fieldView} surface={surface} />
       {/* The lines stay, faint: what is being run is still what was drawn. */}
       <g opacity={0.3}>

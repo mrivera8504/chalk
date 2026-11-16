@@ -1,7 +1,7 @@
 import { refreshPaths } from '../domain/regenerate';
 import type { Play } from '../domain/types';
 import { VIEW } from '../render/geometry';
-import { isFootball, isHoops, viewOf } from '../sports';
+import { isFootball, isHoops, surfaceOf, viewFor, viewOf } from '../sports';
 
 
 /**
@@ -37,7 +37,7 @@ export const DEFAULT_VIEW: View = {
 /** The whole board a play is drawn on: the field's window, or the court's. */
 export function boardView(play: Play): View {
   if (isFootball(play.variant)) return DEFAULT_VIEW;
-  const c = viewOf(play.variant);
+  const c = viewFor(play.variant, play.pitchView);
   return { x: -c.halfWidth, y: -c.downfield, w: c.halfWidth * 2, h: c.downfield + c.behind };
 }
 
@@ -194,6 +194,13 @@ export function viewForPlays(plays: Play[], aspect: number): View {
   if (plays.length && plays.every((p) => isHoops(p.variant))) {
     const c = viewOf(plays[0].variant);
     return { x: -c.halfWidth, y: -c.downfield, w: c.halfWidth * 2, h: c.downfield + c.behind };
+  }
+  // Plays the coach set to one part of a pitch print that part, as drawn, so
+  // the penalty area is where it was on the board. A page with no view set, or
+  // a mix, is windowed round what is drawn, as a pitch always was.
+  const part = plays[0]?.pitchView;
+  if (part && plays.every((p) => surfaceOf(p.variant) === 'pitch' && p.pitchView === part)) {
+    return boardView(plays[0]);
   }
   const v = contentView(plays);
   let { w, h } = v;

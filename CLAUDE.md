@@ -1321,6 +1321,57 @@ still device-only, for the merge-rule reason in *One cloud document per play*;
 more roles than coach; and an invite list for the owner to take one back before
 it runs out (the document can be deleted, there is just no screen for it).
 
+## The small items the plan review found
+
+A review against the implementation plan (the Claude doc *Chalk Overhaul:
+Implementation Plan*, not these notes) found promised items that were never
+built. The small ones were built on 2026-11-16; the rest are listed in the
+doc's *Review against this plan* section.
+
+**The team's color is the chrome's accent.** `accentFor()` in
+`export/printInk.ts` keeps the hue and steps the lightness until it reads at
+4.5:1 on the theme's page, judged on the rounded hex it will be written as.
+Only `--accent` and `--on-accent` are set, on the root, in `applyTheme`; never
+a board token.
+
+**A play may only be so big, in the rules.** `playOk()` caps players,
+assignments, strokes, steps, marks and the text fields, each several times
+anything drawn. The catch-all under a team became three named collections —
+plays (with revisions), purged — because a catch-all cannot be narrowed by a
+more specific match. **The rules need publishing again** for the caps to bite;
+until then nothing changes. New team documents carry `plan: 'free'`; absent
+means free.
+
+**Save GIF** sits beside Save video. `export/gif.ts` is its own encoder:
+popularity palette in 5-bit buckets, nearest-color map cached per bucket, LZW
+(tested by round trip past a full code table). Frames are `videoFrames` at 12
+fps, so a GIF moves and draws exactly as the board and the video do.
+
+**A pitch play can be about a part of it.** `Play.pitchView` — `half` or
+`third`, absent is the whole pitch. The card, the sheet and the video draw that
+window (`viewFor`, `boardView`; a printed page whose plays share a part prints
+it). The editor centers on it but keeps the whole pitch as grass, drag bounds
+and pan bounds (`fullView`), and pins the window to the top of the board:
+upright, a phone is width-bound and every part is full width, so the part is
+the top of the screen with the pitch running down; turned sideways it fills
+the height. `Playback` takes the same `align`, or a running play would drift.
+
+**A set can have its own depth chart.** `chalk.depth.sets.v1` holds, per
+formation id, only the positions that differ; `chartFor()` lays them over the
+base chart. The editor now records the offense's `formationId` — on applying
+a set, saving one, and on a new play from the starred foundation — which it
+never did. Backups carry `depthSets`.
+
+**Select, on the playbook.** A tap ticks a card instead of opening it, and the
+new-play buttons give way to Move to… and Delete for the lot, one toast and one
+Undo. The back gesture leaves the mode.
+
+**History, on the Print page.** Plays emptied from the trash (the last copy
+`purge()` kept) and the old whole-book copies from before per-play documents.
+Bringing back only ever adds a play the book does not have, stamped now so the
+purge record does not take it straight back out. Replacing the whole book is
+still what a backup file is for.
+
 ## Coach tools: game day, study, practices, depth chart
 
 The overhaul's stage 7.

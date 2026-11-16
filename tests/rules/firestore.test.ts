@@ -109,6 +109,41 @@ describe('a coach’s own things', () => {
   });
 });
 
+describe('what a play may be', () => {
+  it('takes a full-sized play', async () => {
+    await ownTeam();
+    const play = {
+      name: 'Trips Right 26 Power',
+      players: Array.from({ length: 22 }, (_, i) => ({ id: `m${i}`, x: i, y: 1 })),
+      assignments: Array.from({ length: 40 }, (_, i) => ({ id: `a${i}` })),
+      annotations: Array.from({ length: 200 }, () => ({ points: [{ x: 0, y: 0 }] })),
+      frames: [{}, {}, {}],
+      notes: 'x'.repeat(5000),
+      updatedAt: 1,
+    };
+    await assertSucceeds(setDoc(doc(as('owner'), 'teams/owner/plays/p1'), play));
+  });
+
+  it('refuses one stuffed past any play a coach could draw', async () => {
+    await ownTeam();
+    const db = as('owner');
+    await assertFails(setDoc(doc(db, 'teams/owner/plays/p1'), { players: Array.from({ length: 101 }, () => ({})) }));
+    await assertFails(setDoc(doc(db, 'teams/owner/plays/p1'), { notes: 'x'.repeat(50001) }));
+    await assertFails(setDoc(doc(db, 'teams/owner/plays/p1'), { annotations: Array.from({ length: 3001 }, () => ({})) }));
+  });
+
+  it('still lets a stuffed play be deleted', async () => {
+    await ownTeam();
+    await seed((db) => setDoc(doc(db, 'teams/owner/plays/p1'), { players: Array.from({ length: 150 }, () => ({})) }));
+    await assertSucceeds(deleteDoc(doc(as('owner'), 'teams/owner/plays/p1')));
+  });
+
+  it('allows no collection under a team but the three the app uses', async () => {
+    await ownTeam();
+    await assertFails(setDoc(doc(as('owner'), 'teams/owner/anything/x'), { a: 1 }));
+  });
+});
+
 describe('invites', () => {
   it('can only be made by a team’s owner, for that team, to coach', async () => {
     const good = { teamId: 'owner', teamName: 'Eagles', role: 'coach', createdBy: 'owner', expiresAt: Date.now() + DAY };
