@@ -370,7 +370,9 @@ export function SettingsPanel({ settings, onClose }: Props) {
         <p className="picker-note">
           These decide what the badge calls legal and how the holes are
           numbered. Changing them renumbers every play at once, because the hole
-          map is worked out from the formation rather than stored.
+          map is worked out from the formation rather than stored. The two
+          head counts are for 7-man playbooks; flag, 6-, 8-, 9- and 11-man bring
+          their own.
         </p>
         <Num
           label="Players a side"

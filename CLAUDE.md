@@ -6,11 +6,11 @@ Full spec and stage list: `docs/build-spec.md`.
 ## Where it stands
 
 **An overhaul is under way** — multi-sport, a new look, teams and sharing — in
-eight stages. Stage 0 (tests, and the editor split up) and stage 1 (the design
-system and the new shell) and stage 2 (the data layer) are done in code. None of
-it has been on the tablet, and stage 2's cloud half is waiting on rules the owner
-has to publish. See *Tests*, *The editor, in
-pieces* and *The shell* below.
+eight stages. Stages 0 to 2 (tests and the editor split up; the design system
+and the new shell; the data layer) are deployed, and the `/teams` rules are
+published. Stage 3 (the sport module, and flag, 6-, 8-, 9- and 11-man beside
+7-man) is done in code. See *Tests*, *The editor, in pieces*, *The shell* and
+*Kinds of football* below.
 
 Stages 1-7 done: field and players, blocking tool, route and run presets with
 formations and auto play-naming, freehand ink, a playbook that saves, and
@@ -996,6 +996,63 @@ So the book is also written to IndexedDB, a moment after every save, and:
   the same reason.
 
 Anything that writes the book locally goes through `persist()`, not `writeLocal`.
+
+## Kinds of football, and the sport module
+
+The overhaul's stage 3. `src/sports/` is the boundary the next sport plugs into:
+`SportModule` in `sports/types.ts` says what a sport supplies — a unit, a window,
+a mark radius, and its variants — and `sports/football/` is the only one. The
+rules that are only football's (holes, gaps, legality, the namer, every preset)
+**stayed where they were under `domain/`**. Moving forty files to change no
+behavior was not worth the churn; the module is what the app asks, not where
+the files live. Basketball will be the test of whether the interface is right.
+
+**Seven-man is the variant a play has when it says nothing.** `Play.variant`,
+`Book.variant` and `Formation.variant` are all optional and absent means
+seven-man — the same bargain as `Play.unit` and `Play.bookId`. Choosing 7-man
+stores nothing (`variantKey`), so no play, book or saved formation from before
+this was rewritten. A variant nobody has heard of reads as seven-man rather than
+being refused.
+
+**Seven-man is held to Settings; every other kind brings its own two numbers.**
+`rulesFor(play.variant, settings)` is the one place that decides, and the editor,
+the namer and the exporter all go through it. Players a side and the line
+minimum come from the variant; which way the even holes run and the on-line
+tolerance stay the coach's. A book that has run for two seasons on a house rule
+keeps it.
+
+**The play carries its kind, the book only says what the next play will be.**
+Written at creation like the unit. Changing a playbook's kind changes nothing
+already drawn — the men on a board were set out for one count.
+
+**Formations and stars are per kind.** One list in one storage key, filtered by
+`formationsFor()`; the editor holds `allFormations` and writes that back whole.
+**Delete from `allFormations`, never from the filtered list** — writing the
+filtered list back would erase every other kind's saved sets. The foundation key
+carries the variant (`chalk.foundation.v1.eleven`); seven-man's key is the one
+it always was.
+
+**Every kind is drawn in the same 22-yard window.** An eleven-man set's wide men
+stand at ±9.5 rather than ±20, and its line splits are 1.6 rather than 1.8 so a
+tight end fits. That is how a playbook page draws them. A per-sport window is
+stage 4's problem, where a court makes it unavoidable. `tests/sports/` holds
+every built-in set to: the right head count, legal, nobody standing on anybody,
+everybody a yard inside the board.
+
+**Flag has no block tools and no stunt** (`Variant.blocking`), and its rush row
+is three things: Pull flag, Contain, Spy. Pull flag is a `blitz` whose `preset`
+is `pull-flag`; `AssignmentPath` caps that one with a drawn pennant instead of an
+arrowhead. A preset rather than a new `AssignmentKind`, so the eraser, the
+swatches and the exporter needed no teaching.
+
+**The welcome screen is asked of a device with nothing on it, once.**
+`shell/Welcome.tsx`, keyed on `chalk.welcomed.v1`. Any play, live or in the
+trash, marks the device as welcomed without showing it. Its hooks sit above the
+editor's early return in `App` — below it they are skipped when a play opens,
+and React throws.
+
+**`askChoice()`** in `ui/dialog.ts` is the third question the dialog can ask: a
+few buttons, each with a line under it, and the tap is the answer.
 
 ## Backup, and what a backup has to carry
 

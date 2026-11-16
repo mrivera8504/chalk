@@ -13,6 +13,7 @@ import { PlayerShape } from '../render/PlayerShape';
 import { VisionCone } from '../render/VisionCone';
 import { toPathD } from '../render/geometry';
 import { BOARD_ASPECT } from './paper';
+import { rulesFor } from '../sports/football';
 import { DEFAULT_VIEW, viewBox, type View } from './view';
 import { paperCss } from '../ui/surface';
 
@@ -115,7 +116,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
    * way the app shipped rather than the way this team plays — the same mistake
    * the editor's stale useMemo arrays made.
    */
-  const holes = computeHoles(play.players, getSettings());
+  const holes = computeHoles(play.players, rulesFor(play.variant, getSettings()));
   const gaps = computeGaps(play.players);
   const qb = quarterback(play.players);
   /*

@@ -120,3 +120,40 @@
   color: var(--select);
   font-weight: 600;
 }
+
+/*
+ * A question answered by picking. Each choice is a full-width target with its
+ * own line of explanation, and the tap is the answer.
+ */
+.dialog-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.dialog-choices button,
+.welcome-kinds button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 48px;
+  padding: 8px 12px;
+  text-align: left;
+  border-radius: 10px;
+}
+
+.dialog-choices button span,
+.welcome-kinds button span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dim);
+}
+
+.dialog-choices button[aria-pressed='true'],
+.welcome-kinds button[aria-checked='true'] {
+  border-color: var(--select);
+  box-shadow: inset 0 0 0 1px var(--select);
+}

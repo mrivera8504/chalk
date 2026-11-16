@@ -10,7 +10,8 @@ import {
 } from '../domain/types';
 import { PageHead } from '../shell/AppShell';
 import type { SyncState } from '../store/sync';
-import { askConfirm, askText } from '../ui/dialog';
+import { football, variantOf } from '../sports/football';
+import { askChoice, askConfirm, askText } from '../ui/dialog';
 import { Icon } from '../ui/Icon';
 import { Menu } from '../ui/Menu';
 import { PlayCard } from './PlayCard';
@@ -45,7 +46,8 @@ interface Props {
   books: Book[];
   bookId: string;
   onSelectBook: (id: string) => void;
-  onAddBook: (name: string) => void;
+  onAddBook: (name: string, variant?: string) => void;
+  onSetBookVariant: (id: string, variant?: string) => void;
   onRenameBook: (id: string, name: string) => void;
   /** False when it is the last one, which cannot go. */
   onDeleteBook: (id: string) => boolean;
@@ -77,6 +79,17 @@ const SYNC_LABEL: Record<SyncState, string> = {
  */
 const NEEDS_ACTION = new Set<SyncState>(['denied', 'blocked', 'toobig', 'failed']);
 
+/** The kinds of football, as a question, with the current one marked. */
+function kinds(current?: string) {
+  const now = variantOf(current).id;
+  return football.variants.map((v) => ({
+    id: v.id,
+    label: v.name,
+    sub: v.blurb,
+    current: v.id === now,
+  }));
+}
+
 export function PlaybookList({
   plays,
   trashed,
@@ -101,6 +114,7 @@ export function PlaybookList({
   bookId,
   onSelectBook,
   onAddBook,
+  onSetBookVariant,
   onRenameBook,
   onDeleteBook,
 }: Props) {
@@ -139,7 +153,20 @@ export function PlaybookList({
       label: 'Playbook name',
       confirmLabel: 'Add playbook',
     });
-    if (name) onAddBook(name);
+    if (!name) return;
+    // Asked second, and defaulting to what this playbook already is: a coach
+    // adding "JV offense" is nearly always adding more of the same game.
+    const kind = await askChoice('What kind of football?', kinds(book.variant), {
+      body: `Every new play in ${name} opens with this many on the field.`,
+    });
+    if (kind) onAddBook(name, kind);
+  }
+
+  async function changeKind() {
+    const kind = await askChoice('What kind of football?', kinds(book.variant), {
+      body: 'For the plays you make from here on. The ones already drawn stay as they are.',
+    });
+    if (kind) onSetBookVariant(book.id, kind);
   }
 
   async function renameBook() {
@@ -289,6 +316,15 @@ export function PlaybookList({
                   }}
                 >
                   Rename this one
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    close();
+                    void changeKind();
+                  }}
+                >
+                  {variantOf(book.variant).name} football…
                 </button>
                 {/* The last one cannot go: a play has to be somewhere. */}
                 {books.length > 1 && (

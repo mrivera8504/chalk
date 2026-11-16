@@ -19,6 +19,11 @@ export interface DialogRequest {
   body?: string;
   /** Present for a question that wants typing; absent for a plain confirm. */
   input?: { value: string; placeholder?: string; label?: string };
+  /**
+   * Present for a question answered by picking one of a few things. Each is a
+   * button and the tap is the answer, so there is no confirm to press after it.
+   */
+  choices?: { id: string; label: string; sub?: string; current?: boolean }[];
   confirmLabel: string;
   cancelLabel: string;
   /** Paints the confirm button as the destructive one. */
@@ -103,4 +108,24 @@ export async function askConfirm(
     danger: opts.danger ?? false,
   });
   return answer !== null;
+}
+
+/**
+ * Ask which of a few. Resolves with the id of the one tapped, or null on a
+ * cancel. A list of buttons rather than a native select: the options carry a
+ * line of explanation each, and a select shows one word.
+ */
+export function askChoice(
+  title: string,
+  choices: { id: string; label: string; sub?: string; current?: boolean }[],
+  opts: { body?: string } = {},
+): Promise<string | null> {
+  return ask({
+    title,
+    body: opts.body,
+    choices,
+    confirmLabel: '',
+    cancelLabel: 'Cancel',
+    danger: false,
+  });
 }

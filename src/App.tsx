@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { PlayEditor } from './editor/PlayEditor';
 import { UNFILED_SECTION, bookOf, type Side } from './domain/types';
 import { PlaybookList } from './playbook/PlaybookList';
@@ -11,6 +11,7 @@ import { ToastHost } from './ui/ToastHost';
 import { go, useRoute } from './ui/route';
 import { AppShell } from './shell/AppShell';
 import { PrintPage, SettingsPage, TeamPage } from './shell/pages';
+import { Welcome, markWelcomed, wasWelcomed } from './shell/Welcome';
 
 export function App() {
   const book = usePlaybook();
@@ -46,13 +47,34 @@ export function App() {
     if (openBook && openBook !== bookId) selectBook(openBook);
   }, [openBook, bookId, selectBook]);
 
+  /*
+   * Asked once, of a device with nothing on it. A book with a single play in
+   * it has answered already, and is marked so without being shown anything —
+   * including the plays in the trash, which are still somebody's playbook.
+   */
+  const [welcomed, setWelcomed] = useState(wasWelcomed);
+  const hasBook = book.everyPlay.length > 0 || book.trashed.length > 0;
+  useEffect(() => {
+    if (!welcomed && hasBook) {
+      markWelcomed();
+      setWelcomed(true);
+    }
+  }, [welcomed, hasBook]);
+  const greet = (variant?: string) => {
+    if (variant) book.setBookVariant(book.bookId, variant);
+    markWelcomed();
+    setWelcomed(true);
+  };
+
   // The back gesture goes where the `‹` button goes: to the playbook, not out
   // of the app. Every screen that is not the playbook is one step in from it.
   useBackLayer(route.screen !== 'book', home);
 
   const startNew = useCallback(
     (unit: Side = 'offense') => {
-      const play = blankPlay(UNFILED_SECTION, unit, book.bookId);
+      // A new play is the kind of football its playbook is.
+      const kind = book.books.find((b) => b.id === book.bookId)?.variant;
+      const play = blankPlay(UNFILED_SECTION, unit, book.bookId, kind);
       book.savePlay(play);
       go({ screen: 'play', id: play.id });
     },
@@ -88,6 +110,21 @@ export function App() {
           onChange={book.savePlay}
           onSave={book.saveNow}
           onClose={home}
+        />
+      </>
+    );
+  }
+
+  if (!welcomed && !hasBook && route.screen === 'book') {
+    return (
+      <>
+        <DialogHost />
+        <Welcome
+          onStart={greet}
+          onSignIn={() => {
+            greet();
+            go({ screen: 'settings' });
+          }}
         />
       </>
     );
@@ -167,8 +204,9 @@ export function App() {
             books={book.books}
             bookId={book.bookId}
             onSelectBook={book.selectBook}
-            onAddBook={(name) => {
-              book.addBook(name);
+            onSetBookVariant={book.setBookVariant}
+            onAddBook={(name, variant) => {
+              book.addBook(name, variant);
               toast(`Added ${name}`);
             }}
             onRenameBook={book.renameBook}

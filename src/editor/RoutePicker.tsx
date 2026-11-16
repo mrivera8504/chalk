@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useScrollFade } from '../ui/useScrollFade';
 import { ZONE_SWATCHES } from '../domain/colors';
 import { byJersey, whoIs, type RosterEntry } from '../domain/roster';
-import { DEFENSE_PRESETS, type DefensePreset } from '../domain/presets/defense';
+import { DEFENSE_PRESETS, rushPresets, type DefensePreset } from '../domain/presets/defense';
 import { ROUTES, type RoutePreset } from '../domain/presets/routes';
 import { ZONE_PRESETS, type ZonePreset } from '../domain/presets/zones';
 import type { PlayerSlot, ShapeKind } from '../domain/types';
@@ -44,6 +44,8 @@ const SHAPES: { kind: ShapeKind; name: string }[] = [
  */
 export interface DefenseTools {
   onPick: (preset: DefensePreset) => void;
+  /** False for flag: the rush row is the three things a flag rusher does. */
+  blocking?: boolean;
   onZone: (preset: ZonePreset) => void;
   /** A zone with no concept behind it, to be dragged into shape. */
   hasZone: boolean;
@@ -469,7 +471,7 @@ export function RoutePicker({
             */}
           <Group
             title="Rush"
-            routes={DEFENSE_PRESETS.filter((d) => d.group === 'rush')}
+            routes={rushPresets(defense.blocking ?? true)}
             activeId={defense.activeJob}
             onPick={(p) => defense.onPick(p as DefensePreset)}
           />

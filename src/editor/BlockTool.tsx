@@ -20,12 +20,19 @@ export function isPairTool(tool: Tool): tool is BlockKind | LinkKind {
  * eight to both would be six buttons that do nothing wherever you happen to be,
  * which is what made the old sixteen-pill drawer unreadable.
  */
-export function toolsFor(unit: Side): { id: Tool; label: string }[] {
+export function toolsFor(unit: Side, blocking = true): { id: Tool; label: string }[] {
   const common: { id: Tool; label: string }[] = [
     { id: 'select', label: 'Move' },
     { id: 'routes', label: unit === 'defense' ? 'Jobs' : 'Routes' },
     { id: 'erase', label: 'Erase' },
   ];
+
+  /*
+   * Where nobody may block, the row is the three tools and Man. Flag has no
+   * line to run a game on either, so the stunt goes with the blocks: a button
+   * for a thing the rules forbid is worse than a shorter row.
+   */
+  if (!blocking) return unit === 'defense' ? [...common, { id: 'cover', label: 'Man' }] : common;
 
   return unit === 'defense'
     ? [...common, { id: 'cover', label: 'Man' }, { id: 'stunt', label: 'Stunt' }]
@@ -131,6 +138,8 @@ export function toolLabel(tool: Tool): string {
 interface Props {
   tool: Tool;
   unit: Side;
+  /** False for a kind of football with no blocking: flag. */
+  blocking?: boolean;
   onTool: (t: Tool) => void;
 }
 
@@ -140,10 +149,10 @@ interface Props {
  * block you are halfway through assigning, and it is worth more than the
  * buttons when the board is what you want to see.
  */
-export function BlockTool({ tool, unit, onTool }: Props) {
+export function BlockTool({ tool, unit, blocking = true, onTool }: Props) {
   return (
     <div className="tools">
-      {toolsFor(unit).map((t) => (
+      {toolsFor(unit, blocking).map((t) => (
         <button key={t.id} aria-pressed={tool === t.id} onClick={() => onTool(t.id)}>
           {t.label}
         </button>

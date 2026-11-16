@@ -1,3 +1,4 @@
+import { PULL_FLAG } from '../domain/presets/defense';
 import type { Assignment, AssignmentKind, PathPoint } from '../domain/types';
 import { headingInto, toPathD } from './geometry';
 
@@ -5,7 +6,7 @@ import { headingInto, toPathD } from './geometry';
 const CAP = 0.46;
 const ARROW = 0.5;
 
-type EndCap = 'tee' | 'arrow' | 'none';
+type EndCap = 'tee' | 'arrow' | 'flag' | 'none';
 
 interface Style {
   cap: EndCap;
@@ -73,6 +74,29 @@ function Cap({
         strokeWidth={width}
         strokeLinecap="round"
       />
+    );
+  }
+
+  if (kind === 'flag') {
+    /*
+     * A pennant on a short staff, standing across the line of travel. Drawn
+     * rather than typed for the reason the carrier's star is: an exported SVG
+     * carries no fonts.
+     */
+    const top = { x: p.x + px * CAP * 1.5, y: p.y + py * CAP * 1.5 };
+    const mid = { x: p.x + px * CAP * 0.5, y: p.y + py * CAP * 0.5 };
+    const tip = { x: p.x + px * CAP + u.x * CAP * 1.3, y: p.y + py * CAP + u.y * CAP * 1.3 };
+    return (
+      <g>
+        <line x1={p.x} y1={p.y} x2={top.x} y2={top.y} stroke={color} strokeWidth={width} strokeLinecap="round" />
+        <polygon
+          points={`${top.x},${top.y} ${tip.x},${tip.y} ${mid.x},${mid.y}`}
+          fill={color}
+          stroke={color}
+          strokeWidth={width * 0.5}
+          strokeLinejoin="round"
+        />
+      </g>
     );
   }
 
@@ -145,7 +169,7 @@ export function AssignmentPath({ assignment, selected = false, autoColor }: Prop
         <Cap kind="tee" points={path} index={1} color={color} width={width} />
       )}
       <Cap
-        kind={style.cap}
+        kind={assignment.preset === PULL_FLAG ? 'flag' : style.cap}
         points={path}
         index={path.length - 1}
         color={color}

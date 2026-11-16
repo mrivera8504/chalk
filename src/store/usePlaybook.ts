@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { applyOnLine } from '../domain/legality';
 import { withSuggestion } from '../domain/naming';
 import {
+  baseFrontId,
   foundationDefense,
   foundationOffense,
   readFoundationId,
 } from '../domain/presets/formations';
+import { rulesFor, variantKey } from '../sports/football';
 import {
   MAIN_BOOK,
   MAIN_BOOK_NAME,
@@ -178,7 +180,9 @@ export function blankPlay(
   sectionId = UNFILED_SECTION,
   unit: Side = 'offense',
   bookId: string = MAIN_BOOK,
+  variant?: string,
 ): Play {
+  const kind = variantKey(variant);
   const now = Date.now();
   return {
     id: newId('p'),
@@ -191,14 +195,18 @@ export function blankPlay(
      * exactly what foundationDefense() just put on the board.
      */
     ...(unit === 'defense'
-      ? { defenseFormationId: readFoundationId('defense') ?? 'builtin-5-2' }
+      ? { defenseFormationId: readFoundationId('defense', kind) ?? baseFrontId(kind) }
       : {}),
+    // Only said when it is not seven-man, for the same reason as the book.
+    ...(kind ? { variant: kind } : {}),
     sectionId,
     // Only said when it is not the main one, so a play in the main playbook is
     // stored exactly as a play has always been stored.
     ...(bookId === MAIN_BOOK ? {} : { bookId }),
     players: applyOnLine(
-      unit === 'defense' ? [...foundationOffense(), ...foundationDefense()] : foundationOffense(),
+      unit === 'defense'
+        ? [...foundationOffense(kind), ...foundationDefense(kind)]
+        : foundationOffense(kind),
       getSettings(),
     ),
     assignments: [],
@@ -600,7 +608,7 @@ export function usePlaybook() {
   }, []);
 
   const savePlay = useCallback((play: Play) => {
-    const stamped = withSuggestion({ ...play, updatedAt: Date.now() }, getSettings());
+    const stamped = withSuggestion({ ...play, updatedAt: Date.now() }, rulesFor(play.variant, getSettings()));
     setPlays((prev) => {
       const i = prev.findIndex((p) => p.id === stamped.id);
       if (i === -1) return [...prev, stamped];
@@ -760,8 +768,15 @@ export function usePlaybook() {
   }, []);
 
   const addBook = useCallback(
-    (name: string) => {
-      const book: Book = { id: newId('b'), name, order: Date.now(), updatedAt: Date.now() };
+    (name: string, variant?: string) => {
+      const kind = variantKey(variant);
+      const book: Book = {
+        id: newId('b'),
+        name,
+        order: Date.now(),
+        updatedAt: Date.now(),
+        ...(kind ? { variant: kind } : {}),
+      };
       setBooks((prev) => [...prev, book]);
       selectBook(book.id);
       return book;
@@ -778,6 +793,30 @@ export function usePlaybook() {
         return id === MAIN_BOOK ? [...prev, { id, name, order: 0, updatedAt: now }] : prev;
       }
       return prev.map((b) => (b.id === id ? { ...b, name, updatedAt: now } : b));
+    });
+  }, []);
+
+  /**
+   * Say what kind of football a playbook's new plays are.
+   *
+   * Only the plays made from here on: a play carries its own kind, so nothing
+   * already drawn changes how many men it is counted against.
+   */
+  const setBookVariant = useCallback((id: string, variant?: string) => {
+    const kind = variantKey(variant);
+    setBooks((prev) => {
+      const now = Date.now();
+      const set = (b: Book): Book => {
+        const { variant: _was, ...rest } = b;
+        return { ...rest, ...(kind ? { variant: kind } : {}), updatedAt: now };
+      };
+      if (!prev.some((b) => b.id === id)) {
+        // The main playbook is implied until something is said about it.
+        return id === MAIN_BOOK && kind
+          ? [...prev, set({ id, name: MAIN_BOOK_NAME, order: 0, updatedAt: now })]
+          : prev;
+      }
+      return prev.map((b) => (b.id === id ? set(b) : b));
     });
   }, []);
 
@@ -908,6 +947,7 @@ export function usePlaybook() {
     selectBook,
     addBook,
     renameBook,
+    setBookVariant,
     deleteBook,
     setPlayStatus,
     /** Past copies of one play. Empty until the account is on per-play documents. */

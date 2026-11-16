@@ -435,3 +435,55 @@ button.with-icon {
   font-size: var(--text-s);
   color: var(--dim);
 }
+
+/*
+ * The first screen of a device with nothing on it. A page of its own rather
+ * than a dialog over an empty playbook: there is nothing behind it to see.
+ */
+.welcome {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.welcome-card {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.welcome h1 {
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: 34px;
+  letter-spacing: -0.5px;
+}
+
+.welcome-lede {
+  margin: 0 0 4px;
+  color: var(--dim);
+  font-size: 15px;
+}
+
+.welcome-sports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.welcome-kinds {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.welcome-go {
+  min-height: 48px;
+  margin-top: 6px;
+  font-size: 15px;
+}

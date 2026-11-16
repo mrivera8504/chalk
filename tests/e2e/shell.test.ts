@@ -188,9 +188,16 @@ describe('a play card', () => {
 
 describe('playbooks', () => {
   const switcher = () => page.getByRole('button', { name: 'Change playbook' });
-  const ask = async (text: string, confirm: string) => {
+  const ask = async (text: string, confirm: string, kind = '7-man') => {
     await page.getByRole('dialog').getByRole('textbox').fill(text);
     await page.getByRole('dialog').getByRole('button', { name: confirm }).click();
+    // A new playbook is asked what kind of football it is, straight after.
+    await page.getByRole('dialog', { name: 'What kind of football?' }).getByRole('button', { name: kind }).click();
+  };
+  const men = async (side: string) => {
+    const made = (await stored()).plays.find((x) => !['sweep', 'cover3', 'oldest'].includes(x.id));
+    const play = made as unknown as { variant?: string; players: { side: string }[] };
+    return { variant: play.variant, count: play.players.filter((m) => m.side === side).length };
   };
 
   it('adds a second one, empty, and switches back to the first with its plays intact', async () => {
@@ -219,6 +226,42 @@ describe('playbooks', () => {
     expect((made as unknown as { bookId?: string }).bookId).toBeTruthy();
   });
 
+  it('opens an eleven-man playbook with eleven on the field, blocks and all', async () => {
+    await switcher().click();
+    await page.getByRole('menuitem', { name: 'New playbook' }).click();
+    await ask('Varsity', 'Add playbook', '11-man');
+    await page.getByRole('button', { name: 'New play', exact: true }).click();
+    await page.locator('.stage > svg').waitFor();
+    expect(await men('offense')).toEqual({ variant: 'eleven', count: 11 });
+    await expect.poll(() => page.locator('.legality').first().innerText()).toMatch(/7/);
+    expect(await page.getByRole('button', { name: 'Block', exact: true }).count()).toBe(1);
+  });
+
+  it('opens a flag playbook five a side, with nothing to block with', async () => {
+    await switcher().click();
+    await page.getByRole('menuitem', { name: 'New playbook' }).click();
+    await ask('Flag', 'Add playbook', '5v5 flag');
+    await page.getByRole('button', { name: 'New defense', exact: true }).click();
+    await page.locator('.stage > svg').waitFor();
+    expect(await men('defense')).toEqual({ variant: 'flag5', count: 5 });
+    expect((await men('offense')).count).toBe(5);
+    for (const gone of ['Block', 'Pull', 'Combo', 'Stunt']) {
+      expect(await page.getByRole('button', { name: gone, exact: true }).count(), gone).toBe(0);
+    }
+    expect(await page.getByRole('button', { name: 'Man', exact: true }).count()).toBe(1);
+  });
+
+  it('leaves the plays already drawn alone when a playbook changes kind', async () => {
+    await switcher().click();
+    await page.getByRole('menuitem', { name: /7-man football/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '8-man' }).click();
+    const before = (await stored()).plays.filter((x) => ['sweep', 'cover3', 'oldest'].includes(x.id));
+    expect(before.every((x) => !('variant' in x))).toBe(true);
+    await page.getByRole('button', { name: 'New play', exact: true }).click();
+    await page.locator('.stage > svg').waitFor();
+    expect(await men('offense')).toEqual({ variant: 'eight', count: 8 });
+  });
+
   it('marks where the team is with a play, and filters by it', async () => {
     await page.getByRole('button', { name: 'More for Cover 3' }).click();
     await page.getByLabel('Status of Cover 3').selectOption({ label: 'Game-ready' });
@@ -244,5 +287,44 @@ describe('the themes', () => {
     await page.reload();
     await page.locator('.page-head').waitFor();
     expect((await colors()).bg).toBe(light.bg);
+  });
+});
+
+describe('the first screen', () => {
+  const fresh = async () => {
+    await close();
+    const opened = await openApp(browser, { width: 412, height: 915, welcome: true });
+    page = opened.page;
+    close = () => opened.context.close();
+  };
+
+  it('asks a device with nothing on it what it coaches, once', async () => {
+    await fresh();
+    await page.getByRole('radio', { name: /6-man/ }).click();
+    await page.getByRole('button', { name: 'Start my playbook' }).click();
+    await page.locator('.page-head').waitFor();
+    await page.getByRole('button', { name: 'New play', exact: true }).click();
+    await page.locator('.stage > svg').waitFor();
+    const play = (await stored()).plays[0] as unknown as { variant?: string; players: unknown[] };
+    expect([play.variant, play.players.length]).toEqual(['six', 6]);
+    expect(await page.evaluate(() => localStorage.getItem('chalk.welcomed.v1'))).toBeTruthy();
+  });
+
+  it('answers a light pen tap, and seven-man stores nothing', async () => {
+    await fresh();
+    await penTapButton(page, 'Start my playbook');
+    await page.locator('.page-head').waitFor();
+    const book = await page.evaluate(() => JSON.parse(localStorage.getItem('chalk.playbook.v1') ?? '{}'));
+    expect(book.books ?? []).toEqual([]);
+  });
+
+  it('never shows to a device that already has a book', async () => {
+    await close();
+    const opened = await openApp(browser, { width: 412, height: 915, welcome: true, book: fixture() });
+    page = opened.page;
+    close = () => opened.context.close();
+    await page.locator('.page-head').waitFor();
+    expect(await page.locator('.welcome').count()).toBe(0);
+    expect(await page.locator('.play-card').count()).toBe(2);
   });
 });

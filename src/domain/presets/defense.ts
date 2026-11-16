@@ -176,6 +176,31 @@ export const DEFENSE_PRESETS: DefensePreset[] = [
     shape: (s, _h, ctx) => rush(s, nearestGap(ctx.gaps, s.x)?.x ?? s.x, 0),
   },
 
+  {
+    /*
+     * Flag only. There is no tackle to make, so the rush ends on the thing the
+     * rusher is actually reaching for, and the line is capped with it. Aimed at
+     * the quarterback because that is who has the ball when a rush is drawn;
+     * with nobody back there it runs straight through the line like a fill.
+     */
+    id: 'pull-flag',
+    name: 'Pull flag',
+    group: 'rush',
+    kind: 'blitz',
+    shape: (s, _h, ctx) =>
+      ctx.qb
+        ? [
+            { x: s.x, y: s.y },
+            // Stops short of him: the cap is drawn at the end of the line, and
+            // on top of his mark it could not be seen.
+            {
+              x: ctx.qb.x + Math.sign(s.x - ctx.qb.x || 1) * 1.1,
+              y: ctx.qb.y - 0.9,
+            },
+          ]
+        : rush(s, s.x),
+  },
+
   // ---- giving up ground ---------------------------------------------------
   {
     id: 'drop-hook',
@@ -240,4 +265,22 @@ export const defensePresetById = (id: string) =>
 /** Every defensive concept, so the flip and the namer can look one up by id. */
 export function isDefensePreset(id: string | undefined): boolean {
   return !!id && DEFENSE_PRESETS.some((p) => p.id === id);
+}
+
+/** The line that ends in a flag rather than an arrowhead. */
+export const PULL_FLAG = 'pull-flag';
+
+/**
+ * The rush row for a kind of football.
+ *
+ * Flag has no gaps to send a man through — nobody is blocking, so there is no
+ * line to split — and what is left of a rush is going for the flag, keeping
+ * the edge and sitting on the quarterback. Tackle football keeps every concept
+ * it had and is not offered the one that ends in a flag.
+ */
+export function rushPresets(blocking: boolean): DefensePreset[] {
+  const flag = [PULL_FLAG, 'contain', 'spy'];
+  return DEFENSE_PRESETS.filter(
+    (d) => d.group === 'rush' && (blocking ? d.id !== PULL_FLAG : flag.includes(d.id)),
+  ).sort((a, b) => (blocking ? 0 : flag.indexOf(a.id) - flag.indexOf(b.id)));
 }

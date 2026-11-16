@@ -1,7 +1,6 @@
 import type { Formation, PlayerSlot, Side } from '../types';
-
-let counter = 0;
-const id = (prefix: string) => `${prefix}-${++counter}`;
+import { OTHER_VARIANTS } from '../../sports/football/variants';
+import { back, front, lineman } from './slots';
 
 /**
  * One balanced 7-man set, sitting at the legal minimum of four on the line so
@@ -9,34 +8,11 @@ const id = (prefix: string) => `${prefix}-${++counter}`;
  * your own playbook rather than invented here.
  */
 export function defaultOffense(): PlayerSlot[] {
-  const line = (label: string, x: number): PlayerSlot => ({
-    id: id('o'),
-    label,
-    side: 'offense',
-    x,
-    y: 0,
-    onLine: true,
-    onLineLocked: false,
-    shape: 'square',
-  });
-
-  const back = (label: string, x: number, y: number, backNumber?: number): PlayerSlot => ({
-    id: id('o'),
-    label,
-    side: 'offense',
-    x,
-    y,
-    onLine: false,
-    onLineLocked: false,
-    backNumber,
-    shape: 'circle',
-  });
-
   return [
-    line('LG', -1.8),
-    line('C', 0),
-    line('RG', 1.8),
-    line('TE', 3.6),
+    lineman('LG', -1.8),
+    lineman('C', 0),
+    lineman('RG', 1.8),
+    lineman('TE', 3.6),
     back('WB', -5, 1.8),
     back('QB', 0, 1.6, 1),
     back('RB', 0, 5, 2),
@@ -44,84 +20,7 @@ export function defaultOffense(): PlayerSlot[] {
 }
 
 export function defaultDefense(): PlayerSlot[] {
-  const front = (label: string, x: number): PlayerSlot => ({
-    id: id('d'),
-    label,
-    side: 'defense',
-    x,
-    y: -1.7,
-    onLine: false,
-    onLineLocked: false,
-    shape: 'x',
-  });
-
-  const off = (label: string, x: number, y: number): PlayerSlot => ({
-    id: id('d'),
-    label,
-    side: 'defense',
-    x,
-    y,
-    onLine: false,
-    onLineLocked: false,
-    shape: 'triangle',
-  });
-
-  return [
-    front('E', -3.4),
-    front('T', -1.2),
-    front('T', 1.2),
-    front('E', 3.4),
-    off('W', -2.6, -4.5),
-    off('M', 2.6, -4.5),
-    off('S', 0, -9),
-  ];
-}
-
-/**
- * A front, built from two rows of numbers.
- *
- * Fronts are named by how many men are in each row — 5-2, 6-1 — so that is what
- * they are written as here, and the marks follow the same convention the default
- * defense set: ✕ on the line, triangle off it. Nothing is anchored to an
- * offensive player, deliberately. A front is where these seven stand; who they
- * end up shaded on is the coach's next drag, and the gap map re-letters itself
- * around wherever they finish.
- */
-function front(down: number[], off: { label: string; x: number; y: number }[]): PlayerSlot[] {
-  const middle = (down.length - 1) / 2;
-  const onBall = down.map((x, i) => ({
-    id: id('d'),
-    // A man head-up on the center is the nose; everyone inside the ends is a tackle.
-    label: i === middle ? 'N' : 'T',
-    side: 'defense' as const,
-    x,
-    // Off the ball by more than two marks' worth, so a nose head-up on the
-    // center draws as two players rather than as one smudge.
-    y: -1.7,
-    onLine: false,
-    onLineLocked: false,
-    shape: 'x' as const,
-  }));
-
-  // The outside men on the line are ends, whatever the count is.
-  if (onBall.length > 1) {
-    onBall[0].label = 'E';
-    onBall[onBall.length - 1].label = 'E';
-  }
-
-  return [
-    ...onBall,
-    ...off.map((o) => ({
-      id: id('d'),
-      label: o.label,
-      side: 'defense' as const,
-      x: o.x,
-      y: o.y,
-      onLine: false,
-      onLineLocked: false,
-      shape: 'triangle' as const,
-    })),
-  ];
+  return front421();
 }
 
 /** Five across and two behind: the base front for most 7-man youth teams. */
@@ -175,7 +74,7 @@ const FORMATION_KEY = 'chalk.formations.v1';
  * is showing, and saving a front had to go somewhere that backup already
  * carries.
  */
-export function builtInFormations(): Formation[] {
+export function classicFormations(): Formation[] {
   return [
     { id: 'builtin-balanced', name: 'Balanced', side: 'offense', players: defaultOffense(), builtIn: true },
     { id: 'builtin-5-2', name: '5-2', side: 'defense', players: front52(), builtIn: true },
@@ -183,6 +82,29 @@ export function builtInFormations(): Formation[] {
     { id: 'builtin-3-3-1', name: '3-3-1', side: 'defense', players: front331(), builtIn: true },
     { id: 'builtin-6-1', name: '6-1', side: 'defense', players: front61(), builtIn: true },
   ];
+}
+
+/**
+ * Every built-in set, for every kind of football.
+ *
+ * One list, told apart by `variant` the way the two units are told apart by
+ * `side`. A formation with no variant is a seven-man one, which is every
+ * formation saved before there was any other kind.
+ */
+export function builtInFormations(): Formation[] {
+  return [...classicFormations(), ...OTHER_VARIANTS.flatMap((v) => v.formations())];
+}
+
+/** The formations that belong on a play of this kind. */
+export function formationsFor(all: Formation[], variant?: string): Formation[] {
+  const key = variant && variant !== 'seven' ? variant : undefined;
+  return all.filter((f) => f.variant === key);
+}
+
+/** The built-in base front of a kind of football: what a new defense opens in. */
+export function baseFrontId(variant?: string): string {
+  const v = OTHER_VARIANTS.find((o) => o.id === variant);
+  return v?.formations().find((f) => f.side === 'defense')?.id ?? 'builtin-5-2';
 }
 
 export function readFormations(): Formation[] {
@@ -219,16 +141,26 @@ const DEF_FOUNDATION_KEY = 'chalk.foundation.def.v1';
  * rather than in the playbook document, because it describes this team's base
  * rather than any one play, and a play already keeps its own players.
  */
-export function readFoundationId(side: Side = 'offense'): string | null {
+/*
+ * Each kind of football stars its own. A starred seven-man set is seven men,
+ * and opening an eleven-man play in it would be a play four short — so the key
+ * carries the variant, and the seven-man key is the one it has always been.
+ */
+function foundationKey(side: Side, variant?: string): string {
+  const base = side === 'defense' ? DEF_FOUNDATION_KEY : FOUNDATION_KEY;
+  return variant && variant !== 'seven' ? `${base}.${variant}` : base;
+}
+
+export function readFoundationId(side: Side = 'offense', variant?: string): string | null {
   try {
-    return localStorage.getItem(side === 'defense' ? DEF_FOUNDATION_KEY : FOUNDATION_KEY);
+    return localStorage.getItem(foundationKey(side, variant));
   } catch {
     return null;
   }
 }
 
-export function writeFoundationId(id: string | null, side: Side = 'offense'): void {
-  const key = side === 'defense' ? DEF_FOUNDATION_KEY : FOUNDATION_KEY;
+export function writeFoundationId(id: string | null, side: Side = 'offense', variant?: string): void {
+  const key = foundationKey(side, variant);
   try {
     if (id) localStorage.setItem(key, id);
     else localStorage.removeItem(key);
@@ -241,19 +173,23 @@ export function writeFoundationId(id: string | null, side: Side = 'offense'): vo
  * The offense a new play starts from. Falls back to the built-in set whenever
  * no foundation is set, or when the one that was set has since been deleted.
  */
-export function foundationOffense(): PlayerSlot[] {
-  return foundationFor('offense');
+export function foundationOffense(variant?: string): PlayerSlot[] {
+  return foundationFor('offense', variant);
 }
 
 /** The front a new defensive play starts from, on the same terms. */
-export function foundationDefense(): PlayerSlot[] {
-  return foundationFor('defense');
+export function foundationDefense(variant?: string): PlayerSlot[] {
+  return foundationFor('defense', variant);
 }
 
-function foundationFor(side: Side): PlayerSlot[] {
-  const fallback = () => (side === 'defense' ? front52() : defaultOffense());
-  const id = readFoundationId(side);
-  if (!id) return fallback();
-  const found = readFormations().find((f) => f.id === id && f.side === side);
-  return found ? structuredClone(found.players) : fallback();
+function foundationFor(side: Side, variant?: string): PlayerSlot[] {
+  const all = formationsFor(readFormations(), variant);
+  const id = readFoundationId(side, variant);
+  const found = id ? all.find((f) => f.id === id && f.side === side) : undefined;
+  if (found) return structuredClone(found.players);
+  const other = OTHER_VARIANTS.find((o) => o.id === variant);
+  if (!other) return side === 'defense' ? front52() : defaultOffense();
+  // Built fresh rather than cloned, so the men get ids of their own.
+  const base = other.formations().find((f) => f.side === side);
+  return base ? base.players : [];
 }

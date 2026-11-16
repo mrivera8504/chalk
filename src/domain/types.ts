@@ -204,6 +204,11 @@ export interface Formation {
   side: Side;
   players: PlayerSlot[];
   builtIn: boolean;
+  /**
+   * The kind of football it is a set for. Absent means seven-man, which is
+   * every formation saved before there was another kind.
+   */
+  variant?: string;
 }
 
 /**
@@ -319,6 +324,12 @@ export interface Book {
   order: number;
   updatedAt: number;
   deletedAt?: number;
+  /**
+   * The kind of football its new plays are: `flag5`, `eleven`. Absent means
+   * seven-man. A play carries its own, so changing this never changes a play
+   * that is already drawn.
+   */
+  variant?: string;
 }
 
 /** The playbook every play is in unless it says otherwise. */
@@ -392,6 +403,14 @@ export interface Play {
    * the picker offers, and which rules the namer runs.
    */
   unit?: Side;
+  /**
+   * The kind of football this play is: how many are on the field and what the
+   * line owes. Written at creation like the unit, and for the same reason —
+   * the men on the board were set out for one of them. Absent means seven-man,
+   * held to the league rules in Settings, which is every play drawn before
+   * there was another kind.
+   */
+  variant?: string;
   /** '26 Sweep', computed. Only a suggestion; name always wins if set. */
   suggestedName?: string;
   backNumber?: number;

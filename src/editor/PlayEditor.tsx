@@ -9,7 +9,7 @@ import {
 import { describeAssignment } from '../domain/presets/blocks';
 import { refreshPaths } from '../domain/regenerate';
 import { computeGaps } from '../domain/gaps';
-import { defaultDefense } from '../domain/presets/formations';
+import { rulesFor, variantKey, variantOf } from '../sports/football';
 import {
   defensePresetById,
   type DefenseContext,
@@ -65,6 +65,7 @@ import {
 import {
   foundationDefense,
   foundationOffense,
+  formationsFor,
   readFormations,
   readFoundationId,
   writeFormations,
@@ -111,14 +112,14 @@ import {
  * back to the foundation rather than to the built-in set, so it means "start
  * this play over" rather than "throw away how this team lines up".
  */
-function initialPlayers(unit: Side = 'offense'): PlayerSlot[] {
+function initialPlayers(unit: Side = 'offense', variant?: string): PlayerSlot[] {
   const settings = getSettings();
   // A defensive play starts as a front with a look to line up against: gaps are
   // computed from whoever is on the offensive line, so a defense with nobody
   // across from it has no gaps, no blitz aiming points and nothing to cover.
   return unit === 'defense'
-    ? applyOnLine([...foundationOffense(), ...foundationDefense()], settings)
-    : applyOnLine(foundationOffense(), settings);
+    ? applyOnLine([...foundationOffense(variant), ...foundationDefense(variant)], settings)
+    : applyOnLine(foundationOffense(variant), settings);
 }
 
 interface EditorProps {
@@ -217,10 +218,19 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * the tools do next time the coach opens a play.
    */
   useBackLayer(Boolean(picker), () => setPicker(null));
-  const [formations, setFormations] = useState<Formation[]>(readFormations);
+  /*
+   * Every saved set, of every kind of football: the list is written back
+   * whole. `formations` is the part of it this play can line up in.
+   */
+  const [allFormations, setFormations] = useState<Formation[]>(readFormations);
+  const formations = useMemo(
+    () => formationsFor(allFormations, play.variant),
+    [allFormations, play.variant],
+  );
+  const kind = useMemo(() => variantOf(play.variant), [play.variant]);
   /* The starred set for this unit. The two sides star independently. */
   const [foundationId, setFoundationId] = useState<string | null>(() =>
-    readFoundationId(play.unit ?? 'offense'),
+    readFoundationId(play.unit ?? 'offense', play.variant),
   );
   const [customRoutes, setCustomRoutes] = useState<CustomRoute[]>(readCustomRoutes);
   /** The team sheet, read once. Edited on the playbook screen, never here. */
@@ -380,14 +390,19 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
   // settings belongs in both: the rules are live now, and changing which way
   // the even holes run has to renumber the board without touching a player.
-  const holes = useMemo(() => computeHoles(players, settings), [players, settings]);
+  /*
+   * The rules this play is held to: the coach's own for seven-man, the
+   * variant's two numbers for every other kind.
+   */
+  const rules = useMemo(() => rulesFor(play.variant, settings), [play.variant, settings]);
+  const holes = useMemo(() => computeHoles(players, rules), [players, rules]);
   /*
    * The gap map, the defensive twin of the holes and computed from exactly the
    * same men. Not stored, for the same reason: a blitz aimed at the B gap has
    * to find the B gap that exists now, after the tight end moved.
    */
   const gaps = useMemo(() => computeGaps(players), [players]);
-  const issues = useMemo(() => checkFormation(players, settings), [players, settings]);
+  const issues = useMemo(() => checkFormation(players, rules), [players, rules]);
   /* Derived, never stored: the cone re-anchors itself when the formation does. */
   const qb = useMemo(() => quarterback(players), [players]);
   /** What a defensive concept is a function of, beside the man himself. */
@@ -622,14 +637,14 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
      */
     const needsFront = isPairTool(next);
     if (needsFront && !defenseExists) {
-      setPlayers((prev) => applyOnLine([...prev, ...defaultDefense()], settings));
+      setPlayers((prev) => applyOnLine([...prev, ...foundationDefense(play.variant)], settings));
     }
     if (needsFront) setShowDefense(true);
   }
 
   function handleDefense() {
     if (!defenseExists) {
-      setPlayers((prev) => applyOnLine([...prev, ...defaultDefense()], settings));
+      setPlayers((prev) => applyOnLine([...prev, ...foundationDefense(play.variant)], settings));
       setShowDefense(true);
       return;
     }
@@ -1153,8 +1168,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     const label = await askText(unit === 'defense' ? 'Name this front' : 'Name this formation', {
       body:
         unit === 'defense'
-          ? 'Saves where these seven are standing, to drop onto any play.'
-          : 'Saves where these seven are standing, to drop onto any play.',
+          ? 'Saves where this front is standing, to drop onto any play.'
+          : 'Saves where this offense is standing, to drop onto any play.',
       placeholder: unit === 'defense' ? '5-2 Tight' : 'Trips right',
       label: 'Name',
     });
@@ -1165,14 +1180,15 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       side: unit,
       players: structuredClone(players.filter((p) => p.side === unit)),
       builtIn: false,
+      ...(variantKey(play.variant) ? { variant: play.variant } : {}),
     };
-    const all = [...formations, next];
+    const all = [...allFormations, next];
     setFormations(all);
     writeFormations(all);
   }
 
   function deleteFormation(id: string) {
-    const all = formations.filter((f) => f.id !== id);
+    const all = allFormations.filter((f) => f.id !== id);
     setFormations(all);
     writeFormations(all);
     // A foundation pointing at a formation that no longer exists would silently
@@ -1182,7 +1198,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
   function setFoundation(id: string | null) {
     setFoundationId(id);
-    writeFoundationId(id, unit);
+    writeFoundationId(id, unit, play.variant);
   }
 
   /*
@@ -1427,7 +1443,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     if (!ok) return;
     dropCarried('reset');
     remember();
-    setPlayers(initialPlayers(unit));
+    setPlayers(initialPlayers(unit, play.variant));
     setAssignments([]);
     setAnnotations([]);
     setBallCarrierId(null);
@@ -1516,7 +1532,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         />
         <LegalityBadge
           onLine={onLine}
-          minOnLine={settings.minOnLine}
+          minOnLine={rules.minOnLine}
           issues={issues}
           unit={unit}
           defenders={defense.length}
@@ -1617,6 +1633,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               selectedPlayer.side === 'defense'
                 ? {
                     onPick: applyDefensePreset,
+                    blocking: kind.blocking,
                     onZone: applyZonePreset,
                     hasZone: zones.some((z) => z.playerId === selectedPlayer.id),
                     onToggleZone: () => toggleZone(selectedPlayer),
@@ -1774,7 +1791,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               */}
             <section className="tool-group">
               <h4>Mode</h4>
-              <BlockTool tool={tool} unit={unit} onTool={handleTool} />
+              <BlockTool tool={tool} unit={unit} blocking={kind.blocking} onTool={handleTool} />
             </section>
 
             {/*

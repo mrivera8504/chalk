@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { answerDialog, currentDialog, subscribeDialog } from './dialog';
-import { useBackLayer } from './backstack';
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { answerDialog, currentDialog, subscribeDialog } from "./dialog";
+import { useBackLayer } from "./backstack";
 
 /**
  * The one dialog, mounted once at the root.
@@ -15,15 +15,19 @@ import { useBackLayer } from './backstack';
  * pen until it was set.
  */
 export function DialogHost() {
-  const request = useSyncExternalStore(subscribeDialog, currentDialog, () => null);
-  const [text, setText] = useState('');
+  const request = useSyncExternalStore(
+    subscribeDialog,
+    currentDialog,
+    () => null,
+  );
+  const [text, setText] = useState("");
   const field = useRef<HTMLInputElement>(null);
 
   // Each question starts from whatever it was given, and the field takes the
   // keyboard so a rename is one gesture rather than a tap and then a tap.
   useEffect(() => {
     if (!request) return;
-    setText(request.input?.value ?? '');
+    setText(request.input?.value ?? "");
     if (request.input) {
       const id = window.setTimeout(() => {
         field.current?.focus();
@@ -42,20 +46,20 @@ export function DialogHost() {
   useEffect(() => {
     if (!request) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.preventDefault();
         answerDialog(null);
       }
     }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [request]);
 
   if (!request) return null;
 
   const confirm = () => {
     if (!request.input) {
-      answerDialog('');
+      answerDialog("");
       return;
     }
     const value = text.trim();
@@ -86,7 +90,7 @@ export function DialogHost() {
             spellCheck={false}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === "Enter") {
                 e.preventDefault();
                 confirm();
               }
@@ -94,17 +98,34 @@ export function DialogHost() {
           />
         )}
 
+        {request.choices && (
+          <div className="dialog-choices">
+            {request.choices.map((c) => (
+              <button
+                key={c.id}
+                aria-pressed={Boolean(c.current)}
+                onClick={() => answerDialog(c.id)}
+              >
+                <strong>{c.label}</strong>
+                {c.sub && <span>{c.sub}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="dialog-buttons">
           <button className="quiet" onClick={() => answerDialog(null)}>
             {request.cancelLabel}
           </button>
-          <button
-            className={request.danger ? 'danger' : 'primary'}
-            disabled={Boolean(request.input) && !text.trim()}
-            onClick={confirm}
-          >
-            {request.confirmLabel}
-          </button>
+          {!request.choices && (
+            <button
+              className={request.danger ? "danger" : "primary"}
+              disabled={Boolean(request.input) && !text.trim()}
+              onClick={confirm}
+            >
+              {request.confirmLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>
