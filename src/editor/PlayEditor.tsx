@@ -253,7 +253,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   const hoops = ground !== 'field';
   /** Which part of a pitch this play is about; undefined is the whole pitch. */
   const [pitchView, setPitchView] = useState<Play['pitchView']>(() => play.pitchView);
-  const view = viewFor(play.variant, pitchView);
+  /** Half court, or the whole of it. */
+  const [courtView, setCourtView] = useState<Play['courtView']>(() => play.courtView);
+  const view = viewFor(play.variant, pitchView, courtView);
   /*
    * The whole of what the play is drawn on. The part of a pitch only says
    * where the board is centered: a phone held upright is limited by its width,
@@ -261,7 +263,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * pitch shows above and below and has to be grass a man can be dragged onto.
    * Turned sideways, the part fills the height and the board is magnified.
    */
-  const fullView = viewFor(play.variant);
+  const fullView = viewFor(play.variant, undefined, courtView);
   /*
    * And held to the top of the board rather than its middle, so the goal is
    * at the top of the screen with the rest of the pitch running down below
@@ -616,6 +618,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
        */
       surface,
       pitchView,
+      courtView,
       notes,
       coachingPoint,
       tags,
@@ -637,6 +640,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     showDefense,
     surface,
     pitchView,
+    courtView,
     notes,
     coachingPoint,
     tags,
@@ -730,9 +734,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   /**
    * Put a step on the board.
    *
-   * Undo starts over. A step back is a step back on the board in front of
-   * you, and a stack that reached across steps would put one step's men onto
-   * another's.
+   * Undo carries on across it. Every snapshot remembers which step it was
+   * taken on and every step as it stood, so a step back puts that step on the
+   * board before it puts its men back — never one step's men on another's.
    */
   function showStep(all: Frame[], index: number) {
     dropCarried('step');
@@ -745,8 +749,6 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     setBallCarrierId(f.ballCarrierId ?? null);
     setSel(null);
     setPending(null);
-    undo.current = new UndoStack<Snapshot>();
-    syncUndo();
   }
 
   /** The middle of what is on screen, where a new thing is put down. */
@@ -846,6 +848,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
   /** A new step after this one: everybody where their line left them. */
   function addStep() {
+    remember();
     const all = [...allSteps.slice(0, step + 1), nextFrame(allSteps[step]), ...allSteps.slice(step + 1)];
     showStep(all, step + 1);
   }
@@ -858,6 +861,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       danger: true,
     });
     if (!ok) return;
+    remember();
     const all = allSteps.filter((_, i) => i !== step);
     showStep(all, Math.min(step, all.length - 1));
   }
@@ -891,11 +895,17 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       focuses,
       zones,
       marks,
+      step,
+      steps: allSteps,
     });
     syncUndo();
   }
 
   function restore(snap: Snapshot) {
+    if (snap.steps) {
+      setSteps(snap.steps);
+      setStep(snap.step ?? 0);
+    }
     setPlayers(snap.players);
     setAssignments(snap.assignments);
     setAnnotations(snap.annotations);
@@ -920,6 +930,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       focuses,
       zones,
       marks,
+      step,
+      steps: allSteps,
     });
     if (prev) restore(prev);
     else syncUndo();
@@ -936,6 +948,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       focuses,
       zones,
       marks,
+      step,
+      steps: allSteps,
     });
     if (next) restore(next);
     else syncUndo();
@@ -1688,6 +1702,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
          is the board the coach is looking at and not the one before it. */
       surface,
       pitchView,
+      courtView,
     };
   }
 
@@ -2099,7 +2114,12 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
            * from the other direction. One play or the whole book, the options
            * are the options.
            */
-          <PrintPanel plays={[livePlay()]} sections={[]} roster={roster} />
+          <PrintPanel
+            plays={[livePlay()]}
+            whole={allSteps.length > 1 ? [withFrames(livePlay(), allSteps)] : undefined}
+            sections={[]}
+            roster={roster}
+          />
         ) : picker === 'notes' ? (
           <NotesPanel
             coachingPoint={coachingPoint}
@@ -2359,6 +2379,28 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                       aria-pressed={pitchView === v}
                       onClick={() => {
                         setPitchView(v);
+                        resetView();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* A press, a break, an inbound under the far basket: the whole floor. */}
+              {ground === 'court' && (
+                <div className="picker-row seg" role="group" aria-label="Court">
+                  {(
+                    [
+                      [undefined, 'Half court'],
+                      ['full', 'Full court'],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <button
+                      key={label}
+                      aria-pressed={courtView === v}
+                      onClick={() => {
+                        setCourtView(v);
                         resetView();
                       }}
                     >

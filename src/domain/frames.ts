@@ -75,3 +75,29 @@ export function nextFrame(frame: Frame): Frame {
     ...(ball && players.some((p) => p.id === ball) ? { ballCarrierId: ball } : {}),
   };
 }
+
+/**
+ * A play with steps as one play per step, for a sheet that prints them all.
+ *
+ * Each is the play standing as that step stands — its men, its lines, its ink,
+ * who has the ball — with no steps of its own, named after the play and which
+ * step it is. Its id carries the step so a page can tell the boards apart; it
+ * is never saved. A play with one step comes back as itself.
+ */
+export function expandSteps(plays: Play[]): Play[] {
+  return plays.flatMap((p) => {
+    const steps = framesOf(p);
+    if (steps.length < 2) return [p];
+    const name = p.name || p.suggestedName || 'Untitled';
+    return steps.map((f, i) => ({
+      ...p,
+      id: `${p.id}#${i + 1}`,
+      name: `${name} · ${i + 1}/${steps.length}`,
+      players: f.players,
+      assignments: f.assignments,
+      annotations: f.annotations,
+      ballCarrierId: f.ballCarrierId,
+      frames: undefined,
+    }));
+  });
+}

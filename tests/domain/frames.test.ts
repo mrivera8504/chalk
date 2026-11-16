@@ -136,3 +136,21 @@ describe('playback', () => {
     expect(poseAt(frames, -5).step).toBe(0);
   });
 });
+
+describe('every step on a sheet', () => {
+  it('is one board per step, in order, named for the play and the step', async () => {
+    const { expandSteps } = await import('../../src/domain/frames');
+    const base = fixture({ id: 'p', name: 'Horns' });
+    const two = withFrames(base, [framesOf(base)[0], nextFrame(framesOf(base)[0])]);
+    const out = expandSteps([two]);
+    expect(out.map((p) => p.name)).toEqual(['Horns · 1/2', 'Horns · 2/2']);
+    expect(out.map((p) => p.id)).toEqual(['p#1', 'p#2']);
+    expect(out.every((p) => p.frames === undefined)).toBe(true);
+  });
+
+  it('leaves a play with one step as it is', async () => {
+    const { expandSteps } = await import('../../src/domain/frames');
+    const one = fixture({ id: 'q' });
+    expect(expandSteps([one])).toEqual([one]);
+  });
+});

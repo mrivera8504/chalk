@@ -38,3 +38,18 @@ export const COURT_VIEW = {
   downfield: 1.3,
   behind: COURT.length + 1.3,
 };
+
+/**
+ * The whole court: both baskets, the far one at the bottom. A play run in the
+ * half court stays a half court, which is every play drawn before this; a
+ * press, a fast break or an inbound under the far basket is drawn on this.
+ */
+export const COURT_FULL_VIEW = {
+  halfWidth: COURT_VIEW.halfWidth,
+  downfield: COURT_VIEW.downfield,
+  behind: COURT.length * 2 + 1.3,
+};
+
+export function courtWindow(which: 'full' | undefined): typeof COURT_VIEW {
+  return which === 'full' ? COURT_FULL_VIEW : COURT_VIEW;
+}

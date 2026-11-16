@@ -1,3 +1,4 @@
+import type { Frame } from '../domain/frames';
 import type { BoardMark } from '../domain/marks';
 import { PLAYER_R, type Assignment, type Focus, type PathPoint, type PlayerSlot, type Vision, type Zone } from '../domain/types';
 import { VIEW, clamp, snap, snapDepth, type Yards } from '../render/geometry';
@@ -112,6 +113,13 @@ export interface Snapshot {
   focuses: Focus[];
   zones: Zone[];
   marks: BoardMark[];
+  /**
+   * Which step was on the board, and every step as it stood. So undo reaches
+   * across steps: stepping back over an edit made on step 2 puts step 2 back
+   * on the board first, and adding or removing a step is one step back too.
+   */
+  step?: number;
+  steps?: Frame[];
 }
 
 /** A drag that just ended, kept for a moment in case the pen only bounced. */

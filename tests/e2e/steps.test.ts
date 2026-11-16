@@ -267,3 +267,38 @@ describe('drills and equipment', () => {
     expect(await page.locator('.stage > svg .marks text').innerHTML()).toBe('Start here');
   });
 });
+
+describe('undo across steps', () => {
+  it('steps back over an edit on step 1 while step 2 is showing, putting step 1 on the board', async () => {
+    await football();
+    const before = await saved();
+    await penTap(page, man(before, 'WB'));
+    await settle();
+    await pick('Slant');
+    await press('Add a step');
+    expect(await page.getByRole('button', { name: 'Step 2' }).getAttribute('aria-pressed')).toBe('true');
+
+    // One back: the step that was added goes.
+    await press('Step back');
+    expect(await chips()).toBe(1);
+    // Two back: the slant on step 1 goes too.
+    await press('Step back');
+    expect((await saved()).assignments).toEqual([]);
+    // And forward again, both of them.
+    await press('Step forward');
+    await press('Step forward');
+    expect(await chips()).toBe(2);
+    expect((await saved()).assignments.length).toBe(1);
+  });
+
+  it('brings a removed step back', async () => {
+    await football();
+    await press('Add a step');
+    await press('Step 2');
+    await page.getByRole('dialog').getByRole('button', { name: 'Remove step' }).click();
+    await settle();
+    expect(await chips()).toBe(1);
+    await press('Step back');
+    expect(await chips()).toBe(2);
+  });
+});

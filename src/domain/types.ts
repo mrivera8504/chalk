@@ -532,6 +532,8 @@ export interface Play {
    * the size it was drawn.
    */
   pitchView?: 'half' | 'third';
+  /** A basketball play run on the whole court. Absent is the half court. */
+  courtView?: 'full';
   players: PlayerSlot[];
   assignments: Assignment[];
   /**

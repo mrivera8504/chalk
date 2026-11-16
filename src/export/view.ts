@@ -1,7 +1,7 @@
 import { refreshPaths } from '../domain/regenerate';
 import type { Play } from '../domain/types';
 import { VIEW } from '../render/geometry';
-import { isFootball, isHoops, surfaceOf, viewFor, viewOf } from '../sports';
+import { isFootball, isHoops, surfaceOf, viewFor } from '../sports';
 
 
 /**
@@ -37,7 +37,7 @@ export const DEFAULT_VIEW: View = {
 /** The whole board a play is drawn on: the field's window, or the court's. */
 export function boardView(play: Play): View {
   if (isFootball(play.variant)) return DEFAULT_VIEW;
-  const c = viewFor(play.variant, play.pitchView);
+  const c = viewFor(play.variant, play.pitchView, play.courtView);
   return { x: -c.halfWidth, y: -c.downfield, w: c.halfWidth * 2, h: c.downfield + c.behind };
 }
 
@@ -192,7 +192,8 @@ export function viewForPlays(plays: Play[], aspect: number): View {
   // against — which side of the arc, how far off the lane — and a window
   // cropped to the players would cut the basket off a play run at half court.
   if (plays.length && plays.every((p) => isHoops(p.variant))) {
-    const c = viewOf(plays[0].variant);
+    // One window a page: the whole court if any play on it needs the whole.
+    const c = viewFor(plays[0].variant, undefined, plays.some((p) => p.courtView === 'full') ? 'full' : undefined);
     return { x: -c.halfWidth, y: -c.downfield, w: c.halfWidth * 2, h: c.downfield + c.behind };
   }
   // Plays the coach set to one part of a pitch print that part, as drawn, so

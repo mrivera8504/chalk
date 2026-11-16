@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { expandSteps } from '../domain/frames';
 import type { RosterEntry } from '../domain/roster';
 import type { Play, Section } from '../domain/types';
 import {
@@ -15,6 +16,11 @@ import { download, playToSvg, sheetName } from './render';
 import { contentAspect, viewForPlays } from './view';
 
 interface Props {
+  /**
+   * The same plays with every step, where they differ from `plays`: the editor
+   * prints the step on screen, and needs the whole play only for Every step.
+   */
+  whole?: Play[];
   plays: Play[];
   sections: Section[];
   roster: RosterEntry[];
@@ -205,9 +211,14 @@ function PagePreview({
  * numbers in it, so this is those numbers, with the sheet shown underneath
  * while they are changed.
  */
-export function PrintPanel({ plays, sections, roster, onClose }: Props) {
+export function PrintPanel({ plays, whole, sections, roster, onClose }: Props) {
   const [opts, setOpts] = useState<PrintOptions>(DEFAULT_PRINT);
   const [byFolder, setByFolder] = useState(true);
+  /** Every step of a play with steps, one to a cell, in order. */
+  const [everyStep, setEveryStep] = useState(false);
+  const stepped = whole ?? plays;
+  const hasSteps = stepped.some((p) => p.frames?.length);
+  const source = useMemo(() => (everyStep ? expandSteps(stepped) : plays), [plays, stepped, everyStep]);
   const [page, setPage] = useState(0);
   const [full, setFull] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -223,15 +234,15 @@ export function PrintPanel({ plays, sections, roster, onClose }: Props) {
     const order = [...sections].sort((a, b) => a.order - b.order);
     const name = new Map(order.map((s) => [s.id, s.name]));
     const folder = (p: Play) => name.get(p.sectionId) ?? 'Unfiled';
-    if (!byFolder) return { ordered: plays, folderOf: undefined };
+    if (!byFolder) return { ordered: source, folderOf: undefined };
     return {
       ordered: [
-        ...order.flatMap((s) => plays.filter((p) => p.sectionId === s.id)),
-        ...plays.filter((p) => !name.has(p.sectionId)),
+        ...order.flatMap((s) => source.filter((p) => p.sectionId === s.id)),
+        ...source.filter((p) => !name.has(p.sectionId)),
       ],
       folderOf: folder,
     };
-  }, [plays, sections, byFolder]);
+  }, [source, sections, byFolder]);
 
   /*
    * The folder's name, when every play on the sheet came out of one.
@@ -393,6 +404,11 @@ export function PrintPanel({ plays, sections, roster, onClose }: Props) {
           {toggle(!!opts.showHoles, 'Holes', () => set('showHoles', !opts.showHoles))}
           {toggle(!!opts.showGaps, 'Gaps', () => set('showGaps', !opts.showGaps))}
           {toggle(opts.showNotes, 'Notes', () => set('showNotes', !opts.showNotes))}
+          {hasSteps &&
+            toggle(everyStep, 'Every step', () => {
+              setEveryStep(!everyStep);
+              setPage(0);
+            })}
           {many &&
             toggle(byFolder, 'Folder order', () => {
               setByFolder(!byFolder);
