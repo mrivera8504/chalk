@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { applyOnLine } from '../domain/legality';
-import { withSuggestion } from '../domain/naming';
 import {
   baseFrontId,
   foundationDefense,
@@ -8,22 +7,21 @@ import {
   readFoundationId,
 } from '../domain/presets/formations';
 import { surfaceOf } from '../sports';
-import { rulesFor, variantKey } from '../sports/football';
+import { variantKey } from '../sports/football';
 import {
   MAIN_BOOK,
-  MAIN_BOOK_NAME,
   UNFILED_SECTION,
   bookOf,
   liveBooks,
   type Book,
   type Play,
-  type PlayStatus,
   type Section,
   type Side,
 } from '../domain/types';
 import { getSettings } from './settings';
 import { makeBackup, readBackup } from './backup';
 import * as cloud2 from './cloud2';
+import { newId, sameBook, useBookEdits } from './bookEdits';
 import { localBook, overflowing, persist, recover } from './deep';
 import {
   EMPTY,
@@ -124,49 +122,7 @@ function readBackupAt(): number | null {
   }
 }
 
-let counter = 0;
-export const newId = (p: string) => `${p}${Date.now().toString(36)}${(counter++).toString(36)}`;
-
-/**
- * Live first, thrown-away last.
- *
- * Reordering is done by index against the list the coach can see, so the two
- * have to line up: keeping the trash at the end means a live index is an array
- * index and `movePlay` needs to know nothing about any of this.
- */
-const order = (list: Play[]): Play[] => [
-  ...list.filter((p) => !p.deletedAt),
-  ...list.filter((p) => p.deletedAt),
-];
-
-/**
- * Do these two books say the same thing?
- *
- * Every save stamps `updatedAt`, so an id, that stamp and whether the play is
- * in the trash is the whole of what a merge can have changed about it — no need
- * to walk a hundred plays' worth of paths and ink to find out. Order counts,
- * because the order of the array is the order of the cards.
- */
-function sameBook(a: Playbook, b: Playbook): boolean {
-  if (a.plays.length !== b.plays.length || a.sections.length !== b.sections.length) return false;
-  for (let i = 0; i < a.plays.length; i++) {
-    const x = a.plays[i];
-    const y = b.plays[i];
-    if (x.id !== y.id || x.updatedAt !== y.updatedAt || x.deletedAt !== y.deletedAt) return false;
-  }
-  for (let i = 0; i < a.sections.length; i++) {
-    const x = a.sections[i];
-    const y = b.sections[i];
-    if (x.id !== y.id || x.name !== y.name || x.order !== y.order) return false;
-  }
-  const ab = a.books ?? [];
-  const bb = b.books ?? [];
-  if (ab.length !== bb.length) return false;
-  for (let i = 0; i < ab.length; i++) {
-    if (ab[i].id !== bb[i].id || ab[i].updatedAt !== bb[i].updatedAt) return false;
-  }
-  return true;
-}
+export { newId } from './bookEdits';
 
 /**
  * A new play, on one side of the ball or the other.
@@ -621,59 +577,17 @@ export function usePlaybook() {
     return sent.state;
   }, []);
 
-  const savePlay = useCallback((play: Play) => {
-    const stamped = withSuggestion({ ...play, updatedAt: Date.now() }, rulesFor(play.variant, getSettings()));
-    setPlays((prev) => {
-      const i = prev.findIndex((p) => p.id === stamped.id);
-      if (i === -1) return [...prev, stamped];
-      const next = prev.slice();
-      next[i] = stamped;
-      return next;
-    });
+  const selectBook = useCallback((id: string) => {
+    setWantedBook(id);
+    try {
+      localStorage.setItem(CURRENT_BOOK_KEY, id);
+    } catch {
+      /* storage blocked; the session keeps working */
+    }
   }, []);
 
-  /**
-   * Throw a play away without losing it.
-   *
-   * It leaves every list immediately, which is the whole of what a delete has
-   * to feel like, and it is still in the book underneath until the trash is
-   * emptied on purpose. The one loss this app could cause with nobody's bug
-   * involved was a mis-tap on the wrong card.
-   */
-  const deletePlay = useCallback((id: string) => {
-    setPlays((prev) =>
-      order(
-        prev.map((p) =>
-          // Stamped, because a delete is an edit. Two copies of a play merge by
-          // the newer stamp, and a delete that left the stamp alone tied with
-          // the live copy on every other device and lost.
-          p.id === id ? { ...p, deletedAt: Date.now(), updatedAt: Date.now() } : p,
-        ),
-      ),
-    );
-  }, []);
+  const edits = useBookEdits({ setPlays, setSections, setBooks, books, bookId, selectBook });
 
-  const restorePlay = useCallback((id: string) => {
-    setPlays((prev) =>
-      order(
-        prev.map((p) => {
-          if (p.id !== id) return p;
-          const { deletedAt: _gone, ...live } = p;
-          return { ...live, updatedAt: Date.now() };
-        }),
-      ),
-    );
-  }, []);
-
-  /**
-   * Empty the trash for good.
-   *
-   * Not swept on a timer. A sweep large enough to matter is indistinguishable
-   * from the bug the shrink guard exists to catch, so it would either trip the
-   * guard and jam the sync or have to be exempted from it — and an exemption
-   * that deletes plays on a schedule is exactly the thing not to build. The
-   * coach says when.
-   */
   const emptyTrash = useCallback(() => {
     // This playbook's trash, which is the one on screen being emptied.
     const going = allPlays.filter((p) => p.deletedAt && bookOf(p, books) === bookId);
@@ -690,209 +604,6 @@ export function usePlaybook() {
       void cloud2.purge(uid, going).then((state) => state !== 'synced' && setSync(state));
     }
   }, [allPlays, books, bookId, uid]);
-
-  const duplicatePlay = useCallback((id: string) => {
-    setPlays((prev) => {
-      const src = prev.find((p) => p.id === id);
-      if (!src) return prev;
-      const now = Date.now();
-      const copy: Play = {
-        ...structuredClone(src),
-        id: newId('p'),
-        name: src.name ? `${src.name} copy` : '',
-        createdAt: now,
-        updatedAt: now,
-      };
-      const at = prev.findIndex((p) => p.id === id);
-      return [...prev.slice(0, at + 1), copy, ...prev.slice(at + 1)];
-    });
-  }, []);
-
-  /** Move a play into a folder, or out to Unfiled. */
-  const setPlaySection = useCallback((id: string, sectionId: string) => {
-    setPlays((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, sectionId, updatedAt: Date.now() } : p)),
-    );
-  }, []);
-
-  const addSection = useCallback(
-    (name: string) => {
-      const section: Section = {
-        id: newId('s'),
-        name,
-        order: Date.now(),
-        ...(bookId === MAIN_BOOK ? {} : { bookId }),
-      };
-      setSections((prev) => [...prev, section]);
-      return section;
-    },
-    [bookId],
-  );
-
-  const renameSection = useCallback((id: string, name: string) => {
-    setSections((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
-  }, []);
-
-  const deleteSection = useCallback((id: string) => {
-    setSections((prev) => prev.filter((s) => s.id !== id));
-    setPlays((prev) =>
-      prev.map((p) => (p.sectionId === id ? { ...p, sectionId: UNFILED_SECTION } : p)),
-    );
-  }, []);
-
-  /** Drag to reorder within the flat list; sections read their own order off it. */
-  /**
-   * Put one play in front of another, or at the end of the live ones.
-   *
-   * By the play it lands before, not by a number. An index was an index into
-   * the whole book, and the screen now shows one playbook out of several, so
-   * the third card on screen is not the third play in the array.
-   */
-  const movePlay = useCallback((id: string, beforeId: string | null) => {
-    setPlays((prev) => {
-      const from = prev.findIndex((p) => p.id === id);
-      if (from === -1 || id === beforeId) return prev;
-      const next = prev.slice();
-      const [moved] = next.splice(from, 1);
-      const at = beforeId === null ? -1 : next.findIndex((p) => p.id === beforeId);
-      // No such play, or none named: the end of the live run, ahead of the trash.
-      const live = next.filter((p) => !p.deletedAt).length;
-      next.splice(at === -1 ? live : at, 0, moved);
-      return order(next);
-    });
-  }, []);
-
-  const setPlayStatus = useCallback((id: string, status: PlayStatus | undefined) => {
-    setPlays((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        const { status: _was, ...rest } = p;
-        return { ...rest, ...(status ? { status } : {}), updatedAt: Date.now() };
-      }),
-    );
-  }, []);
-
-  const selectBook = useCallback((id: string) => {
-    setWantedBook(id);
-    try {
-      localStorage.setItem(CURRENT_BOOK_KEY, id);
-    } catch {
-      /* storage blocked; the session keeps working */
-    }
-  }, []);
-
-  const addBook = useCallback(
-    (name: string, variant?: string) => {
-      const kind = variantKey(variant);
-      const book: Book = {
-        id: newId('b'),
-        name,
-        order: Date.now(),
-        updatedAt: Date.now(),
-        ...(kind ? { variant: kind } : {}),
-      };
-      setBooks((prev) => [...prev, book]);
-      selectBook(book.id);
-      return book;
-    },
-    [selectBook],
-  );
-
-  const renameBook = useCallback((id: string, name: string) => {
-    setBooks((prev) => {
-      const now = Date.now();
-      // The main playbook is implied until something is said about it, and
-      // naming it is saying something.
-      if (!prev.some((b) => b.id === id)) {
-        return id === MAIN_BOOK ? [...prev, { id, name, order: 0, updatedAt: now }] : prev;
-      }
-      return prev.map((b) => (b.id === id ? { ...b, name, updatedAt: now } : b));
-    });
-  }, []);
-
-  /**
-   * Say what kind of football a playbook's new plays are.
-   *
-   * Only the plays made from here on: a play carries its own kind, so nothing
-   * already drawn changes how many men it is counted against.
-   */
-  const setBookVariant = useCallback((id: string, variant?: string) => {
-    const kind = variantKey(variant);
-    setBooks((prev) => {
-      const now = Date.now();
-      const set = (b: Book): Book => {
-        const { variant: _was, ...rest } = b;
-        return { ...rest, ...(kind ? { variant: kind } : {}), updatedAt: now };
-      };
-      if (!prev.some((b) => b.id === id)) {
-        // The main playbook is implied until something is said about it.
-        return id === MAIN_BOOK && kind
-          ? [...prev, set({ id, name: MAIN_BOOK_NAME, order: 0, updatedAt: now })]
-          : prev;
-      }
-      return prev.map((b) => (b.id === id ? set(b) : b));
-    });
-  }, []);
-
-  /** Remember (or forget) the link a playbook is shared at. */
-  const setBookShare = useCallback((id: string, token?: string) => {
-    setBooks((prev) => {
-      const now = Date.now();
-      const set = (b: Book): Book => {
-        const { shareToken: _was, ...rest } = b;
-        return { ...rest, ...(token ? { shareToken: token } : {}), updatedAt: now };
-      };
-      if (!prev.some((b) => b.id === id)) {
-        return id === MAIN_BOOK && token
-          ? [...prev, set({ id, name: MAIN_BOOK_NAME, order: 0, updatedAt: now })]
-          : prev;
-      }
-      return prev.map((b) => (b.id === id ? set(b) : b));
-    });
-  }, []);
-
-  /**
-   * Take a playbook away, and lose nothing that was in it.
-   *
-   * Its plays go to the trash of the playbook that is left to show — moved
-   * there, because a trash belonging to a book nobody can open is a trash
-   * nobody can empty or take a play back out of. Its folders go, as a folder's
-   * do when it is deleted. The book itself stays behind as a tombstone, so the
-   * tablet does not hand it back to the phone on the next sync.
-   *
-   * The last playbook cannot go: there has to be somewhere for a play to be.
-   */
-  const deleteBook = useCallback(
-    (id: string) => {
-      const rest = books.filter((b) => b.id !== id);
-      if (!rest.length) return false;
-      const home = rest[0].id;
-      const now = Date.now();
-      const rehome = home === MAIN_BOOK ? {} : { bookId: home };
-      setPlays((prev) =>
-        order(
-          prev.map((p) => {
-            if (bookOf(p, books) !== id) return p;
-            const { bookId: _was, ...play } = p;
-            return { ...play, ...rehome, sectionId: UNFILED_SECTION, deletedAt: p.deletedAt ?? now, updatedAt: now };
-          }),
-        ),
-      );
-      setSections((prev) => prev.filter((sec) => bookOf(sec, books) !== id));
-      setBooks((prev) => {
-        const known = prev.some((b) => b.id === id);
-        const gone: Book = {
-          ...(prev.find((b) => b.id === id) ?? { id, name: MAIN_BOOK_NAME, order: 0 }),
-          updatedAt: now,
-          deletedAt: now,
-        };
-        return known ? prev.map((b) => (b.id === id ? gone : b)) : [...prev, gone];
-      });
-      selectBook(home);
-      return true;
-    },
-    [books, selectBook],
-  );
 
   const saveNow = useCallback(async () => {
     if (timer.current) window.clearTimeout(timer.current);
@@ -976,28 +687,16 @@ export function usePlaybook() {
     books,
     bookId,
     selectBook,
-    addBook,
-    renameBook,
-    setBookVariant,
-    setBookShare,
-    deleteBook,
-    setPlayStatus,
+    ...edits,
     /** Past copies of one play. Empty until the account is on per-play documents. */
     revisions: (playId: string) =>
       uid && mode.current === 'v2' ? cloud2.listRevisions(uid, playId) : Promise.resolve([]),
     sync,
+    /** Who is signed in, for the teams this account coaches on. */
+    uid,
     lastBackupAt,
-    savePlay,
-    deletePlay,
-    restorePlay,
     emptyTrash,
-    duplicatePlay,
-    setPlaySection,
     saveNow,
-    addSection,
-    renameSection,
-    deleteSection,
-    movePlay,
     exportJson,
     importJson,
     reset: () => {

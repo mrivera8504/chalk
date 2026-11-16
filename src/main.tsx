@@ -8,6 +8,19 @@ import { installPenTaps } from './ui/penTaps';
 import { installBackGesture } from './ui/backstack';
 import { installRoute } from './ui/route';
 import { watchForUpdates } from './store/update';
+import { asInviteCode, parkInvite } from './store/teams';
+
+/*
+ * An invite to coach on somebody's team. Parked until the app has an account
+ * to join with — it lands before auth has answered — and the address goes back
+ * to the playbook, so a reload does not ask twice.
+ */
+const invited = /^\/j\/([^/]+)\/?$/.exec(location.pathname);
+if (invited) {
+  const code = asInviteCode(invited[1]);
+  if (code) parkInvite(code);
+  history.replaceState(history.state, '', '/');
+}
 
 // First line in the console on every device, so "which bundle is this one
 // running" is a glance rather than an afternoon.

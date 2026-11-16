@@ -11,11 +11,13 @@ and the new shell; the data layer) are deployed, and the `/teams` rules are
 published. Stage 3 (the sport module, and flag, 6-, 8-, 9- and 11-man beside
 7-man) and stage 4 (basketball, steps, and running a play) are deployed.
 Stage 5 (soccer, equipment and drills) is deployed. Stage 6 (share links, the
-viewer, video, Google sign-in, branded sheets) is deployed except team
-members, which are not built. Stage 7 (game day, study and quiz, practices,
-depth chart) is done in code. See *Tests*, *The editor, in pieces*, *The shell*, *Kinds of
+viewer, video, Google sign-in, branded sheets) is deployed, and its last piece —
+team members, invited by link — is done in code; it needs the new
+`firestore.rules` published before an invite can be made. Stage 7 (game day,
+study and quiz, practices, depth chart) is on `main`. See *Tests*, *The editor, in pieces*, *The shell*, *Kinds of
 football*, *Basketball, steps and playback*, *Soccer, equipment and drills* and
-*Sharing, video, Google and branded sheets* and *Coach tools* below.
+*Sharing, video, Google and branded sheets*, *Coaching on somebody else's team*
+and *Coach tools* below.
 
 Stages 1-7 done: field and players, blocking tool, route and run presets with
 formations and auto play-naming, freehand ink, a playbook that saves, and
@@ -928,9 +930,10 @@ devices migrating at once write the same documents to the same place.
 **It switches itself on, and nothing changes until the rules are published.**
 Every reconcile calls `probe()`. `denied` means the `/teams` rules are not live:
 the app stays on the single document exactly as before, and asks again next
-time. The rules to publish are in `firestore.rules`; they have **not** been run
-against a real Firestore or the emulator, only reasoned about. Publish them in
-the console, then watch the sync label on one device before trusting it.
+time. The rules to publish are in `firestore.rules`, and `npm run test:rules`
+runs them against the emulator — see *Coaching on somebody else's team* for the
+hole that found in rules which had only been reasoned about. Publish them in the
+console, then watch the sync label on one device before trusting it.
 
 **Migration copies, verifies, and marks last.** Every play goes up with its id
 and stamp untouched; the collection is read back and compared; only then is the
@@ -1200,7 +1203,7 @@ equipment that resizes or rotates.
 
 ## Sharing, video, Google and branded sheets
 
-The overhaul's stage 6, all of it but team members.
+The overhaul's stage 6. Team members are their own section below.
 
 **A share link is a frozen copy** at `/shares/{token}` (`store/share.ts`): one
 play, or the live plays of the playbook on screen. Frozen, so Tuesday night's
@@ -1250,14 +1253,72 @@ PNG on the way in, because PNG is what pdf-lib embeds unaided, and a logo that
 will not embed is dropped rather than failing the sheet. Checked by rendering a
 real two-up PDF through `pdftoppm`.
 
-**Not done: team members and roles.** It is not a screen, it is a change to
-which book the sync writes. Every cloud call in `usePlaybook` passes the uid as
-the team id, local storage holds one book stamped with one uid, and a book from
-a different owner *merges* by decision. Opening another coach's team on this
-device without per-team local storage would merge his book into this one.
-Doing it safely means a team id beside the uid through `persist`, the journal,
-`loadedFor` and `cloud2`, and the rules for `/invites` — and it should be done
-against the emulator, not reasoned about.
+## Coaching on somebody else's team
+
+The last of stage 6. A head coach sends an assistant a link; the assistant's app
+shows the head coach's playbook and edits it as the head coach would, beside
+their own and never inside it.
+
+**A joined team is a second book, kept apart all the way down.** The coach's own
+book merges whatever is on the device into whoever signs in — by decision, see
+*The playbook, and how it syncs* — so a second team pushed through the same
+storage would have been merged straight into it. `store/useTeamBook.ts` keeps a
+joined team in its own local storage key (`chalk.team.{teamId}.v1`), its own
+cloud stamps (`chalk.sync2.{uid}.team.{teamId}`) and its own choice of open
+playbook. `usePlaybook` is untouched and stays mounted, so the coach's own book
+goes on syncing while a team is on screen. `App` picks which of the two every
+screen is handed; nothing below it knows there are two. The tests in
+`tests/store/teams.test.tsx` hold that a play drawn on the team never reaches
+the coach's own storage or cloud, and the other way round.
+
+**The edits are shared, the keeping is not.** `store/bookEdits.ts` is every
+change a coach can make to a book — save, delete, folders, playbooks — lifted
+out of `usePlaybook` so both books are edited by one copy of it.
+
+What a joined team does not need: the single document, the migration, the
+shrink guard. An invite cannot be made for a book that is not on the per-play
+cloud, and there nothing leaves except by `purge`. What it keeps: local storage
+first, nothing pushed before the team has been read this session, no push from
+a pull that changed nothing, and a pull on coming back to the front. Its local
+copy is plain local storage, **without** the IndexedDB journal — a joined book
+that outgrows local storage lives in memory and the cloud until it is opened
+again with signal. A restore is refused on a team: replacing a whole book is the
+owner's call.
+
+**One role, `coach`.** Players already have share links, which need no account,
+so the only thing worth inviting somebody to is editing. An invite is
+`/invites/{code}` — 22 characters, like a share token, read by its exact id and
+never listed — naming the team, the role and a date it runs out (14 days). The
+joiner writes themselves onto the team document's `members` and `names`, and
+remembers the team at `/users/{uid}/teams/{teamId}`, under their own uid, so the
+existing rule covers it. Only the owner can take a coach off; a coach can only
+take themselves off. When the cloud refuses a member — the owner took them off —
+the app goes back to the coach's own book and says so, and keeps its copy of the
+team's on the device in case anything drawn there had not gone up.
+
+**The link** is `/j/{code}`. `main.tsx` parks the code in session storage and
+puts the address back to `/`, because the link lands before auth has answered;
+`App` asks once there is an account, and asks rather than acts, because a link in
+a group chat gets tapped by accident. An anonymous joiner is told that adding an
+email is what lets them reach the team from another device.
+
+**The rules are tested against the emulator**, `npm run test:rules`, which runs
+firebase-tools pinned through `npx` (not a dependency — it is ten thousand lines
+of lockfile on every Netlify build) and `@firebase/rules-unit-testing` 4, the
+last that takes Firebase 11. CI runs them. They found a hole on the first run:
+in rules version 2 `{document=**}` matches **zero** segments, so the nested
+"members may write anything under the team" rule also matched the team document
+itself, and any member could rewrite `members`. The nested match is
+`/{sub}/{document=**}` now. That shape was in the rules from the start; it did
+no harm only because nobody but the owner had ever been a member.
+
+**Publish `firestore.rules` before trusting any of this.** Until it is, creating
+an invite is refused and says so in words; nothing else changes.
+
+**Not done:** sharing the roster, formations and saved routes with the team —
+still device-only, for the merge-rule reason in *One cloud document per play*;
+more roles than coach; and an invite list for the owner to take one back before
+it runs out (the document can be deleted, there is just no screen for it).
 
 ## Coach tools: game day, study, practices, depth chart
 
@@ -1613,6 +1674,7 @@ in the S Pen work came from a sentence they wrote, never from a trace alone.
     npm run build                # tsc -b && vite build
     npm test                     # the unit suite, about three seconds
     npm run test:e2e             # the pen, in a real Chromium
+    npm run test:rules           # the Firestore rules, against the emulator
     npm run typecheck            # src and tests together
 
 ## Tests

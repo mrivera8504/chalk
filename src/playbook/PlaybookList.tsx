@@ -59,6 +59,9 @@ interface Props {
   onRenameBook: (id: string, name: string) => void;
   /** False when it is the last one, which cannot go. */
   onDeleteBook: (id: string) => boolean;
+  /** The team whose playbook this is, when it is not the coach's own. */
+  team?: string;
+  onOwnBook?: () => void;
 }
 
 /*
@@ -139,6 +142,8 @@ export function PlaybookList({
   onAddStarters,
   onRenameBook,
   onDeleteBook,
+  team,
+  onOwnBook,
 }: Props) {
   const [query, setQuery] = useState('');
   const [showTrash, setShowTrash] = useState(false);
@@ -426,6 +431,23 @@ export function PlaybookList({
           </button>
         )}
       </PageHead>
+
+      {/*
+        * Whose book this is, said every time it is not the coach's own — every
+        * edit made here lands in somebody else's playbook.
+        */}
+      {team && (
+        <div className="team-on">
+          <span>
+            Coaching on <b>{team}</b>
+          </span>
+          {onOwnBook && (
+            <button className="quiet" onClick={onOwnBook}>
+              Your own playbook
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Finding a play. */}
       <div className="book-find">

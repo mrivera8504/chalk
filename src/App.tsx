@@ -16,10 +16,31 @@ import { GameDay } from './shell/GameDay';
 import { publishShare, revokeShare, shareUrl, takeHandOver } from './store/share';
 import { newId } from './store/usePlaybook';
 import { starterPlays } from './store/starters';
+import { joinTeam, readInvite, takeParkedInvite } from './store/teams';
+import { useTeamBook } from './store/useTeamBook';
+import { useTeams } from './store/useTeams';
+import { askConfirm, askText } from './ui/dialog';
 import type { Book, Play } from './domain/types';
 
 export function App() {
-  const book = usePlaybook();
+  const own = usePlaybook();
+  const teams = useTeams(own.uid);
+  const { removed: teamRemoved } = teams;
+  const onTeamRemoved = useCallback(
+    (teamId: string) => {
+      const name = teams.joined.find((t) => t.teamId === teamId)?.name ?? teams.open?.name ?? 'that team';
+      teamRemoved(teamId);
+      toast(`You are no longer on ${name}. Showing your own playbook.`);
+    },
+    [teamRemoved, teams.joined, teams.open],
+  );
+  const teamBook = useTeamBook(teams.open?.teamId ?? null, own.uid, onTeamRemoved);
+  /*
+   * Whose playbook every screen shows. The coach's own unless a team they
+   * coach on is open — and the two are kept apart all the way down, so
+   * switching never merges one into the other. See store/useTeamBook.ts.
+   */
+  const book: typeof own = teams.open ? teamBook : own;
   const route = useRoute();
   const home = useCallback(() => go({ screen: 'book' }), []);
 
@@ -96,6 +117,63 @@ export function App() {
     // Once, on the first render that has the book.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /*
+   * An invite link, parked by main.tsx until there is an account to join with.
+   * Asked rather than acted on: joining puts somebody else's playbook on this
+   * device, and a link in a group chat can be tapped by accident.
+   */
+  const { joined, joinedOne, openTeam } = teams;
+  useEffect(() => {
+    if (!own.uid) return;
+    const code = takeParkedInvite();
+    if (!code) return;
+    const uid = own.uid;
+    void (async () => {
+      const inv = await readInvite(code);
+      if (!inv.ok) {
+        toast(inv.reason);
+        return;
+      }
+      const team = inv.value;
+      if (team.teamId === uid) {
+        toast('That is an invite to your own team.');
+        return;
+      }
+      if (joined.some((t) => t.teamId === team.teamId)) {
+        openTeam({ teamId: team.teamId, name: team.teamName });
+        toast(`Showing ${team.teamName}`);
+        return;
+      }
+      const { auth } = await import('./firebase');
+      const ok = await askConfirm(`Coach on ${team.teamName}?`, {
+        body:
+          'You will see and edit their playbook. Your own playbook stays exactly as it is, and the Coaches ' +
+          'view on the Team page switches between them.' +
+          (auth.currentUser?.isAnonymous
+            ? ' This device has no email on its account yet — add one under Settings to reach the team from another device.'
+            : ''),
+        confirmLabel: 'Join',
+      });
+      if (!ok) return;
+      const name = await askText('Your name', {
+        body: 'So the head coach can see who joined.',
+        placeholder: 'Coach Smith',
+        confirmLabel: 'Join',
+      });
+      if (name === null) return;
+      const done = await joinTeam(uid, team, name);
+      if (!done.ok) {
+        toast(done.reason);
+        return;
+      }
+      joinedOne(done.value);
+      toast(`You are coaching on ${done.value.name}`);
+      go({ screen: 'book' });
+    })();
+    // When the account is known, and not again for the same one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [own.uid]);
 
   /** Hand a link to whatever the device shares with, or copy it. */
   const sendLink = useCallback(async (url: string, title: string) => {
@@ -254,7 +332,20 @@ export function App() {
       <UpdateBar />
       <AppShell screen={route.screen === 'play' ? 'book' : route.screen}>
         {route.screen === 'team' ? (
-          <TeamPage plays={book.plays} />
+          <TeamPage
+            plays={book.plays}
+            coaches={{
+              uid: own.uid,
+              open: teams.open,
+              joined: teams.joined,
+              onOpen: (t) => {
+                teams.openTeam(t);
+                toast(t ? `Showing ${t.name}` : 'Showing your own playbook');
+              },
+              onLeave: teams.leave,
+              sendLink,
+            }}
+          />
         ) : route.screen === 'print' ? (
           <PrintPage
             plays={book.plays}
@@ -345,6 +436,8 @@ export function App() {
             }}
             onRenameBook={book.renameBook}
             onDeleteBook={book.deleteBook}
+            team={teams.open?.name}
+            onOwnBook={() => teams.openTeam(null)}
           />
         )}
       </AppShell>

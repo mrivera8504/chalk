@@ -13,6 +13,20 @@
   color: var(--bad);
 }
 
+/* Somebody else's playbook is on screen. */
+.team-on {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 16px 8px;
+  padding: 0 0 0 12px;
+  border-left: 3px solid var(--accent);
+}
+.team-on b {
+  color: var(--accent);
+}
+
 .backup-age::before {
   content: '·';
   margin: 0 6px;

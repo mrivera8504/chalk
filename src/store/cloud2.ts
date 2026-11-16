@@ -16,8 +16,9 @@ import { explain, fromCloud, toCloud, type Playbook, type SyncState } from './sy
  *
  * A coach's own team has their uid for its id. That makes it findable with no
  * lookup and makes creating it idempotent: two devices migrating at once write
- * the same documents to the same place. A team somebody is invited to will have
- * an id of its own; `members` is already on the document for that day.
+ * the same documents to the same place. Every function here takes that id as
+ * `uid`, and is handed another coach's uid as the team id when this coach is
+ * working on a team they joined — see `store/teams.ts` and `useTeamBook`.
  *
  * Every rule in *The playbook, and how it syncs* still holds here, and the
  * notes say how each one translates. The short version: nothing in this file
@@ -162,8 +163,13 @@ export async function pull(uid: string, since: number): Promise<Pull2> {
 
 /** When a revision of each play was last kept, this session. */
 const revisedAt = new Map<string, number>();
-/** The team document as last written, so an unchanged one is not written again. */
-let metaSent = '';
+/**
+ * The team document as last written, per team, so an unchanged one is not
+ * written again. Per team because a coach on somebody else's team has two
+ * books syncing in one session, and a single slot would have each one's push
+ * rewrite the team document the other had just written.
+ */
+const metaSent = new Map<string, string>();
 
 async function keepRevision(fs: Fs, ref: import('firebase/firestore').DocumentReference, old: unknown, id: string) {
   if (Date.now() - (revisedAt.get(id) ?? 0) < REVISION_EVERY_MS) return;
@@ -214,10 +220,10 @@ export async function push(
     });
 
     const meta = { books: book.books ?? [], sections: book.sections };
-    const text = uid + JSON.stringify(meta);
-    if (text !== metaSent) {
+    const text = JSON.stringify(meta);
+    if (text !== metaSent.get(uid)) {
       await fs.setDoc(team, { ...meta, updatedAt: Date.now() }, { merge: true });
-      metaSent = text;
+      metaSent.set(uid, text);
     }
     return { state: 'synced', known: next };
   } catch (err) {
@@ -299,5 +305,5 @@ export async function listRevisions(uid: string, playId: string): Promise<Revisi
 /** Forget what this session remembers, between tests and between accounts. */
 export function resetCloud2(): void {
   revisedAt.clear();
-  metaSent = '';
+  metaSent.clear();
 }

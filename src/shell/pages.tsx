@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { readRoster, type RosterEntry } from '../domain/roster';
 import type { Play, Section } from '../domain/types';
 import { SettingsPanel } from '../editor/SettingsPanel';
 import { ExportPanel } from '../export/ExportPanel';
 import { AccountPanel } from '../playbook/AccountPanel';
+import { CoachesPanel } from '../playbook/CoachesPanel';
 import { DepthPanel } from '../playbook/DepthPanel';
 import { PracticePanel } from '../playbook/PracticePanel';
 import { RosterPanel } from '../playbook/RosterPanel';
@@ -19,13 +20,14 @@ import { PageHead } from './AppShell';
  */
 
 /**
- * The team, rather than the plays: who is on it, who plays where, and what
- * the week's practices are. Three views of one page, because each is a list
- * typed once and corrected now and then, and none of them is worth a tab.
+ * The team, rather than the plays: who is on it, who plays where, what the
+ * week's practices are, and who else coaches it. Views of one page, because
+ * each is a list typed once and corrected now and then, and none of them is
+ * worth a tab.
  */
-export function TeamPage({ plays }: { plays: Play[] }) {
+export function TeamPage({ plays, coaches }: { plays: Play[]; coaches: ComponentProps<typeof CoachesPanel> }) {
   const [roster, setRoster] = useState<RosterEntry[]>(readRoster);
-  const [view, setView] = useState<'roster' | 'depth' | 'practice'>('roster');
+  const [view, setView] = useState<'roster' | 'depth' | 'practice' | 'coaches'>('roster');
   return (
     <div className="page">
       <PageHead
@@ -42,10 +44,14 @@ export function TeamPage({ plays }: { plays: Play[] }) {
         <button aria-pressed={view === 'practice'} onClick={() => setView('practice')}>
           Practices
         </button>
+        <button aria-pressed={view === 'coaches'} onClick={() => setView('coaches')}>
+          Coaches
+        </button>
       </div>
       {view === 'roster' && <RosterPanel roster={roster} onChange={setRoster} />}
       {view === 'depth' && <DepthPanel roster={roster} />}
       {view === 'practice' && <PracticePanel plays={plays} />}
+      {view === 'coaches' && <CoachesPanel {...coaches} />}
     </div>
   );
 }

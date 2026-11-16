@@ -505,6 +505,14 @@ button:disabled { opacity: 0.4; cursor: default; }
 /* The team page's three views, and the two lists that are new to it. */
 .team-views {
   margin: 0 16px 8px;
+  /* Four views on one row at phone width: narrower targets, never shorter. */
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.team-views button {
+  padding-left: 4px;
+  padding-right: 4px;
+  white-space: nowrap;
 }
 
 .depth-row {
@@ -629,4 +637,33 @@ button:disabled { opacity: 0.4; cursor: default; }
 :root[data-theme='light'] .practice-plays select,
 :root[data-theme='light'] .practice-edit input {
   color-scheme: light;
+}
+
+/* Coaches: which team's playbook is showing, and who is on it. */
+.coach-teams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.coach-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.coach-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+}
+.coach-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.coach-role {
+  font-size: 11px;
+  color: var(--dim);
 }

@@ -28,6 +28,8 @@ function nestedArray(value: unknown, inArray = false): boolean {
   return false;
 }
 
+const DELETE = Symbol('deleteField');
+
 export function fakeFirestore(cloud: FakeCloud) {
   const fail = () => {
     if (cloud.failWith) throw Object.assign(new Error(cloud.failWith.message), { code: cloud.failWith.code });
@@ -74,6 +76,30 @@ export function fakeFirestore(cloud: FakeCloud) {
         .map(([p, data]) => ({ id: p.slice(c.path.length + 1), data: () => structuredClone(data) }));
       return { docs };
     },
+    /** Dotted field paths, as Firestore takes them, and `deleteField()` to remove one. */
+    updateDoc: async (r: { path: string }, fields: Record<string, unknown>) => {
+      fail();
+      if (cloud.deny?.(r.path)) {
+        throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
+      }
+      const was = cloud.docs.get(r.path);
+      if (!was) throw Object.assign(new Error(`No document to update: ${r.path}`), { code: 'not-found' });
+      const data = structuredClone(was);
+      for (const [path, value] of Object.entries(fields)) {
+        const keys = path.split('.');
+        let at = data as Record<string, unknown>;
+        for (const k of keys.slice(0, -1)) {
+          if (!at[k] || typeof at[k] !== 'object') at[k] = {};
+          at = at[k] as Record<string, unknown>;
+        }
+        const last = keys[keys.length - 1];
+        if (value === DELETE) delete at[last];
+        else at[last] = value;
+      }
+      cloud.docs.set(r.path, data);
+      cloud.writes.push({ op: 'set', path: r.path });
+    },
+    deleteField: () => DELETE,
     deleteDoc: async (r: { path: string }) => {
       fail();
       cloud.docs.delete(r.path);
