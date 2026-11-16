@@ -1,6 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import {
   EmailAuthProvider,
+  GoogleAuthProvider,
+  linkWithPopup,
+  signInWithCredential,
+  signInWithPopup,
   createUserWithEmailAndPassword,
   getAuth,
   linkWithCredential,
@@ -147,6 +151,42 @@ export async function upgradeToEmail(email: string, password: string): Promise<A
   return describeUser(created.user)!;
 }
 
+/**
+ * Sign in with Google, on the same terms as an email.
+ *
+ * An anonymous device *links* Google to the uid it already has, so every play
+ * drawn before is still there — the reason the email path links rather than
+ * registers, applied here. If that Google account already belongs to somebody
+ * here, there is nothing to link: this signs into it, and the account change
+ * brings that playbook down and merges it with what is on the device, exactly
+ * as signing in by email does.
+ *
+ * A popup rather than a redirect. A redirect leaves the app for the
+ * firebaseapp.com domain and comes back to a fresh page load, which on an
+ * installed app on a phone is a reload in the middle of a practice; the popup
+ * opens as a tab over the app and closes itself.
+ */
+export async function signInWithGoogle(): Promise<Account> {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const user = auth.currentUser;
+  if (user?.isAnonymous) {
+    try {
+      const result = await linkWithPopup(user, provider);
+      return describeUser(result.user)!;
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (code !== 'auth/credential-already-in-use' && code !== 'auth/email-already-in-use') throw err;
+      const credential = GoogleAuthProvider.credentialFromError(err as never);
+      if (!credential) throw err;
+      const signedIn = await signInWithCredential(auth, credential);
+      return describeUser(signedIn.user)!;
+    }
+  }
+  const result = await signInWithPopup(auth, provider);
+  return describeUser(result.user)!;
+}
+
 export async function signInExisting(email: string, password: string): Promise<Account> {
   const result = await signInWithEmailAndPassword(auth, email, password);
   return describeUser(result.user)!;
@@ -190,7 +230,16 @@ export function explainAuth(err: unknown): string {
     case 'auth/network-request-failed':
       return 'No connection. Your playbook is safe on this device either way.';
     case 'auth/operation-not-allowed':
-      return 'Email sign-in is not switched on in the Firebase console yet.';
+      return 'That way of signing in is not switched on in the Firebase console yet.';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Signing in was cancelled. Nothing changed.';
+    case 'auth/popup-blocked':
+      return 'The sign-in window was blocked. Allow pop-ups for this site and try again.';
+    case 'auth/unauthorized-domain':
+      return 'This address is not on the Firebase sign-in list yet (Authentication, Settings, Authorized domains).';
+    case 'auth/account-exists-with-different-credential':
+      return 'That email already has an account with a password. Sign in with the password instead.';
     default:
       return 'That did not work. Your playbook is safe on this device either way.';
   }

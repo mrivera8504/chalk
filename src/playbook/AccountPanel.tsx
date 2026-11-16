@@ -3,6 +3,7 @@ import { askConfirm } from '../ui/dialog';
 import {
   explainAuth,
   signInExisting,
+  signInWithGoogle,
   signOutOfAccount,
   upgradeToEmail,
   watchAccount,
@@ -62,6 +63,27 @@ export function AccountPanel({ onSaveNow, onClose }: Props) {
         mode === 'up'
           ? 'Signed in. Your playbook is saved to this account.'
           : 'Signed in. Loading that account’s playbook…',
+      );
+    } catch (err) {
+      setError(explainAuth(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function google() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      const wasAnonymous = account?.anonymous ?? true;
+      setAccount(await signInWithGoogle());
+      await onSaveNow();
+      setNote(
+        wasAnonymous
+          ? 'Signed in with Google. Your playbook is saved to this account.'
+          : 'Signed in with Google.',
       );
     } catch (err) {
       setError(explainAuth(err));
@@ -133,6 +155,14 @@ export function AccountPanel({ onSaveNow, onClose }: Props) {
             phone. Adding an email means you can get the playbook back if you
             lose the phone, and open it on a second one.
           </p>
+
+          {/* One tap and no password, which is what most coaches will want. */}
+          <div className="picker-row">
+            <button className="primary" disabled={busy} onClick={() => void google()}>
+              Continue with Google
+            </button>
+          </div>
+          <p className="picker-note">Or with an email and a password:</p>
 
           <div className="picker-row seg">
             <button aria-pressed={mode === 'up'} onClick={() => setMode('up')}>
