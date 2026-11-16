@@ -1,3 +1,5 @@
+import { readDepth, writeDepth, type DepthChart } from '../domain/depth';
+import { readPractices, writePractices, type Practice } from '../domain/practice';
 import { readRoster, writeRoster, type RosterEntry } from '../domain/roster';
 import {
   readFormations,
@@ -39,6 +41,9 @@ export interface Backup {
   formations: Formation[];
   routes: CustomRoute[];
   roster: RosterEntry[];
+  /** Absent from a file written before there were practices. */
+  practices?: Practice[];
+  depth?: DepthChart;
   settings: AppSettings;
   foundationId: string | null;
   /*
@@ -62,6 +67,8 @@ export function makeBackup(book: Playbook): Backup {
     formations: readFormations().filter((f) => !f.builtIn),
     routes: readCustomRoutes(),
     roster: readRoster(),
+    practices: readPractices(),
+    depth: readDepth(),
     settings: getSettings(),
     foundationId: readFoundationId(),
     foundationDefenseId: readFoundationId('defense'),
@@ -119,6 +126,10 @@ export function readBackup(text: string): Restored {
   if (Array.isArray(parsed.formations)) writeFormations(formations);
   if (Array.isArray(parsed.routes)) writeCustomRoutes(routes);
   if (Array.isArray(parsed.roster)) writeRoster(roster);
+  if (Array.isArray(parsed.practices)) writePractices(parsed.practices as Practice[]);
+  if (parsed.depth && typeof parsed.depth === 'object' && !Array.isArray(parsed.depth)) {
+    writeDepth(parsed.depth as DepthChart);
+  }
   if ('foundationId' in parsed) {
     writeFoundationId(typeof parsed.foundationId === 'string' ? parsed.foundationId : null);
   }

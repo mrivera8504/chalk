@@ -368,3 +368,27 @@ describe('game day', () => {
     await expect.poll(path).toBe('/');
   });
 });
+
+describe('the team page', () => {
+  it('keeps a depth chart, and builds a practice that prints', async () => {
+    await page.evaluate(() =>
+      localStorage.setItem('chalk.roster.v1', JSON.stringify([{ id: 'a', name: 'Sam', jersey: 7, positions: [] }])),
+    );
+    await page.reload();
+    await tab('Team').click();
+    await page.getByRole('button', { name: 'Depth chart' }).click();
+    await page.getByRole('combobox', { name: 'Add a player at QB' }).selectOption('7');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('chalk.depth.v1') ?? '{}'))).toEqual({ QB: [7] });
+
+    await page.getByRole('button', { name: 'Practices' }).click();
+    await page.getByRole('button', { name: 'New practice' }).click();
+    await page.getByRole('dialog').getByRole('textbox').fill('Tuesday');
+    await page.getByRole('dialog').getByRole('button', { name: 'Add' }).click();
+    await page.getByRole('combobox', { name: 'Add a drill or play to Team' }).selectOption({ index: 1 });
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('chalk.practices.v1') ?? '[]'));
+    expect(saved[0].name).toBe('Tuesday');
+    expect(saved[0].blocks.find((b: { title: string }) => b.title === 'Team').playIds.length).toBe(1);
+    const [sheet] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Print' }).click()]);
+    expect(sheet.suggestedFilename()).toMatch(/^tuesday-.*\.pdf$/);
+  });
+});

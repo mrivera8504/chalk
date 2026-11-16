@@ -4,6 +4,8 @@ import type { Play, Section } from '../domain/types';
 import { SettingsPanel } from '../editor/SettingsPanel';
 import { ExportPanel } from '../export/ExportPanel';
 import { AccountPanel } from '../playbook/AccountPanel';
+import { DepthPanel } from '../playbook/DepthPanel';
+import { PracticePanel } from '../playbook/PracticePanel';
 import { RosterPanel } from '../playbook/RosterPanel';
 import { useInstallPrompt } from '../store/install';
 import { useSettings } from '../store/settings';
@@ -16,15 +18,34 @@ import { PageHead } from './AppShell';
  * struck with the editor's drawer.
  */
 
-export function TeamPage() {
+/**
+ * The team, rather than the plays: who is on it, who plays where, and what
+ * the week's practices are. Three views of one page, because each is a list
+ * typed once and corrected now and then, and none of them is worth a tab.
+ */
+export function TeamPage({ plays }: { plays: Play[] }) {
   const [roster, setRoster] = useState<RosterEntry[]>(readRoster);
+  const [view, setView] = useState<'roster' | 'depth' | 'practice'>('roster');
   return (
     <div className="page">
       <PageHead
         title="Team"
         sub={`${roster.length} ${roster.length === 1 ? 'player' : 'players'} on the roster`}
       />
-      <RosterPanel roster={roster} onChange={setRoster} />
+      <div className="picker-row seg team-views" role="group" aria-label="Team">
+        <button aria-pressed={view === 'roster'} onClick={() => setView('roster')}>
+          Roster
+        </button>
+        <button aria-pressed={view === 'depth'} onClick={() => setView('depth')}>
+          Depth chart
+        </button>
+        <button aria-pressed={view === 'practice'} onClick={() => setView('practice')}>
+          Practices
+        </button>
+      </div>
+      {view === 'roster' && <RosterPanel roster={roster} onChange={setRoster} />}
+      {view === 'depth' && <DepthPanel roster={roster} />}
+      {view === 'practice' && <PracticePanel plays={plays} />}
     </div>
   );
 }

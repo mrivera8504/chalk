@@ -7,6 +7,7 @@ import {
   type PDFPage,
 } from 'pdf-lib';
 import { byJersey, describePersonnel, type RosterEntry } from '../domain/roster';
+import { schedule, totalMinutes, type Practice } from '../domain/practice';
 import { type Play } from '../domain/types';
 import { getSettings } from '../store/settings';
 import { centerIn, DEFAULT_PRINT, layout, type PrintOptions, type Rect } from './paper';
@@ -455,5 +456,77 @@ export async function rosterPdf(roster: RosterEntry[], title = 'Roster'): Promis
     y -= rowH;
   }
 
+  return doc.save();
+}
+
+/**
+ * A practice on paper: the timed plan first, then every drill and play it
+ * names, two to a page, in the order the practice reaches them.
+ *
+ * The plan is a list, so it is drawn like the roster; the boards are drawn by
+ * `playSheetPdf`, the one composer, and copied in after it — a second copy of
+ * the page arithmetic is how the four old sheets came to disagree.
+ */
+export async function practicePdf(practice: Practice, plays: Play[]): Promise<Uint8Array> {
+  const { doc, fonts } = await startDoc();
+  const page = doc.addPage([PAGE.w, PAGE.h]);
+  const times = schedule(practice);
+  header(page, fonts, practice.name || 'Practice', `${totalMinutes(practice)} min`);
+
+  const title = (p: Play) => p.name || p.suggestedName || 'Untitled';
+  let y = PAGE.h - MARGIN - 46;
+  for (const { block, start, end } of times) {
+    if (y < MARGIN + 20) break;
+    page.drawText(`${start} – ${end}`, { x: MARGIN, y, size: 11, font: fonts.bold, color: BLACK });
+    page.drawText(fit(block.title || 'Block', fonts.bold, 13, 260), {
+      x: MARGIN + 130,
+      y,
+      size: 13,
+      font: fonts.bold,
+      color: BLACK,
+    });
+    page.drawText(`${block.minutes} min`, {
+      x: PAGE.w - MARGIN - fonts.body.widthOfTextAtSize(`${block.minutes} min`, 10),
+      y,
+      size: 10,
+      font: fonts.body,
+      color: GRAY,
+    });
+    const names = block.playIds
+      .map((id) => plays.find((p) => p.id === id))
+      .filter((p): p is Play => Boolean(p))
+      .map(title);
+    let rowH = 26;
+    if (names.length) {
+      page.drawText(fit(names.join(' · '), fonts.body, 10, PAGE.w - MARGIN * 2 - 130), {
+        x: MARGIN + 130,
+        y: y - 15,
+        size: 10,
+        font: fonts.body,
+        color: GRAY,
+      });
+      rowH = 38;
+    }
+    page.drawLine({
+      start: { x: MARGIN, y: y - rowH + 14 },
+      end: { x: PAGE.w - MARGIN, y: y - rowH + 14 },
+      thickness: 0.5,
+      color: RULE,
+    });
+    y -= rowH;
+  }
+
+  const seen = new Set<string>();
+  const boards = practice.blocks
+    .flatMap((b) => b.playIds)
+    .filter((id) => !seen.has(id) && seen.add(id))
+    .map((id) => plays.find((p) => p.id === id))
+    .filter((p): p is Play => Boolean(p));
+  if (boards.length) {
+    const sheet = await PDFDocument.load(
+      await playSheetPdf(boards, { ...DEFAULT_PRINT, perPage: 2 }, { title: practice.name || 'Practice' }),
+    );
+    for (const p of await doc.copyPages(sheet, sheet.getPageIndices())) doc.addPage(p);
+  }
   return doc.save();
 }

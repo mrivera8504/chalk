@@ -253,7 +253,7 @@ export function App() {
       <UpdateBar />
       <AppShell screen={route.screen === 'play' ? 'book' : route.screen}>
         {route.screen === 'team' ? (
-          <TeamPage />
+          <TeamPage plays={book.plays} />
         ) : route.screen === 'print' ? (
           <PrintPage
             plays={book.plays}

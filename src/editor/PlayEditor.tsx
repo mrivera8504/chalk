@@ -80,7 +80,8 @@ import {
   writeFormations,
   writeFoundationId,
 } from '../domain/presets/formations';
-import { askConfirm, askText } from '../ui/dialog';
+import { askChoice, askConfirm, askText } from '../ui/dialog';
+import { fillFromDepth, readDepth } from '../domain/depth';
 import { toast } from '../ui/toast';
 import { useBackLayer } from '../ui/backstack';
 import { UndoStack } from '../store/undo';
@@ -797,6 +798,27 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     if (ballCarrierId === id) setBallCarrierId(null);
     setSel(null);
     setPending(null);
+  }
+
+  /**
+   * Put the depth chart's kids in this play's slots: the starters, or the
+   * second or third string, on the side the play is about. One step of undo.
+   */
+  async function fillFromChart() {
+    const chart = readDepth();
+    if (!Object.keys(chart).length) {
+      toast('The depth chart is empty. Fill it in on the Team page.');
+      return;
+    }
+    const pick = await askChoice('Fill from the depth chart', [
+      { id: '0', label: 'Starters' },
+      { id: '1', label: 'Second string' },
+      { id: '2', label: 'Third string' },
+    ]);
+    if (pick === null) return;
+    remember();
+    setPlayers((prev) => fillFromDepth(prev, chart, unit, Number(pick)));
+    closeDrawerAfter();
   }
 
   /** A new step after this one: everybody where their line left them. */
@@ -2137,6 +2159,9 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                   </button>
                 )}
                 <button onClick={mirror}>Flip sides</button>
+                {roster.length > 0 && (
+                  <button onClick={() => void fillFromChart()}>Depth chart</button>
+                )}
                 <button
                   className="quiet"
                   disabled={drawn.length + annotations.length + zones.length === 0}

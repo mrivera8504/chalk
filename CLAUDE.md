@@ -11,10 +11,11 @@ and the new shell; the data layer) are deployed, and the `/teams` rules are
 published. Stage 3 (the sport module, and flag, 6-, 8-, 9- and 11-man beside
 7-man) and stage 4 (basketball, steps, and running a play) are deployed.
 Stage 5 (soccer, equipment and drills) is deployed. Stage 6 (share links, the
-viewer, video, Google sign-in, branded sheets) is done in code except team
-members. See *Tests*, *The editor, in pieces*, *The shell*, *Kinds of
+viewer, video, Google sign-in, branded sheets) is deployed except team
+members, which are not built. Stage 7 (game day, study and quiz, practices,
+depth chart) is done in code. See *Tests*, *The editor, in pieces*, *The shell*, *Kinds of
 football*, *Basketball, steps and playback*, *Soccer, equipment and drills* and
-*Sharing, video, Google and branded sheets* below.
+*Sharing, video, Google and branded sheets* and *Coach tools* below.
 
 Stages 1-7 done: field and players, blocking tool, route and run presets with
 formations and auto play-naming, freehand ink, a playbook that saves, and
@@ -1257,6 +1258,40 @@ device without per-team local storage would merge his book into this one.
 Doing it safely means a team id beside the uid through `persist`, the journal,
 `loadedFor` and `cloud2`, and the rules for `/invites` — and it should be done
 against the emulator, not reasoned about.
+
+## Coach tools: game day, study, practices, depth chart
+
+The overhaul's stage 7.
+
+**Game day** (`shell/GameDay.tsx`, `/gameday`) is the playbook as a call sheet:
+folder by folder, big cards, nothing that edits. It sits outside `AppShell`, like
+the editor, and is a back layer like every other screen. It shows the
+game-ready plays once any play is marked so, and every play until then — a
+sheet that opens empty on a Friday night is not trusted twice.
+
+**`shell/PlayStudy.tsx` is one play, to be read**: steps, Run the play, the
+notes, and *I play* — pick a position and `PlayPicture`'s `focus` fades every
+other line back; *Quiz me* hides his line and *Show my job* brings it back. The
+positions offered are the side the play is about; one with nothing drawn for
+him is disabled. Never stored. Both the shared viewer and game day use it, so a
+player studying a link and a coach on the sideline see the same thing.
+
+**A practice** (`domain/practice.ts`, `chalk.practices.v1`) is a start time and
+timed blocks, each naming drills and plays **by id** — never copied, so the
+drill reworked midweek is the one Thursday prints, and a deleted one drops off.
+Device-only like the roster, and in the backup. `practicePdf` draws the timed
+plan as a list and then copies in a 2-up `playSheetPdf` of everything the
+blocks name: one play composer, not a second copy of the page arithmetic.
+
+**The depth chart** (`domain/depth.ts`, `chalk.depth.v1`) is shirts in order
+per position **label** — the word in the man's mark is the only name a
+position has. `fillFromDepth` puts a string into a board's slots on one side,
+starters claiming their shirts first, and never puts one kid in two slots: a
+kid charted at two positions makes the next name down take the second. The
+editor's drawer offers it as *Depth chart* once there is a roster.
+
+**The Team page is three views** — Roster, Depth chart, Practices — rather than
+three tabs. Each is a list typed once and corrected now and then.
 
 ## Backup, and what a backup has to carry
 
