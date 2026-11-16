@@ -94,6 +94,13 @@ export interface SheetOptions {
    * either side of it; see `view.ts`.
    */
   view?: View;
+  /**
+   * The ball in the air, for a frame of a running play: drawn on top, where
+   * no man is holding it.
+   */
+  ball?: { x: number; y: number } | null;
+  /** The lines drawn faint, as playback draws them while the men move. */
+  fadeLines?: boolean;
 }
 
 /*
@@ -184,9 +191,18 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
       ))}
       {/* Regenerated from the players, as the board draws them: a block, a
           cover rope and a stunt are stored as relationships, never as lines. */}
-      {lines.map((a) => (
-        <AssignmentPath key={a.id} assignment={a} autoColor={autoRouteColor(a, play.players)} />
-      ))}
+      {/* Wrapped only for a frame of a running play, so a sheet is unchanged. */}
+      {opts.fadeLines ? (
+        <g opacity={0.3}>
+          {lines.map((a) => (
+            <AssignmentPath key={a.id} assignment={a} autoColor={autoRouteColor(a, play.players)} />
+          ))}
+        </g>
+      ) : (
+        lines.map((a) => (
+          <AssignmentPath key={a.id} assignment={a} autoColor={autoRouteColor(a, play.players)} />
+        ))
+      )}
       {players.map((p) => (
         <PlayerShape
           key={p.id}
@@ -196,6 +212,9 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
           ballMark={isFootball(play.variant) ? 'star' : 'ball'}
         />
       ))}
+      {opts.ball && (
+        <circle cx={opts.ball.x} cy={opts.ball.y} r={0.36} fill="var(--ball)" stroke="var(--ball-line)" strokeWidth={0.07} />
+      )}
     </>,
   );
 

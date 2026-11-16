@@ -10,12 +10,13 @@ import { describeAssignment } from '../domain/presets/blocks';
 import { refreshPaths } from '../domain/regenerate';
 import { computeGaps } from '../domain/gaps';
 import { HOOPS_ACTIONS, makeShot } from '../domain/presets/hoops';
-import { framesOf, nextFrame, type Frame } from '../domain/frames';
+import { framesOf, nextFrame, withFrames, type Frame } from '../domain/frames';
 import { MARK_NAMES, mirrorMarks, placeFor, type BoardMark, type MarkKind } from '../domain/marks';
 import { SOCCER_ACTIONS } from '../domain/presets/soccer';
 import { GOAL } from '../sports/soccer/pitch';
 import { anyVariant, surfaceOf, viewOf } from '../sports';
 import { Playback } from './Playback';
+import { canRecordVideo, playToVideo } from '../export/video';
 import { rulesFor, variantKey } from '../sports/football';
 import {
   defensePresetById,
@@ -80,6 +81,7 @@ import {
   writeFoundationId,
 } from '../domain/presets/formations';
 import { askConfirm, askText } from '../ui/dialog';
+import { toast } from '../ui/toast';
 import { useBackLayer } from '../ui/backstack';
 import { UndoStack } from '../store/undo';
 import { newId } from '../store/usePlaybook';
@@ -1575,6 +1577,35 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   }
 
   /**
+   * The play, running, as a video. Shared straight to the device's share
+   * sheet where it can take a file — which is where a video is going — and
+   * saved otherwise.
+   */
+  async function exportVideo() {
+    const current = livePlay();
+    const title = playTitle(current);
+    setExporting(true);
+    try {
+      const { blob, ext } = await playToVideo(withFrames(current, allSteps));
+      // Every step from the first, whichever one happens to be on screen.
+      const file = new File([blob], `${slug(title, 'play')}.${ext}`, { type: blob.type });
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title });
+          return;
+        } catch (err) {
+          if ((err as { name?: string })?.name === 'AbortError') return;
+        }
+      }
+      download(new Uint8Array(await blob.arrayBuffer()), file.name, blob.type);
+    } catch {
+      toast('Could not record a video on this device.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  /**
    * The play as it stands under the coach's hand, not as it was loaded.
    *
    * The editor holds the name, the men, the lines and the ink in its own state
@@ -2226,6 +2257,11 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                 <button disabled={exporting} onClick={() => void exportPlay()}>
                   Save image
                 </button>
+                {canRecordVideo() && (
+                  <button disabled={exporting} onClick={() => void exportVideo()}>
+                    {exporting ? 'Working…' : 'Save video'}
+                  </button>
+                )}
                 {/*
                   * What this one play is drawn on.
                   *
