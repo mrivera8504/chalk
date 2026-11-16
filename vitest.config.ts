@@ -23,7 +23,7 @@ export default defineConfig({
     environmentOptions: { jsdom: { pretendToBeVisual: true } },
     include: ['tests/**/*.test.{ts,tsx}'],
     // The browser tests have their own config and their own script.
-    exclude: ['tests/e2e/**'],
+    exclude: ['tests/e2e/**', 'tests/rules/**'],
     setupFiles: ['tests/setup.ts'],
     restoreMocks: true,
   },

@@ -16,6 +16,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # The Firestore rules, against the emulator. Java is on the runner; the
+      # emulator itself is downloaded by firebase-tools on first use.
+      - run: npm run test:rules
       - run: npm run build
       # The pen tests need a real browser. No request leaves localhost.
       - run: npx playwright install --with-deps chromium

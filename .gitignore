@@ -6,3 +6,4 @@ tsconfig.tsbuildinfo
 preview-*.svg
 preview-*.png
 build
+*-debug.log
