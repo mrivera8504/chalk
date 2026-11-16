@@ -2,7 +2,7 @@ import { framesOf, nextFrame, withFrames } from '../domain/frames';
 import { eligibleReceivers } from '../domain/legality';
 import { applyCoverage, COVERAGES } from '../domain/presets/coverages';
 import { HOOPS_ACTIONS, makePass, makeScreen, makeShot } from '../domain/presets/hoops';
-import { ROUTES, naturalHand, otherHand, type RoutePreset } from '../domain/presets/routes';
+import { ROUTES, naturalHand, type RoutePreset } from '../domain/presets/routes';
 import { SOCCER_ACTIONS } from '../domain/presets/soccer';
 import { makeCover } from '../domain/presets/links';
 import type { Assignment, Hand, Play, PlayerSlot } from '../domain/types';
@@ -70,13 +70,7 @@ function football(variant?: string, blocking = true): Play[] {
     const receivers = eligibleReceivers(p.players).filter((m) => m.backNumber !== 2 || name === 'Flood');
     out.push(
       named(p, name, {
-        assignments: receivers.map((m, i) => {
-          const preset = cycle[i % cycle.length];
-          // A slant breaks inside. The Slant preset breaks toward the wide side,
-          // as it always has; the starter asks for the inside hand by name
-          // rather than change what every saved slant regenerates to.
-          return job(m, preset, preset === 'slant' ? otherHand(naturalHand(m)) : undefined);
-        }),
+        assignments: receivers.map((m, i) => job(m, cycle[i % cycle.length])),
       }),
     );
   }

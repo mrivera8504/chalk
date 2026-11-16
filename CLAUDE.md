@@ -1303,10 +1303,12 @@ line flips, deepens and erases like one the coach drew, and a 9-man starter is
 laid on the 9-man set. `tests/store/starters.test.ts` holds every sport and
 size to: named, every line naming a man on the board, rebuildable, and legal.
 
-**The Slant preset breaks toward the wide side**, like a corner, where Post
-breaks inside. That predates the overhaul and is flagged to the owner rather
-than changed, because changing it changes what every saved slant regenerates to
-on a flip. The starters ask for the inside hand by name.
+**Slant breaks inside now**, the side Post breaks to. It broke toward the wide
+side, a corner's direction, from before the overhaul until the owner chose to
+fix it (2026-11-16). Saved slants keep the paths they were stored with. The one
+seam: the first Flip of a slant drawn before the fix regenerates it with the
+other hand under the new shape, which lands it outward on the same side it
+already was, so that flip looks like nothing happened.
 
 ## Backup, and what a backup has to carry
 

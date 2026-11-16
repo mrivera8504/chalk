@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm i -D firebase-tools@15.36.0 @firebase/rules-unit-testing@5.0.0)",
+      "Bash(npx firebase emulators:exec:*)",
+      "Bash(npx firebase emulators:start:*)"
+    ]
+  }
+}

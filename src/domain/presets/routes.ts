@@ -139,10 +139,15 @@ export const ROUTES: RoutePreset[] = [
     id: 'slant',
     name: 'Slant',
     group: 'pass',
+    /*
+     * Breaks inside, across the field — the side Post breaks to. It used to
+     * break toward the wide side, which is a corner's direction, and every
+     * slant drawn before the fix keeps the path it was saved with.
+     */
     shape: (s, h) => [
       { x: s.x, y: s.y },
       { x: s.x, y: up(s, s.y + 2) },
-      { x: s.x + side(h) * 5, y: up(s, s.y + 6) },
+      { x: s.x - side(h) * 5, y: up(s, s.y + 6) },
     ],
   },
   /*

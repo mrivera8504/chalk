@@ -3728,7 +3728,7 @@ exports[`route presets > draw the same shapes they always have, from a back and 
       "y": -2,
     },
     {
-      "x": -5,
+      "x": 5,
       "y": -6,
     },
   ],
@@ -3742,7 +3742,7 @@ exports[`route presets > draw the same shapes they always have, from a back and 
       "y": -2,
     },
     {
-      "x": 5,
+      "x": -5,
       "y": -6,
     },
   ],
@@ -3756,7 +3756,7 @@ exports[`route presets > draw the same shapes they always have, from a back and 
       "y": -2,
     },
     {
-      "x": -1.4,
+      "x": 8.6,
       "y": -6,
     },
   ],
@@ -3770,7 +3770,7 @@ exports[`route presets > draw the same shapes they always have, from a back and 
       "y": -2,
     },
     {
-      "x": 8.6,
+      "x": -1.4,
       "y": -6,
     },
   ],
@@ -3784,7 +3784,7 @@ exports[`route presets > draw the same shapes they always have, from a back and 
       "y": -2,
     },
     {
-      "x": -10,
+      "x": 0,
       "y": -6,
     },
   ],
@@ -3798,7 +3798,7 @@ exports[`route presets > draw the same shapes they always have, from a back and 
       "y": -2,
     },
     {
-      "x": 0,
+      "x": -10,
       "y": -6,
     },
   ],
