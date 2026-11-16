@@ -2,11 +2,17 @@ import type { Formation, PlayerSlot, Side } from '../types';
 import { noteList } from '../../store/kitMeta';
 import { basketball } from '../../sports/basketball';
 import { soccer } from '../../sports/soccer';
+import { PACKS } from '../../sports/packs';
 import { OTHER_VARIANTS as FOOTBALL_VARIANTS } from '../../sports/football/variants';
 import { back, front, lineman } from './slots';
 
 /** Every variant that is not seven-man football, of every sport. */
-const OTHER_VARIANTS = [...FOOTBALL_VARIANTS, ...basketball.variants, ...soccer.variants];
+const OTHER_VARIANTS = [
+  ...FOOTBALL_VARIANTS,
+  ...basketball.variants,
+  ...soccer.variants,
+  ...PACKS.flatMap((p) => p.variants),
+];
 
 /**
  * One balanced 7-man set, sitting at the legal minimum of four on the line so

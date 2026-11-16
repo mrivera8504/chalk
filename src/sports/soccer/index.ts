@@ -108,4 +108,5 @@ export const soccer: SportModule = {
   // Smallest first, as football's kinds are.
   variants: [five, seven, nine, eleven],
   defaultVariant: eleven.id,
+  surface: 'pitch',
 };

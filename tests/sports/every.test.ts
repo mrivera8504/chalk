@@ -15,8 +15,8 @@ import { blankPlay } from '../../src/store/usePlaybook';
  * number, with nobody on anybody and everybody inside the window.
  */
 describe('every sport', () => {
-  it('is football, basketball and soccer, and no two share a variant', () => {
-    expect(SPORTS.map((s) => s.id)).toEqual(['football', 'basketball', 'soccer']);
+  it('is football, basketball, soccer and the four packs, and no two share a variant', () => {
+    expect(SPORTS.map((s) => s.id)).toEqual(['football', 'basketball', 'soccer', 'volley6', 'lax10', 'hockey6', 'blank']);
     const ids = SPORTS.flatMap((s) => s.variants.map((v) => v.id));
     expect(new Set(ids).size).toBe(ids.length);
   });

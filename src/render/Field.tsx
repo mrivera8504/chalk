@@ -1,3 +1,4 @@
+import { PackSurface } from './PackSurface';
 import type { Gap } from '../domain/gaps';
 import type { Hole } from '../domain/types';
 import type { Surface } from '../sports';
@@ -48,6 +49,9 @@ export function Field({
 }: Props) {
   if (surface === 'court') return <Court view={view} />;
   if (surface === 'pitch') return <Pitch view={view} />;
+  if (surface === 'volley' || surface === 'lax' || surface === 'rink' || surface === 'blank') {
+    return <PackSurface kind={surface} view={view} />;
+  }
 
   const left = view.x;
   const right = view.x + view.w;

@@ -26,6 +26,12 @@ export interface SportModule {
   variants: Variant[];
   /** The variant a play belongs to when it does not say. */
   defaultVariant: string;
+  /** What its plays are drawn on. Absent is a football field. */
+  surface?: 'field' | 'court' | 'pitch' | 'volley' | 'lax' | 'rink' | 'blank';
+  /** The position label of whoever has the ball when a play starts, in a pack. */
+  ballAt?: string;
+  /** Where a shot goes, for a game with a goal up the board. */
+  goal?: { x: number; y: number };
 }
 
 /**

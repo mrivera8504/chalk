@@ -159,6 +159,8 @@ function soccer(variant: string): Play[] {
 /** The starter plays for a kind of game, unfiled and ready to edit. */
 export function starterPlays(variant?: string): Play[] {
   const surface = surfaceOf(variant);
+  // A sport pack has no concepts to build a starter out of: none to offer.
+  if (surface !== 'court' && surface !== 'pitch' && surface !== 'field') return [];
   const plays =
     surface === 'court'
       ? basketball(variant!)

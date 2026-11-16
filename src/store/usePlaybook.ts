@@ -6,7 +6,7 @@ import {
   foundationOffense,
   readFoundationId,
 } from '../domain/presets/formations';
-import { surfaceOf } from '../sports';
+import { sportOf, surfaceOf } from '../sports';
 import { variantKey } from '../sports/football';
 import {
   MAIN_BOOK,
@@ -184,6 +184,10 @@ export function blankPlay(
     // On a pitch it starts in midfield: the last man of the middle row.
     ...(surface === 'pitch'
       ? { ballCarrierId: players.filter((p) => p.side === 'offense')[Math.ceil(players.length / 2)]?.id }
+      : {}),
+    // In a pack, whoever its sport says starts with it: the setter, a middie, the center.
+    ...(sportOf(kind).ballAt
+      ? { ballCarrierId: players.find((p) => p.side === 'offense' && p.label === sportOf(kind).ballAt)?.id }
       : {}),
     assignments: [],
     annotations: [],

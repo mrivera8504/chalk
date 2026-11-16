@@ -3,10 +3,11 @@ import { pitchWindow, type PitchView } from './soccer/pitch';
 import { basketball } from './basketball';
 import { football } from './football';
 import { soccer } from './soccer';
+import { PACKS } from './packs';
 import type { SportModule, Variant } from './types';
 
 /** Every sport the app can draw, in the order a coach is offered them. */
-export const SPORTS: SportModule[] = [football, basketball, soccer];
+export const SPORTS: SportModule[] = [football, basketball, soccer, ...PACKS];
 
 /**
  * The sport a play, a book or a formation belongs to, read off its variant.
@@ -54,11 +55,15 @@ export function viewFor(
 }
 
 /** What a play is drawn on. Each has its own lines; football's has its rules too. */
-export type Surface = 'field' | 'court' | 'pitch';
+export type Surface = NonNullable<SportModule['surface']>;
 
 export function surfaceOf(variant: string | undefined): Surface {
-  const sport = sportOf(variant);
-  return sport === basketball ? 'court' : sport === soccer ? 'pitch' : 'field';
+  return sportOf(variant).surface ?? 'field';
+}
+
+/** Where a shot goes in a pack sport with a goal; none for the rest. */
+export function goalOf(variant: string | undefined): { x: number; y: number } | undefined {
+  return sportOf(variant).goal;
 }
 
 /**

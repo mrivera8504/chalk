@@ -163,4 +163,5 @@ export const basketball: SportModule = {
   markRadius: PLAYER_R,
   variants: [hoops],
   defaultVariant: HOOPS,
+  surface: 'court',
 };

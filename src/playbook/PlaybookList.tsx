@@ -11,7 +11,7 @@ import {
 } from '../domain/types';
 import { PageHead } from '../shell/AppShell';
 import type { SyncState } from '../store/sync';
-import { SPORTS, anyVariant, football, isFootball, sportOf } from '../sports';
+import { SPORTS, anyVariant, football, isFootball, sportOf, surfaceOf } from '../sports';
 import { go } from '../ui/route';
 import { askChoice, askConfirm, askText } from '../ui/dialog';
 import { Icon } from '../ui/Icon';
@@ -196,6 +196,8 @@ export function PlaybookList({
   /** Where the team is with a play, as a filter. Offered once any play says. */
   const [status, setStatus] = useState<PlayStatus | 'all'>('all');
   const book = books.find((b) => b.id === bookId) ?? books[0];
+  /** A sport pack has no concepts to build starter plays out of. */
+  const hasStarters = ['field', 'court', 'pitch'].includes(surfaceOf(book.variant));
 
   async function newBook() {
     const name = await askText('New playbook', {
@@ -392,15 +394,17 @@ export function PlaybookList({
                     Stop sharing it
                   </button>
                 )}
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    close();
-                    onAddStarters();
-                  }}
-                >
-                  Add starter plays
-                </button>
+                {hasStarters && (
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      close();
+                      onAddStarters();
+                    }}
+                  >
+                    Add starter plays
+                  </button>
+                )}
                 <button
                   role="menuitem"
                   onClick={() => {
@@ -536,7 +540,7 @@ export function PlaybookList({
           <strong>No plays yet</strong>
           <p>Start a play and it saves itself as you draw.</p>
           {/* For the coach who would rather edit than start from nothing. */}
-          <button onClick={onAddStarters}>Add starter plays</button>
+          {hasStarters && <button onClick={onAddStarters}>Add starter plays</button>}
         </div>
       ) : grouped.length === 0 ? (
         <div className="empty">

@@ -72,7 +72,8 @@ interface Props {
     actions: RoutePreset[];
     runTitle: string;
     hasShot: boolean;
-    onShot: () => void;
+    /** Absent where there is nothing to shoot at: a volleyball court, a blank board. */
+    onShot?: () => void;
   };
   /** Set for a defender, and that is what switches the panel to his side. */
   defense?: DefenseTools;
@@ -553,14 +554,16 @@ export function RoutePicker({
                 activeId={activeRoute}
                 onPick={onPick}
               />
-              <div className="picker-group">
-                <h3>Shoot</h3>
-                <div className="picker-row">
-                  <button aria-pressed={hoops.hasShot} onClick={hoops.onShot}>
-                    Shot
-                  </button>
+              {hoops.onShot && (
+                <div className="picker-group">
+                  <h3>Shoot</h3>
+                  <div className="picker-row">
+                    <button aria-pressed={hoops.hasShot} onClick={hoops.onShot}>
+                      Shot
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )}
           <Group

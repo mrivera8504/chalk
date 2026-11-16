@@ -14,7 +14,7 @@ import { framesOf, nextFrame, withFrames, type Frame } from '../domain/frames';
 import { MARK_NAMES, mirrorMarks, placeFor, type BoardMark, type MarkKind } from '../domain/marks';
 import { SOCCER_ACTIONS } from '../domain/presets/soccer';
 import { GOAL } from '../sports/soccer/pitch';
-import { anyVariant, surfaceOf, viewFor } from '../sports';
+import { anyVariant, goalOf, surfaceOf, viewFor } from '../sports';
 import { Playback } from './Playback';
 import { canRecordVideo, playToVideo } from '../export/video';
 import { rulesFor, variantKey } from '../sports/football';
@@ -1003,7 +1003,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       if (rest.length < prev.length) return rest;
       // At the rim on a court; on a pitch at the goal he is attacking.
       const goal = { x: GOAL.x, y: p.side === 'offense' ? GOAL.y : -GOAL.y };
-      return [...rest, makeShot(p, rest, ground === 'pitch' ? goal : undefined)];
+      return [...rest, makeShot(p, rest, ground === 'pitch' ? goal : ground === 'court' ? undefined : goalOf(play.variant))];
     });
   }
 
@@ -1963,12 +1963,17 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
             hoops={
               hoops
                 ? {
-                    actions: ground === 'pitch' ? SOCCER_ACTIONS : HOOPS_ACTIONS,
+                    // A pack has no concepts of its own: lines by hand, the
+                    // Pass tool, and a shot where there is a goal.
+                    actions: ground === 'pitch' ? SOCCER_ACTIONS : ground === 'court' ? HOOPS_ACTIONS : [],
                     runTitle: ground === 'pitch' ? 'Run' : 'Cut',
                     hasShot: assignments.some(
                       (a) => a.playerId === selectedPlayer.id && a.kind === 'shot',
                     ),
-                    onShot: () => toggleShot(selectedPlayer),
+                    onShot:
+                      ground === 'court' || ground === 'pitch' || goalOf(play.variant)
+                        ? () => toggleShot(selectedPlayer)
+                        : undefined,
                   }
                 : undefined
             }

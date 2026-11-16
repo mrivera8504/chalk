@@ -7,7 +7,11 @@ import { rulesFor } from '../../src/sports/football';
 import { starterPlays } from '../../src/store/starters';
 
 describe('starter plays', () => {
-  for (const sport of SPORTS) {
+  it('offers none for a sport pack, which has no concepts to build them from', () => {
+    for (const id of ['volley6', 'lax10', 'hockey6', 'blank']) expect(starterPlays(id)).toEqual([]);
+  });
+
+  for (const sport of SPORTS.filter((s) => !s.surface || ['field', 'court', 'pitch'].includes(s.surface))) {
     for (const v of sport.variants) {
       it(`gives ${sport.name} ${v.name} plays that are whole and legal`, () => {
         const plays = starterPlays(v.id);
