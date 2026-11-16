@@ -130,13 +130,22 @@ export function screenPath(screener: PlayerSlot, forWhom: PlayerSlot): PathPoint
   return between(screener, forWhom, PLAYER_R * 2 + 0.2);
 }
 
-/** A shot: from wherever he ends up, to the rim. */
-export function shotPath(shooter: PlayerSlot, all: Assignment[]): PathPoint[] {
+/**
+ * A shot: from wherever he ends up, to the target — the rim, or a goal.
+ *
+ * The target is kept as the line's own last point, so rebuilding one needs to
+ * know nothing about which sport it is on.
+ */
+export function shotPath(
+  shooter: PlayerSlot,
+  all: Assignment[],
+  target: { x: number; y: number } = rim,
+): PathPoint[] {
   const at = endOf(shooter, all);
-  const d = Math.hypot(rim.x - at.x, rim.y - at.y) || 1;
+  const d = Math.hypot(target.x - at.x, target.y - at.y) || 1;
   return [
-    { x: at.x + ((rim.x - at.x) / d) * PLAYER_R, y: at.y + ((rim.y - at.y) / d) * PLAYER_R },
-    { x: rim.x, y: rim.y },
+    { x: at.x + ((target.x - at.x) / d) * PLAYER_R, y: at.y + ((target.y - at.y) / d) * PLAYER_R },
+    { x: target.x, y: target.y },
   ];
 }
 
@@ -163,6 +172,10 @@ export function makeScreen(screener: PlayerSlot, forWhom: PlayerSlot): Assignmen
   };
 }
 
-export function makeShot(shooter: PlayerSlot, all: Assignment[]): Assignment {
-  return { id: newId(), playerId: shooter.id, kind: 'shot', path: shotPath(shooter, all) };
+export function makeShot(
+  shooter: PlayerSlot,
+  all: Assignment[],
+  target?: { x: number; y: number },
+): Assignment {
+  return { id: newId(), playerId: shooter.id, kind: 'shot', path: shotPath(shooter, all, target) };
 }

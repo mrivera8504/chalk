@@ -1,6 +1,8 @@
 import type { Gap } from '../domain/gaps';
 import type { Hole } from '../domain/types';
+import type { Surface } from '../sports';
 import { Court } from './Court';
+import { Pitch } from './Pitch';
 import { VIEW } from './geometry';
 
 /** NFHS hash spacing is 53 feet 4 inches, so 8.89 yards either side of center. */
@@ -22,10 +24,10 @@ interface Props {
    */
   view?: { x: number; y: number; w: number; h: number };
   /**
-   * A court instead of a field. One component, switched here, so the board,
+   * A court or a pitch instead of a field. One component, switched here, so the board,
    * the card and the exporter cannot draw three different surfaces.
    */
-  court?: boolean;
+  surface?: Surface;
 }
 
 const BOARD_VIEW = {
@@ -42,9 +44,10 @@ export function Field({
   gaps = [],
   showGaps = false,
   view = BOARD_VIEW,
-  court = false,
+  surface = 'field',
 }: Props) {
-  if (court) return <Court view={view} />;
+  if (surface === 'court') return <Court view={view} />;
+  if (surface === 'pitch') return <Pitch view={view} />;
 
   const left = view.x;
   const right = view.x + view.w;

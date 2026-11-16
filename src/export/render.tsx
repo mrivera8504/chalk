@@ -13,7 +13,7 @@ import { PlayerShape } from '../render/PlayerShape';
 import { VisionCone } from '../render/VisionCone';
 import { toPathD } from '../render/geometry';
 import { BOARD_ASPECT } from './paper';
-import { isHoops } from '../sports';
+import { isFootball, surfaceOf } from '../sports';
 import { rulesFor } from '../sports/football';
 import { boardView, viewBox, type View } from './view';
 import { paperCss } from '../ui/surface';
@@ -154,7 +154,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
         gaps={gaps}
         showGaps={opts.showGaps ?? false}
         view={view}
-        court={isHoops(play.variant)}
+        surface={surfaceOf(play.variant)}
       />
       {/* Under everything, exactly as on the board. */}
       {(play.zones ?? []).map((z) => (
@@ -191,7 +191,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
           player={p}
           selected={false}
           ball={p.id === play.ballCarrierId}
-          ballMark={isHoops(play.variant) ? 'ball' : 'star'}
+          ballMark={isFootball(play.variant) ? 'star' : 'ball'}
         />
       ))}
     </>,

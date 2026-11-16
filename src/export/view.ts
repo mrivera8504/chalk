@@ -1,7 +1,7 @@
 import { refreshPaths } from '../domain/regenerate';
 import type { Play } from '../domain/types';
 import { VIEW } from '../render/geometry';
-import { isHoops, viewOf } from '../sports';
+import { isFootball, isHoops, viewOf } from '../sports';
 
 
 /**
@@ -36,7 +36,7 @@ export const DEFAULT_VIEW: View = {
 
 /** The whole board a play is drawn on: the field's window, or the court's. */
 export function boardView(play: Play): View {
-  if (!isHoops(play.variant)) return DEFAULT_VIEW;
+  if (isFootball(play.variant)) return DEFAULT_VIEW;
   const c = viewOf(play.variant);
   return { x: -c.halfWidth, y: -c.downfield, w: c.halfWidth * 2, h: c.downfield + c.behind };
 }

@@ -5,12 +5,13 @@ import { refreshPaths } from '../domain/regenerate';
 import type { PlayerSlot } from '../domain/types';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
+import type { Surface } from '../sports';
 import { PlayerShape } from '../render/PlayerShape';
 
 interface Props {
   frames: Frame[];
   viewBox: string;
-  court: boolean;
+  surface: Surface;
   fieldView: { x: number; y: number; w: number; h: number };
   /** Whether a man is on the board at all: a hidden side stays hidden. */
   shows: (p: PlayerSlot) => boolean;
@@ -30,7 +31,7 @@ interface Props {
  * Inert, like everything else drawn on the board: the stage underneath still
  * takes the pointer, and a tap anywhere stops the play.
  */
-export function Playback({ frames: stored, viewBox, court, fieldView, shows, onStep, onDone }: Props) {
+export function Playback({ frames: stored, viewBox, surface, fieldView, shows, onStep, onDone }: Props) {
   const [ms, setMs] = useState(0);
   /*
    * Every line rebuilt from its men, once, before anybody moves along one. A
@@ -69,7 +70,7 @@ export function Playback({ frames: stored, viewBox, court, fieldView, shows, onS
 
   return (
     <svg className="playback" viewBox={viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-      <Field holes={[]} showHoles={false} view={fieldView} court={court} />
+      <Field holes={[]} showHoles={false} view={fieldView} surface={surface} />
       {/* The lines stay, faint: what is being run is still what was drawn. */}
       <g opacity={0.3}>
         {lines.map((a) => (
@@ -82,7 +83,7 @@ export function Playback({ frames: stored, viewBox, court, fieldView, shows, onS
           player={p}
           selected={false}
           ball={p.id === pose.holder}
-          ballMark={court ? 'ball' : 'star'}
+          ballMark={surface === 'field' ? 'star' : 'ball'}
         />
       ))}
       {pose.ball && (

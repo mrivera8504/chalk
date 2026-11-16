@@ -3,7 +3,6 @@ import { useScrollFade } from '../ui/useScrollFade';
 import { ZONE_SWATCHES } from '../domain/colors';
 import { byJersey, whoIs, type RosterEntry } from '../domain/roster';
 import { DEFENSE_PRESETS, rushPresets, type DefensePreset } from '../domain/presets/defense';
-import { HOOPS_ACTIONS } from '../domain/presets/hoops';
 import { ROUTES, type RoutePreset } from '../domain/presets/routes';
 import { ZONE_PRESETS, type ZonePreset } from '../domain/presets/zones';
 import type { PlayerSlot, ShapeKind } from '../domain/types';
@@ -67,8 +66,14 @@ export interface DefenseTools {
 
 interface Props {
   player: PlayerSlot;
-  /** On a court: the list is cuts and dribbles, and there is a shot to take. */
-  hoops?: { hasShot: boolean; onShot: () => void };
+  /** Off a football field: the list is the sport's own, and there is a shot to take. */
+  hoops?: {
+    /** The sport's own list: a court's cuts, a pitch's runs. */
+    actions: RoutePreset[];
+    runTitle: string;
+    hasShot: boolean;
+    onShot: () => void;
+  };
   /** Set for a defender, and that is what switches the panel to his side. */
   defense?: DefenseTools;
   /** The user's own, already wearing the preset face. */
@@ -530,14 +535,14 @@ export function RoutePicker({
           {hoops && (
             <>
               <Group
-                title="Cut"
-                routes={HOOPS_ACTIONS.filter((r) => r.group === 'cut')}
+                title={hoops.runTitle}
+                routes={hoops.actions.filter((r) => r.group === 'cut')}
                 activeId={activeRoute}
                 onPick={onPick}
               />
               <Group
                 title="Dribble"
-                routes={HOOPS_ACTIONS.filter((r) => r.group === 'dribble')}
+                routes={hoops.actions.filter((r) => r.group === 'dribble')}
                 activeId={activeRoute}
                 onPick={onPick}
               />

@@ -14,6 +14,11 @@ export interface SportModule {
   name: string;
   /** What every position and path is measured in. Never pixels. */
   unit: 'yd' | 'ft' | 'm';
+  /**
+   * Real yards to one unit on the board, where the surface is drawn smaller
+   * than life so the men on it are big enough to read. Absent means one.
+   */
+  yardsPerUnit?: number;
   /** The board's window, in that unit, around the sport's own origin. */
   view: { halfWidth: number; downfield: number; behind: number };
   /** Radius of a player's mark, in that unit. */

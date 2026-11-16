@@ -14,7 +14,7 @@ import {
 import { useSettings, boardVars } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
-import { isHoops } from '../sports';
+import { isFootball, surfaceOf } from '../sports';
 import { PlayerShape } from '../render/PlayerShape';
 import { FocusSquare } from '../render/FocusSquare';
 import { ZoneArea } from '../render/Zone';
@@ -105,7 +105,7 @@ export function PlayCard({
         style={boardVars(playSurface(play, settings.fieldSurface))}
       >
         <svg viewBox={viewBox(view)} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-          <Field holes={holes} showHoles={false} view={view} court={isHoops(play.variant)} />
+          <Field holes={holes} showHoles={false} view={view} surface={surfaceOf(play.variant)} />
           {/* Under the play, exactly as on the board. */}
           {(play.zones ?? []).map((z) => (
             <ZoneArea
@@ -150,7 +150,7 @@ export function PlayCard({
               player={p}
               selected={false}
               ball={p.id === play.ballCarrierId}
-              ballMark={isHoops(play.variant) ? 'ball' : 'star'}
+              ballMark={isFootball(play.variant) ? 'star' : 'ball'}
             />
           ))}
         </svg>

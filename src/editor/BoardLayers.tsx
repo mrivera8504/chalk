@@ -4,6 +4,7 @@ import type { Gap } from '../domain/gaps';
 import type { Assignment, Focus, Hole, PathPoint, PlayerSlot, Vision, Zone } from '../domain/types';
 import { AssignmentPath } from '../render/AssignmentPath';
 import { Field } from '../render/Field';
+import type { Surface } from '../sports';
 import { FocusSquare } from '../render/FocusSquare';
 import { PlayerShape } from '../render/PlayerShape';
 import { VisionCone } from '../render/VisionCone';
@@ -14,7 +15,7 @@ import type { Selection } from './gesture';
 
 interface Props {
   /** A court instead of a field, and the window either is laid down in. */
-  court?: boolean;
+  surface?: Surface;
   fieldView?: { x: number; y: number; w: number; h: number };
   holes: Hole[];
   showHoles: boolean;
@@ -78,7 +79,7 @@ export function BoardLayers({
   routeHandles,
   aimRef,
   ringRef,
-  court = false,
+  surface = 'field',
   fieldView,
 }: Props) {
   return (
@@ -90,7 +91,7 @@ export function BoardLayers({
         gaps={gaps}
         showGaps={showGaps}
         view={fieldView}
-        court={court}
+        surface={surface}
       />
 
       {/*
@@ -152,7 +153,7 @@ export function BoardLayers({
           selected={sel?.kind === 'player' && sel.id === p.id}
           hovered={p.id === hoverId}
           ball={p.id === ballCarrierId}
-          ballMark={court ? 'ball' : 'star'}
+          ballMark={surface === 'field' ? 'star' : 'ball'}
           pending={
             p.id === pending?.blockerId || p.id === pending?.targetId || p.id === carrying
           }

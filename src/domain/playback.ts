@@ -1,4 +1,3 @@
-import { COURT } from '../sports/basketball/court';
 import type { Frame } from './frames';
 import { movementOf } from './moves';
 import type { PlayerSlot } from './types';
@@ -71,11 +70,13 @@ export function poseAt(frames: Frame[], ms: number): Pose {
     }
   } else if (from && shot && t > SHOT[0]) {
     const k = within(t, SHOT[0], SHOT[1]);
+    // Wherever the shot was drawn to: the rim, or a goal.
+    const target = shot.path[shot.path.length - 1];
     return {
       step,
       players,
       holder: null,
-      ball: { x: lerp(from.x, COURT.rim.x, k), y: lerp(from.y, COURT.rim.y, k) },
+      ball: { x: lerp(from.x, target.x, k), y: lerp(from.y, target.y, k) },
     };
   }
   return { step, players, holder: had, ball: null };

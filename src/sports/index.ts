@@ -1,9 +1,10 @@
 import { basketball } from './basketball';
 import { football } from './football';
+import { soccer } from './soccer';
 import type { SportModule, Variant } from './types';
 
 /** Every sport the app can draw, in the order a coach is offered them. */
-export const SPORTS: SportModule[] = [football, basketball];
+export const SPORTS: SportModule[] = [football, basketball, soccer];
 
 /**
  * The sport a play, a book or a formation belongs to, read off its variant.
@@ -33,5 +34,22 @@ export function viewOf(variant: string | undefined): SportModule['view'] {
   return sportOf(variant).view;
 }
 
-export { basketball, football };
+/** What a play is drawn on. Each has its own lines; football's has its rules too. */
+export type Surface = 'field' | 'court' | 'pitch';
+
+export function surfaceOf(variant: string | undefined): Surface {
+  const sport = sportOf(variant);
+  return sport === basketball ? 'court' : sport === soccer ? 'pitch' : 'field';
+}
+
+/**
+ * True for football, false for everything since. The seam most of the app
+ * branches at: holes, gaps, legality, the namer, blocks and the defensive call
+ * are football's, and no other sport is shown them.
+ */
+export function isFootball(variant: string | undefined): boolean {
+  return sportOf(variant) === football;
+}
+
+export { basketball, football, soccer };
 export type { SportModule, Variant } from './types';

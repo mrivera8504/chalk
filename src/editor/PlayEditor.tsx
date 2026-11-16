@@ -11,7 +11,9 @@ import { refreshPaths } from '../domain/regenerate';
 import { computeGaps } from '../domain/gaps';
 import { HOOPS_ACTIONS, makeShot } from '../domain/presets/hoops';
 import { framesOf, nextFrame, type Frame } from '../domain/frames';
-import { anyVariant, isHoops, viewOf } from '../sports';
+import { SOCCER_ACTIONS } from '../domain/presets/soccer';
+import { GOAL } from '../sports/soccer/pitch';
+import { anyVariant, surfaceOf, viewOf } from '../sports';
 import { Playback } from './Playback';
 import { rulesFor, variantKey } from '../sports/football';
 import {
@@ -233,8 +235,14 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     [allFormations, play.variant],
   );
   const kind = useMemo(() => anyVariant(play.variant), [play.variant]);
-  /* A court or a field: the seam the football-only parts of the editor hang on. */
-  const hoops = isHoops(play.variant);
+  /*
+   * What the play is drawn on, and whether it is football at all. `hoops` is
+   * every sport since: it began as basketball and the name stayed, because
+   * what it switches off — holes, gaps, legality, blocks, the defensive call —
+   * is the same list for soccer.
+   */
+  const ground = surfaceOf(play.variant);
+  const hoops = ground !== 'field';
   const view = viewOf(play.variant);
   /* The starred set for this unit. The two sides star independently. */
   const [foundationId, setFoundationId] = useState<string | null>(() =>
@@ -849,7 +857,10 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     remember();
     setAssignments((prev) => {
       const rest = prev.filter((a) => !(a.playerId === p.id && a.kind === 'shot'));
-      return rest.length < prev.length ? rest : [...rest, makeShot(p, rest)];
+      if (rest.length < prev.length) return rest;
+      // At the rim on a court; on a pitch at the goal he is attacking.
+      const goal = { x: GOAL.x, y: p.side === 'offense' ? GOAL.y : -GOAL.y };
+      return [...rest, makeShot(p, rest, ground === 'pitch' ? goal : undefined)];
     });
   }
 
@@ -1070,6 +1081,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     const all = new Map<string, RoutePreset>();
     for (const r of ROUTES) all.set(r.id, r);
     for (const r of HOOPS_ACTIONS) all.set(r.id, r);
+    for (const r of SOCCER_ACTIONS) all.set(r.id, r);
     for (const r of customRoutes) all.set(r.id, toPreset(r));
     return all;
   }, [customRoutes]);
@@ -1675,7 +1687,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       >
         <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
           <BoardLayers
-            court={hoops}
+            surface={ground}
             fieldView={{
               x: -view.halfWidth,
               y: -view.downfield,
@@ -1723,7 +1735,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           <Playback
             frames={allSteps}
             viewBox={viewBox}
-            court={hoops}
+            surface={ground}
             fieldView={{
               x: -view.halfWidth,
               y: -view.downfield,
@@ -1764,6 +1776,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
             hoops={
               hoops
                 ? {
+                    actions: ground === 'pitch' ? SOCCER_ACTIONS : HOOPS_ACTIONS,
+                    runTitle: ground === 'pitch' ? 'Run' : 'Cut',
                     hasShot: assignments.some(
                       (a) => a.playerId === selectedPlayer.id && a.kind === 'shot',
                     ),
@@ -1949,7 +1963,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               */}
             <section className="tool-group">
               <h4>Mode</h4>
-              <BlockTool tool={tool} unit={unit} blocking={kind.blocking} hoops={hoops} onTool={handleTool} />
+              <BlockTool tool={tool} unit={unit} blocking={kind.blocking} surface={ground} onTool={handleTool} />
             </section>
 
             {/*
@@ -1968,7 +1982,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                   onClick={() => setPicker((v) => (v === 'formation' ? null : 'formation'))}
                   aria-pressed={picker === 'formation'}
                 >
-                  {hoops ? 'Set' : unit === 'defense' ? 'Front' : 'Formation'}
+                  {ground === 'pitch' ? 'Shape' : hoops ? 'Set' : unit === 'defense' ? 'Front' : 'Formation'}
                 </button>
                 {/*
                   * The two decisions that are about the whole board rather than

@@ -7,7 +7,7 @@ import {
   foundationOffense,
   readFoundationId,
 } from '../domain/presets/formations';
-import { isHoops } from '../sports';
+import { surfaceOf } from '../sports';
 import { rulesFor, variantKey } from '../sports/football';
 import {
   MAIN_BOOK,
@@ -184,7 +184,7 @@ export function blankPlay(
   variant?: string,
 ): Play {
   const kind = variantKey(variant);
-  const hoops = isHoops(kind);
+  const surface = surfaceOf(kind);
   const players = applyOnLine(
     unit === 'defense'
       ? [...foundationOffense(kind), ...foundationDefense(kind)]
@@ -213,7 +213,11 @@ export function blankPlay(
     ...(bookId === MAIN_BOOK ? {} : { bookId }),
     players,
     // Somebody has the ball when a set starts, and it is the point guard.
-    ...(hoops ? { ballCarrierId: players.find((p) => p.label === '1')?.id } : {}),
+    ...(surface === 'court' ? { ballCarrierId: players.find((p) => p.label === '1')?.id } : {}),
+    // On a pitch it starts in midfield: the last man of the middle row.
+    ...(surface === 'pitch'
+      ? { ballCarrierId: players.filter((p) => p.side === 'offense')[Math.ceil(players.length / 2)]?.id }
+      : {}),
     assignments: [],
     annotations: [],
     notes: '',

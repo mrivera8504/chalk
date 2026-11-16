@@ -10,7 +10,7 @@ import {
 } from '../domain/types';
 import { PageHead } from '../shell/AppShell';
 import type { SyncState } from '../store/sync';
-import { SPORTS, anyVariant, football, isHoops, sportOf } from '../sports';
+import { SPORTS, anyVariant, football, isFootball, sportOf } from '../sports';
 import { askChoice, askConfirm, askText } from '../ui/dialog';
 import { Icon } from '../ui/Icon';
 import { Menu } from '../ui/Menu';
@@ -574,7 +574,7 @@ export function PlaybookList({
           * A court has no second unit to draw for: a basketball play is a set
           * with the defense standing in it, not one side's half of a snap.
           */}
-        {!isHoops(book.variant) && <button onClick={() => onNew('defense')}>New defense</button>}
+        {isFootball(book.variant) && <button onClick={() => onNew('defense')}>New defense</button>}
         <button className="primary with-icon" onClick={() => onNew('offense')}>
           <Icon name="plus" size={20} />
           New play

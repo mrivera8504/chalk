@@ -151,7 +151,7 @@ export function refreshLinks(assignments: Assignment[], players: PlayerSlot[]): 
     // so it is rebuilt with the lines that do.
     if (a.kind === 'shot') {
       const shooter = byId.get(a.playerId);
-      return shooter ? [{ ...a, path: shotPath(shooter, assignments) }] : [];
+      return shooter ? [{ ...a, path: shotPath(shooter, assignments, a.path[a.path.length - 1]) }] : [];
     }
     if (!isLinkKind(a.kind) || !a.targetPlayerId) return [a];
 

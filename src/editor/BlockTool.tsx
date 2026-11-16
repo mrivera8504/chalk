@@ -1,3 +1,4 @@
+import type { Surface } from '../sports';
 import type { BlockKind, LinkKind, PlayerSlot, Side } from '../domain/types';
 
 export type Tool = 'select' | 'routes' | 'draw' | 'erase' | BlockKind | LinkKind;
@@ -23,20 +24,21 @@ export function isPairTool(tool: Tool): tool is BlockKind | LinkKind {
 export function toolsFor(
   unit: Side,
   blocking = true,
-  hoops = false,
+  surface: Surface = 'field',
 ): { id: Tool; label: string }[] {
   /*
    * A court's row. Pass and Screen are the two things drawn between two
    * players, so they are the two-tap tools here, as Block and Man are on a
    * field; everything one man does alone is in his own list.
    */
-  if (hoops) {
+  if (surface !== 'field') {
     return [
       { id: 'select', label: 'Move' },
       { id: 'routes', label: 'Actions' },
       { id: 'erase', label: 'Erase' },
       { id: 'pass', label: 'Pass' },
-      { id: 'screen', label: 'Screen' },
+      // Nobody sets a screen on a pitch.
+      ...(surface === 'court' ? [{ id: 'screen' as const, label: 'Screen' }] : []),
     ];
   }
 
@@ -172,8 +174,8 @@ interface Props {
   unit: Side;
   /** False for a kind of football with no blocking: flag. */
   blocking?: boolean;
-  /** A court's row instead of a field's. */
-  hoops?: boolean;
+  /** A court's row or a pitch's instead of a field's. */
+  surface?: Surface;
   onTool: (t: Tool) => void;
 }
 
@@ -183,10 +185,10 @@ interface Props {
  * block you are halfway through assigning, and it is worth more than the
  * buttons when the board is what you want to see.
  */
-export function BlockTool({ tool, unit, blocking = true, hoops = false, onTool }: Props) {
+export function BlockTool({ tool, unit, blocking = true, surface = 'field', onTool }: Props) {
   return (
     <div className="tools">
-      {toolsFor(unit, blocking, hoops).map((t) => (
+      {toolsFor(unit, blocking, surface).map((t) => (
         <button key={t.id} aria-pressed={tool === t.id} onClick={() => onTool(t.id)}>
           {t.label}
         </button>

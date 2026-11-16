@@ -60,8 +60,6 @@ export function Welcome({ onStart, onSignIn }: Props) {
               {s.name}
             </button>
           ))}
-          {/* Said out loud rather than left off, so nobody goes looking. */}
-          <button disabled>Soccer · soon</button>
         </div>
 
         <div className="welcome-kinds" role="radiogroup" aria-label={`Kind of ${sport.name.toLowerCase()}`}>
