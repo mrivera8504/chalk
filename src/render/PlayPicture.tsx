@@ -17,6 +17,12 @@ interface Props {
   view: View;
   /** The device setting a play with no word of its own falls back to. */
   showDefense: boolean;
+  /**
+   * One man's job, for a player studying his own: his line at full strength
+   * and everybody else's faded back. With `quiz`, his line is not drawn at all
+   * — the question is what he does, and the answer is hidden until asked for.
+   */
+  focus?: { playerId: string; quiz?: boolean } | null;
 }
 
 /**
@@ -27,7 +33,7 @@ interface Props {
  * handles and a pen to answer — and the exporter is a third, for the reasons
  * under *Export*; this is the one that is only ever looked at.
  */
-export function PlayPicture({ play, view, showDefense }: Props) {
+export function PlayPicture({ play, view, showDefense, focus = null }: Props) {
   const qb = quarterback(play.players);
 
   /*
@@ -85,9 +91,19 @@ export function PlayPicture({ play, view, showDefense }: Props) {
         * all stored as who-does-what-to-whom, so a thumbnail that drew the
         * saved path would be showing where those men used to stand.
         */}
-      {shownLines.map((a) => (
-        <AssignmentPath key={a.id} assignment={a} autoColor={autoRouteColor(a, play.players)} />
-      ))}
+      {shownLines
+        .filter((a) => !(focus?.quiz && a.playerId === focus.playerId))
+        .map((a) => (
+          <g key={a.id} opacity={focus && a.playerId !== focus.playerId ? 0.22 : undefined}>
+            <AssignmentPath assignment={a} autoColor={autoRouteColor(a, play.players)} />
+          </g>
+        ))}
+      {focus && (() => {
+        const man = shownPlayers.find((p) => p.id === focus.playerId);
+        return man ? (
+          <circle cx={man.x} cy={man.y} r={1.2} fill="none" stroke="var(--select)" strokeWidth={0.14} />
+        ) : null;
+      })()}
       {shownPlayers.map((p) => (
         <PlayerShape
           key={p.id}

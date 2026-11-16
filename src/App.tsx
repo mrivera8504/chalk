@@ -12,6 +12,7 @@ import { go, useRoute } from './ui/route';
 import { AppShell } from './shell/AppShell';
 import { PrintPage, SettingsPage, TeamPage } from './shell/pages';
 import { Welcome, markWelcomed, wasWelcomed } from './shell/Welcome';
+import { GameDay } from './shell/GameDay';
 import { publishShare, revokeShare, shareUrl, takeHandOver } from './store/share';
 import { newId } from './store/usePlaybook';
 import type { Book, Play } from './domain/types';
@@ -231,6 +232,16 @@ export function App() {
             go({ screen: 'settings' });
           }}
         />
+      </>
+    );
+  }
+
+  // The sideline: full screen, outside the shell, with nothing that edits.
+  if (route.screen === 'gameday') {
+    return (
+      <>
+        <DialogHost />
+        <GameDay plays={book.plays} sections={book.sections} onExit={home} />
       </>
     );
   }

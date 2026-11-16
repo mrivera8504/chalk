@@ -607,3 +607,57 @@ button.with-icon {
   height: 100%;
   display: block;
 }
+
+/* Finding your own job in a play: a row of positions, then the quiz. */
+.study {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 16px 12px;
+}
+
+.study-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.study-row > span {
+  color: var(--dim);
+  font-size: 13px;
+  margin-right: 4px;
+}
+
+.study-row button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.study-row button[aria-pressed='true'] {
+  border-color: var(--select);
+  color: var(--select);
+}
+
+.shared-controls .next {
+  margin-left: auto;
+}
+
+/* Game day: the call sheet's folders, each a heading over its cards. */
+.gameday-group h2 {
+  margin: 16px 16px 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* Bigger cards than the playbook's: read at arm's length on a sideline. */
+.gameday .shared-list {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+
+.gameday .shared-card strong {
+  font-size: 16px;
+}

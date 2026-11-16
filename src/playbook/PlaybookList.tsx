@@ -11,6 +11,7 @@ import {
 import { PageHead } from '../shell/AppShell';
 import type { SyncState } from '../store/sync';
 import { SPORTS, anyVariant, football, isFootball, sportOf } from '../sports';
+import { go } from '../ui/route';
 import { askChoice, askConfirm, askText } from '../ui/dialog';
 import { Icon } from '../ui/Icon';
 import { Menu } from '../ui/Menu';
@@ -406,6 +407,12 @@ export function PlaybookList({
           <Icon name="folder" size={18} />
           Add folder
         </button>
+        {/* A place with its own address, so the sideline survives a reload. */}
+        {plays.length > 0 && (
+          <button className="quiet" onClick={() => go({ screen: 'gameday' })}>
+            Game day
+          </button>
+        )}
       </PageHead>
 
       {/* Finding a play. */}

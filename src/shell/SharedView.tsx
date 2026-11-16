@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { framesOf } from '../domain/frames';
-import type { Play } from '../domain/types';
-import { Playback } from '../editor/Playback';
-import { boardView, viewBox, viewForPlays } from '../export/view';
+import { useEffect, useState } from 'react';
+import { viewForPlays } from '../export/view';
 import { PlayPicture } from '../render/PlayPicture';
-import { surfaceOf } from '../sports';
 import { boardVars } from '../store/settings';
 import { handOver, readShare, type Shared } from '../store/share';
 import { Icon } from '../ui/Icon';
+import { PlayStudy } from './PlayStudy';
 
 interface Props {
   token: string;
@@ -83,7 +80,12 @@ export function SharedView({ token }: Props) {
       </header>
 
       {play ? (
-        <SharedPlay play={play} />
+        <PlayStudy
+          play={play}
+          onNext={
+            shared.plays.length > 1 ? () => setOpen(((open ?? 0) + 1) % shared.plays.length) : undefined
+          }
+        />
       ) : (
         <div className="shared-list">
           {shared.plays.map((p, i) => (
@@ -97,71 +99,5 @@ export function SharedView({ token }: Props) {
         </div>
       )}
     </div>
-  );
-}
-
-/** One play: its steps, a button that runs it, and its notes underneath. */
-function SharedPlay({ play }: { play: Play }) {
-  const steps = useMemo(() => framesOf(play), [play]);
-  const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const view = boardView(play);
-  const f = steps[step];
-  const shown: Play = {
-    ...play,
-    players: f.players,
-    assignments: f.assignments,
-    annotations: f.annotations,
-    ballCarrierId: f.ballCarrierId,
-  };
-
-  return (
-    <>
-      <div className="shared-board" style={boardVars(play.surface ?? 'grass')}>
-        {playing ? (
-          <Playback
-            frames={steps}
-            viewBox={viewBox(view)}
-            surface={surfaceOf(play.variant)}
-            fieldView={view}
-            shows={(p) => (p.side === 'defense' ? !play.hideDefense : !play.hideOffense)}
-            onStep={setStep}
-            onDone={() => setPlaying(false)}
-          />
-        ) : (
-          <PlayPicture play={shown} view={view} showDefense />
-        )}
-      </div>
-      <div className="shared-controls">
-        <button
-          aria-label={playing ? 'Stop' : 'Run the play'}
-          aria-pressed={playing}
-          onClick={() => {
-            setStep(0);
-            setPlaying((v) => !v);
-          }}
-        >
-          <Icon name={playing ? 'stop' : 'play'} />
-        </button>
-        {steps.length > 1 &&
-          steps.map((_, i) => (
-            <button
-              key={i}
-              aria-label={`Step ${i + 1}`}
-              aria-pressed={i === step}
-              disabled={playing}
-              onClick={() => setStep(i)}
-            >
-              {i + 1}
-            </button>
-          ))}
-      </div>
-      {(play.coachingPoint || play.notes) && (
-        <div className="shared-notes">
-          {play.coachingPoint && <p className="point">{play.coachingPoint}</p>}
-          {play.notes && <p>{play.notes}</p>}
-        </div>
-      )}
-    </>
   );
 }

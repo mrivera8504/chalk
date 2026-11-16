@@ -349,3 +349,22 @@ describe('a shared link', () => {
     expect(await page.getByRole('menuitem', { name: 'Share link' }).count()).toBe(1);
   });
 });
+
+describe('game day', () => {
+  it('opens the sheet full screen with nothing to edit, and studies one man’s job', async () => {
+    await page.getByRole('button', { name: 'Game day' }).click();
+    await expect.poll(path).toBe('/gameday');
+    expect(await page.getByRole('navigation').count()).toBe(0);
+    expect(await page.locator('.shared-card').count()).toBe(2);
+    await page.locator('.shared-card').first().click();
+    await page.locator('.study-row button:not([disabled])').first().click();
+    await page.getByRole('button', { name: 'Quiz me' }).click();
+    expect(await page.getByRole('button', { name: 'Show my job' }).count()).toBe(1);
+    // Nothing on the screen edits: no drawer, no pencil, no menus.
+    expect(await page.locator('.drawer, .quick-bar, .play-card').count()).toBe(0);
+    await page.goBack();
+    await page.locator('.shared-card').first().waitFor();
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect.poll(path).toBe('/');
+  });
+});
