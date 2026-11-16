@@ -72,3 +72,53 @@
   border-color: var(--select);
   color: var(--select);
 }
+
+/*
+ * The steps of the play, on the row above the zoom pair. A row of its own
+ * inside the bar, so the bar's inert column still lets taps through beside it.
+ */
+.quick-bar .steps {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  max-width: min(64vw, 320px);
+}
+
+/* Past five or six steps the chips scroll rather than pushing the + away. */
+.quick-bar .step-chips {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  pointer-events: auto;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.quick-bar .steps .quick {
+  flex: 0 0 auto;
+  min-width: 40px;
+  padding: 8px 10px;
+  font-weight: 600;
+}
+
+.quick-bar .step[aria-pressed='true'] {
+  border-color: var(--select);
+  color: var(--select);
+}
+
+.quick-bar .play.on {
+  border-color: var(--ui-live);
+  color: var(--ui-live);
+}
+
+/*
+ * The play running. Laid over the board at exactly its size, and inert: the
+ * stage underneath still takes the pointer, which is how a tap stops it.
+ */
+.stage > svg.playback {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}

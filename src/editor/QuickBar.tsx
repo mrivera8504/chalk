@@ -21,6 +21,16 @@ interface Props {
   onZoom: (next: (z: number) => number) => void;
   viewMoved: boolean;
   onResetView: () => void;
+  /** The play's steps, and the button that runs them. */
+  steps: {
+    count: number;
+    index: number;
+    playing: boolean;
+    onGo: (index: number) => void;
+    onAdd: () => void;
+    onRemove: () => void;
+    onPlay: () => void;
+  };
 }
 
 /**
@@ -50,6 +60,7 @@ export function QuickBar({
   onZoom: setZoom,
   viewMoved,
   onResetView: resetView,
+  steps,
 }: Props) {
   return (
     <div className={`quick-bar ${side}`}>
@@ -73,6 +84,48 @@ export function QuickBar({
           <Icon name="redo" />
         </button>
       )}
+
+      {/*
+        * The steps of the play, on the pencil's row. Over the board and not
+        * under it: a strip below the stage would be a sibling that changes its
+        * height, and every coordinate on the field would move.
+        *
+        * The step that is showing is pressed; tapping it again is how it is
+        * taken away, which the confirm then spells out. One step and there is
+        * nothing to take away, so the first chip does nothing then.
+        */}
+      <div className="steps">
+        <button
+          className={steps.playing ? 'quick play on' : 'quick play'}
+          aria-pressed={steps.playing}
+          aria-label={steps.playing ? 'Stop' : 'Run the play'}
+          onClick={steps.onPlay}
+        >
+          <Icon name={steps.playing ? 'stop' : 'play'} />
+        </button>
+        <div className="step-chips" role="group" aria-label="Steps">
+          {Array.from({ length: steps.count }, (_, i) => (
+            <button
+              key={i}
+              className="quick step"
+              aria-pressed={i === steps.index}
+              aria-label={`Step ${i + 1}`}
+              disabled={steps.playing}
+              onClick={() => (i === steps.index ? steps.count > 1 && steps.onRemove() : steps.onGo(i))}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </div>
+        <button
+          className="quick step"
+          aria-label="Add a step"
+          disabled={steps.playing}
+          onClick={steps.onAdd}
+        >
+          <Icon name="plus" />
+        </button>
+      </div>
 
       {/* Freehand is a thing you reach for mid-play, not a mode you set out in. */}
       <button

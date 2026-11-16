@@ -416,6 +416,13 @@ export interface Play {
    * says. It decides which side the editor opens pointed at, which formations
    * the picker offers, and which rules the namer runs.
    */
+  /**
+   * The steps after the first, for a play that has more than one. The first
+   * step is the play itself — `players`, `assignments`, `annotations`,
+   * `ballCarrierId` — so absent means one step, which is every play there was
+   * before there were steps. See `domain/frames.ts`.
+   */
+  frames?: import('./frames').Frame[];
   unit?: Side;
   /**
    * The kind of football this play is: how many are on the field and what the

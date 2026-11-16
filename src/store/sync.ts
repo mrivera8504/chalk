@@ -119,28 +119,44 @@ export function mergeBooks(mine: Playbook, theirs: Playbook): Playbook {
  */
 type CloudStroke = { points: PathPoint[] };
 
+/*
+ * A play's later steps carry ink of their own, and it is the same array of
+ * arrays one level down — so they are wrapped and unwrapped by the same two
+ * functions as the play. Missed, a play with ink on its second step would be
+ * exactly the write that used to jam the sync.
+ */
+function strokesOut<T extends { annotations?: unknown }>(p: T): T {
+  return Array.isArray(p.annotations)
+    ? { ...p, annotations: (p.annotations as PathPoint[][]).map((points): CloudStroke => ({ points })) }
+    : p;
+}
+
+function strokesIn<T extends { annotations?: unknown }>(p: T): T {
+  return Array.isArray(p?.annotations)
+    ? {
+        ...p,
+        // Accepts a bare array too, which is what a hand-written document or
+        // the rescue script would put there.
+        annotations: (p.annotations as unknown[]).map((s) =>
+          Array.isArray(s) ? s : Array.isArray((s as CloudStroke)?.points) ? (s as CloudStroke).points : [],
+        ),
+      }
+    : p;
+}
+
 export function toCloud(plays: Play[]): unknown[] {
-  return plays.map((p) =>
-    Array.isArray(p.annotations)
-      ? { ...p, annotations: p.annotations.map((points): CloudStroke => ({ points })) }
-      : p,
-  );
+  return plays.map((p) => {
+    const out = strokesOut(p);
+    return Array.isArray(p.frames) ? { ...out, frames: p.frames.map(strokesOut) } : out;
+  });
 }
 
 export function fromCloud(plays: unknown): Play[] {
   if (!Array.isArray(plays)) return [];
-  return plays.map((p: Play) =>
-    Array.isArray(p?.annotations)
-      ? {
-          ...p,
-          // Accepts a bare array too, which is what a hand-written document or
-          // the rescue script would put there.
-          annotations: (p.annotations as unknown[]).map((s) =>
-            Array.isArray(s) ? s : Array.isArray((s as CloudStroke)?.points) ? (s as CloudStroke).points : [],
-          ),
-        }
-      : p,
-  );
+  return plays.map((p: Play) => {
+    const back = strokesIn(p);
+    return Array.isArray(p?.frames) ? { ...back, frames: p.frames.map(strokesIn) } : back;
+  });
 }
 
 export type SyncState =

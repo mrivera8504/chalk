@@ -27,6 +27,8 @@ const PATHS = {
   pan: 'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',
   minus: 'M5 12h14',
   tools: 'M4 6h16M4 12h16M4 18h16',
+  play: 'M8 5l11 7-11 7z',
+  stop: 'M7 7h10v10H7z',
 } as const;
 
 export type IconName = keyof typeof PATHS;

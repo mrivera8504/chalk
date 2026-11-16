@@ -10,7 +10,9 @@ import { describeAssignment } from '../domain/presets/blocks';
 import { refreshPaths } from '../domain/regenerate';
 import { computeGaps } from '../domain/gaps';
 import { HOOPS_ACTIONS, makeShot } from '../domain/presets/hoops';
+import { framesOf, nextFrame, type Frame } from '../domain/frames';
 import { anyVariant, isHoops, viewOf } from '../sports';
+import { Playback } from './Playback';
 import { rulesFor, variantKey } from '../sports/football';
 import {
   defensePresetById,
@@ -315,6 +317,25 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
    * began. One guard, set in one place, covers all of them.
    */
   const tapGuard = useRef(0);
+  /*
+   * The steps of the play. The four pieces of state above — the men, their
+   * lines, the ink, the ball — are always the step that is showing, so every
+   * tool in the editor works on a step without knowing there are any. `steps`
+   * holds them all, and its entry for the step on screen is stale by design:
+   * `allSteps` is the list with the live one put back in.
+   */
+  const [steps, setSteps] = useState<Frame[]>(() => framesOf(play));
+  const [step, setStep] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const allSteps = useMemo<Frame[]>(
+    () =>
+      steps.map((f, i) =>
+        i === step
+          ? { players, assignments, annotations, ...(ballCarrierId ? { ballCarrierId } : {}) }
+          : f,
+      ),
+    [steps, step, players, assignments, annotations, ballCarrierId],
+  );
   const undo = useRef(new UndoStack<Snapshot>());
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -532,10 +553,12 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     onChange({
       ...play,
       name,
-      players,
-      assignments,
-      annotations,
-      ballCarrierId: ballCarrierId ?? undefined,
+      // The first step is the play, as it always was; the rest ride behind it.
+      players: allSteps[0].players,
+      assignments: allSteps[0].assignments,
+      annotations: allSteps[0].annotations,
+      ballCarrierId: allSteps[0].ballCarrierId,
+      frames: allSteps.length > 1 ? allSteps.slice(1) : undefined,
       vision: vision ?? undefined,
       focuses: focuses.length ? focuses : undefined,
       zones: zones.length ? zones : undefined,
@@ -566,10 +589,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     name,
-    players,
-    assignments,
-    annotations,
-    ballCarrierId,
+    // Every step, which is also the men, the lines, the ink and the ball.
+    allSteps,
     vision,
     focuses,
     zones,
@@ -666,6 +687,59 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     if (unit === 'defense') return;
     if (showDefense && isPairTool(tool)) setTool('routes');
     setShowDefense((v) => !v);
+  }
+
+  /**
+   * Put a step on the board.
+   *
+   * Undo starts over. A step back is a step back on the board in front of
+   * you, and a stack that reached across steps would put one step's men onto
+   * another's.
+   */
+  function showStep(all: Frame[], index: number) {
+    dropCarried('step');
+    const f = all[index];
+    setSteps(all);
+    setStep(index);
+    setPlayers(f.players);
+    setAssignments(f.assignments);
+    setAnnotations(f.annotations);
+    setBallCarrierId(f.ballCarrierId ?? null);
+    setSel(null);
+    setPending(null);
+    undo.current = new UndoStack<Snapshot>();
+    syncUndo();
+  }
+
+  /** A new step after this one: everybody where their line left them. */
+  function addStep() {
+    const all = [...allSteps.slice(0, step + 1), nextFrame(allSteps[step]), ...allSteps.slice(step + 1)];
+    showStep(all, step + 1);
+  }
+
+  async function removeStep() {
+    if (allSteps.length < 2) return;
+    const ok = await askConfirm(`Remove step ${step + 1}?`, {
+      body: 'Its lines go with it. The other steps stay as they are.',
+      confirmLabel: 'Remove step',
+      danger: true,
+    });
+    if (!ok) return;
+    const all = allSteps.filter((_, i) => i !== step);
+    showStep(all, Math.min(step, all.length - 1));
+  }
+
+  function togglePlay() {
+    if (playing) {
+      setPlaying(false);
+      return;
+    }
+    dropCarried('play');
+    setSel(null);
+    setPending(null);
+    // From the top, whichever step was showing: a play is run from the start.
+    if (step !== 0) showStep(allSteps, 0);
+    setPlaying(true);
   }
 
   function syncUndo() {
@@ -1584,7 +1658,16 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
            both take them; the panels floating over the board do not. */
         style={boardVars(boardSurface)}
         ref={stageRef}
-        onPointerDown={pointer.handleStageDown}
+        /* While the play runs the board is a screen, and a tap stops it. */
+        onPointerDown={
+          playing
+            ? (e) => {
+                if ((e.target as Element).closest?.('.quick-bar, .drawer')) return;
+                tapGuard.current = performance.now() + 300;
+                setPlaying(false);
+              }
+            : pointer.handleStageDown
+        }
         onPointerMove={pointer.handleMove}
         onPointerUp={pointer.handleUp}
         onPointerCancel={pointer.handleUp}
@@ -1636,6 +1719,24 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           * two panels deep in a drawer.
           */}
         <LiveInkCanvas key={boardSurface} ref={ink} />
+        {playing && (
+          <Playback
+            frames={allSteps}
+            viewBox={viewBox}
+            court={hoops}
+            fieldView={{
+              x: -view.halfWidth,
+              y: -view.downfield,
+              w: view.halfWidth * 2,
+              h: view.downfield + view.behind,
+            }}
+            shows={(p) => (p.side === 'defense' ? showDefense : !hideOffense)}
+            onStep={(i) => {
+              if (i !== step) showStep(allSteps, i);
+            }}
+            onDone={() => setPlaying(false)}
+          />
+        )}
 
       {selectedBlock && (
         <LineInspector
@@ -1748,6 +1849,15 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         * and sits opposite the drawer, so it never competes with the tab.
         */}
       <QuickBar
+        steps={{
+          count: allSteps.length,
+          index: step,
+          playing,
+          onGo: (i) => showStep(allSteps, i),
+          onAdd: addStep,
+          onRemove: () => void removeStep(),
+          onPlay: togglePlay,
+        }}
         side={settings.drawerSide === 'right' ? 'left' : 'right'}
         placeLabel={
           carrying

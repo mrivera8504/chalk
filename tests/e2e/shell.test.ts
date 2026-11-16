@@ -192,7 +192,7 @@ describe('playbooks', () => {
     await page.getByRole('dialog').getByRole('textbox').fill(text);
     await page.getByRole('dialog').getByRole('button', { name: confirm }).click();
     // A new playbook is asked what kind of football it is, straight after.
-    await page.getByRole('dialog', { name: 'What kind of football?' }).getByRole('button', { name: kind }).click();
+    await page.getByRole('dialog', { name: 'What is this playbook for?' }).getByRole('button', { name: kind }).click();
   };
   const men = async (side: string) => {
     const made = (await stored()).plays.find((x) => !['sweep', 'cover3', 'oldest'].includes(x.id));

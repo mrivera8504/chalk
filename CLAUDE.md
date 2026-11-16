@@ -9,8 +9,9 @@ Full spec and stage list: `docs/build-spec.md`.
 eight stages. Stages 0 to 2 (tests and the editor split up; the design system
 and the new shell; the data layer) are deployed, and the `/teams` rules are
 published. Stage 3 (the sport module, and flag, 6-, 8-, 9- and 11-man beside
-7-man) is done in code. See *Tests*, *The editor, in pieces*, *The shell* and
-*Kinds of football* below.
+7-man) and stage 4 (basketball, steps, and running a play) are done in code.
+See *Tests*, *The editor, in pieces*, *The shell*, *Kinds of football* and
+*Basketball, steps and playback* below.
 
 Stages 1-7 done: field and players, blocking tool, route and run presets with
 formations and auto play-naming, freehand ink, a playbook that saves, and
@@ -1053,6 +1054,89 @@ and React throws.
 
 **`askChoice()`** in `ui/dialog.ts` is the third question the dialog can ask: a
 few buttons, each with a line under it, and the tap is the answer.
+
+## Basketball, steps and playback
+
+The overhaul's stage 4.
+
+**Basketball is a variant, and the sport is read off it.** `hoops` in
+`sports/basketball/`, beside `flag5` and `eleven`. `sportOf(variant)`,
+`isHoops()` and `viewOf()` in `sports/index.ts` are the only places that say
+which sport a play is; there is no `Play.sport`, because a variant belongs to
+one sport and a second field could only agree with it or be wrong. So a
+basketball playbook, its plays, its saved sets and its starred set all ride on
+what stage 3 built.
+
+**A court is measured in yards.** The plan said feet. Every constant the board
+is made of — `PLAYER_R`, stroke widths, the snap grid, pick and slop distances —
+is a number of yards, and a half court is 16⅔ by 15⅔ of them: the same order of
+size as the patch of field the board always showed. In feet each constant needs
+a second value and every reader a second branch. `sports/basketball/court.ts`
+holds the dimensions; origin at the middle of the baseline, `+y` to half court,
+so the basket is at the top and the offense comes up from the bottom.
+
+**The window is the sport's.** `VIEW` in `render/geometry.ts` is football's.
+The editor's viewBox, `dragTarget`, `panOffset`, the card and the exporter take
+theirs from `viewOf()`. A court is always shown whole on a card and on paper
+(`viewForPlays`, `boardView`): its lines are what a play is read against.
+`Field` takes `court` and draws `render/Court.tsx` instead, so the board, the
+card and the exporter cannot draw three surfaces.
+
+**What a court draws.** A cut is a `route`. Four kinds are new: `dribble`
+(drawn as a wave by `wavyD`, laid over the path's length so two points and
+forty wobble at the same pitch), `screen`, `pass` and `shot`. Screen and pass
+are `LINK_KINDS` — who to whom, rebuilt by `refreshLinks` — and a shot is
+rebuilt there too, from wherever its shooter's line ends. `isBesideRoute()` is
+pass and shot: lines a man has *beside* the one he runs, which a new cut does
+not take away. Pass and Screen are the two-tap tools; `tapTeammate` takes either
+side of the ball. They are the two pair tools that do **not** drop a defense on
+the board.
+
+**The man with the ball keeps his mark on a court.** `PlayerShape`'s `ballMark`:
+the football star, or a ball drawn at his shoulder. Five numbered circles are
+told apart by their numbers.
+
+**Nothing football-only is shown on a court** — the legality badge, holes, gaps,
+the defensive call, New defense, the on-line toggle. Every one of those branches
+is `hoops` in `PlayEditor`.
+
+**A play is its first step; the rest ride in `Play.frames`.** `domain/frames.ts`.
+Absent means one step, so no saved play changed, and anything that does not know
+about steps — the card, the printed sheet, an old build — draws step one exactly
+as it drew the play. Zones, the cone and the focus squares stay on the play.
+
+**The editor's state is always the step on screen.** `players`, `assignments`,
+`annotations` and `ballCarrierId` are the live step, so no tool had to learn
+about steps. `steps` holds all of them and its entry for the live one is stale
+on purpose; `allSteps` is the list with the live one put back, and it is what is
+saved, stepped from and played. **Undo starts over when the step changes**: a
+stack reaching across steps would put one step's men on another's.
+
+**The next step starts where the lines end.** `nextFrame`: everybody at
+`endOf()` their movement line (`domain/moves.ts`), no lines, and the ball with
+whoever the man holding it passed to. It rebuilds the who-to-whom lines first.
+A saved screen path is only as fresh as the last render, and playback once sent
+a screener to a path from before his man was dragged.
+
+**The step strip is in the quick bar**, over the board, on the row above the
+pencil. Under the stage it would be a sibling that changes the board's height.
+The pressed chip is the step showing; tapping it again asks to remove it.
+
+**Playback is derived and never stored**, and it is its own layer with its own
+clock. `domain/playback.ts` is `poseAt(frames, ms)`: each man along his line by
+distance, eased, arriving as the step ends; a pass in the air from 30% to 70%
+of the step, a shot from 62%. `editor/Playback.tsx` owns the `requestAnimationFrame`
+loop and redraws only itself — re-rendering the editor sixty times a second to
+move eleven marks is paying for the whole screen. The editor hears twice: which
+step is showing, and that it finished. A tap on the board stops it and arms
+`tapGuard`, so the tap picks nothing up.
+
+**The print sheet draws the step on screen**, because `livePlay()` is the board.
+A sheet of every step is not built.
+
+**Not done:** full court, a floor color of its own (the court is drawn in the
+field's two tokens), sets saved per team in the cloud, and play names for
+basketball.
 
 ## Backup, and what a backup has to carry
 
