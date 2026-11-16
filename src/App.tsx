@@ -154,6 +154,16 @@ export function App() {
             }}
             onMovePlay={book.movePlay}
             onSetStatus={book.setPlayStatus}
+            onRevisions={book.revisions}
+            onRestoreRevision={(old) => {
+              const now = book.everyPlay.find((p) => p.id === old.id);
+              // A save like any other, so what is on screen now is kept as the
+              // newest revision and this can be taken back.
+              book.savePlay({ ...old, deletedAt: undefined });
+              toast(`Restored ${old.name || old.suggestedName || 'the play'}`, {
+                undo: now ? () => book.savePlay(now) : undefined,
+              });
+            }}
             books={book.books}
             bookId={book.bookId}
             onSelectBook={book.selectBook}

@@ -14,6 +14,8 @@ import { askConfirm, askText } from '../ui/dialog';
 import { Icon } from '../ui/Icon';
 import { Menu } from '../ui/Menu';
 import { PlayCard } from './PlayCard';
+import { HistoryDialog } from './HistoryDialog';
+import type { Revision } from '../store/cloud2';
 
 interface Props {
   plays: Play[];
@@ -36,6 +38,9 @@ interface Props {
   /** Put a play in front of another one. */
   onMovePlay: (id: string, beforeId: string | null) => void;
   onSetStatus: (id: string, status: PlayStatus | undefined) => void;
+  /** The copies a play's saves have replaced, newest first. */
+  onRevisions: (playId: string) => Promise<Revision[]>;
+  onRestoreRevision: (play: Play) => void;
   /** Every playbook, and which one this screen is showing. */
   books: Book[];
   bookId: string;
@@ -90,6 +95,8 @@ export function PlaybookList({
   onSetSection,
   onMovePlay,
   onSetStatus,
+  onRevisions,
+  onRestoreRevision,
   books,
   bookId,
   onSelectBook,
@@ -121,6 +128,7 @@ export function PlaybookList({
    */
   const [unit, setUnit] = useState<Side | 'all'>('all');
   const [dragging, setDragging] = useState<string | null>(null);
+  const [historyOf, setHistoryOf] = useState<Play | null>(null);
   /** Where the team is with a play, as a filter. Offered once any play says. */
   const [status, setStatus] = useState<PlayStatus | 'all'>('all');
   const book = books.find((b) => b.id === bookId) ?? books[0];
@@ -444,6 +452,7 @@ export function PlaybookList({
                       onSetSection={onSetSection}
                       onFileInNew={fileInNew}
                       onSetStatus={onSetStatus}
+                      onHistory={setHistoryOf}
                     />
                   </div>
                 ))}
@@ -506,6 +515,15 @@ export function PlaybookList({
         * or the other from the moment it exists, because every line drawn on
         * it was drawn for one of them.
         */}
+      {historyOf && (
+        <HistoryDialog
+          play={historyOf}
+          load={onRevisions}
+          onRestore={onRestoreRevision}
+          onClose={() => setHistoryOf(null)}
+        />
+      )}
+
       <div className="book-new">
         <button onClick={() => onNew('defense')}>New defense</button>
         <button className="primary with-icon" onClick={() => onNew('offense')}>

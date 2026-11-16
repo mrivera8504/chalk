@@ -59,14 +59,17 @@ export function readLocal(): StoredBook {
   }
 }
 
-export function writeLocal(book: Playbook, uid: string | null): void {
+/** False when storage would not take it — full, or blocked. See `deep.ts`. */
+export function writeLocal(book: Playbook, uid: string | null): boolean {
   try {
     localStorage.setItem(
       KEY,
       JSON.stringify({ plays: book.plays, sections: book.sections, books: book.books ?? [], uid }),
     );
+    return true;
   } catch {
-    /* quota or private mode; the session still works, it just will not persist */
+    /* quota or private mode; the session still works, and deep.ts takes over */
+    return false;
   }
 }
 

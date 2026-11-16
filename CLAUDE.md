@@ -7,8 +7,9 @@ Full spec and stage list: `docs/build-spec.md`.
 
 **An overhaul is under way** — multi-sport, a new look, teams and sharing — in
 eight stages. Stage 0 (tests, and the editor split up) and stage 1 (the design
-system and the new shell) are done bar a pass on the tablet; stage 2 (the data
-layer) has its first slice in, several playbooks. See *Tests*, *The editor, in
+system and the new shell) and stage 2 (the data layer) are done in code. None of
+it has been on the tablet, and stage 2's cloud half is waiting on rules the owner
+has to publish. See *Tests*, *The editor, in
 pieces* and *The shell* below.
 
 Stages 1-7 done: field and players, blocking tool, route and run presets with
@@ -904,6 +905,97 @@ several.
 filtered on the playbook screen, which offers the filter only once some play has
 one. Backups are version 2 and carry the book list; a version 1 file restores
 exactly as it always did.
+
+## One cloud document per play
+
+Stage 2, second slice: `store/cloud2.ts`. The book was one Firestore document —
+a megabyte for every playbook together, rewritten whole on every stroke. A play
+is now its own document under a team:
+
+    /teams/{teamId}                              books, folders, members, purges
+    /teams/{teamId}/plays/{playId}
+    /teams/{teamId}/plays/{playId}/revisions/{stamp}     the last ten
+    /teams/{teamId}/purged/{playId}              last copy of an emptied play
+
+A coach's own team has their **uid for its id**: no lookup to find it, and two
+devices migrating at once write the same documents to the same place.
+
+**It switches itself on, and nothing changes until the rules are published.**
+Every reconcile calls `probe()`. `denied` means the `/teams` rules are not live:
+the app stays on the single document exactly as before, and asks again next
+time. The rules to publish are in `firestore.rules`; they have **not** been run
+against a real Firestore or the emulator, only reasoned about. Publish them in
+the console, then watch the sync label on one device before trusting it.
+
+**Migration copies, verifies, and marks last.** Every play goes up with its id
+and stamp untouched; the collection is read back and compared; only then is the
+team document written, and that document is the marker. Cut short, there is no
+marker and the next attempt writes the same plays again. If a play fails to
+arrive nothing is switched over and the session carries on with the old sync.
+
+**The old document is never written to again, and still read.** It stays as the
+copy to go back to. A device on an old build goes on writing it, so it is read
+on every reconcile — but merged only when its own `updatedAt` has moved past
+`legacySeen`, or every folder deleted since the migration would come back out
+of it on every sync.
+
+**A push sends what changed, and never writes over a newer copy.** `known` is
+each play's stamp as last seen in the cloud, kept per account in
+`chalk.sync2.{uid}`. A play is sent when its stamp differs. Before writing, the
+copy up there is read: if it is newer it is left alone, and it comes down on the
+next pull. Otherwise it is kept as a revision first, at most one per play per
+ten minutes.
+
+**Nothing leaves the cloud by being left out of a save.** That was the shape of
+every loss this app has had, and with one document per play it cannot happen:
+the only thing that deletes a play document is `purge()`, which is handed the
+plays a coach has just emptied from the trash, keeps a last copy of each, and
+records them on the team document. That record is what stops another device
+handing the trash back — which is the `it.fails` in the hook's tests, still
+failing on the single document and passing here. So the shrink guard has no
+equivalent in this file, on purpose.
+
+**A delete and a put-back stamp the play.** They did not. Two copies merge by
+the newer stamp, so a delete tied with the live copy on every other device and
+lost, on both clouds.
+
+**A pull asks for what changed since the last one**, less five minutes for a
+clock that is behind. The first pull of a session asks for everything.
+
+**Each play has its earlier versions on its card.** `HistoryDialog`, from the
+card's menu. Restoring is a save, so what was on screen becomes the newest
+revision and the toast's Undo takes it back. The list is empty on the single
+document, which never kept revisions per play.
+
+**Not done:** the roster, saved formations, hand-drawn routes and league rules
+are still device-only. Moving them to the team needs a merge rule per item, or
+an empty roster on a new tablet overwrites a full one.
+
+## The second local copy
+
+Stage 2, third slice: `store/deep.ts`. Local storage is still the floor and the
+app still boots from it synchronously. It is also about five megabytes for the
+whole origin, and when the book outgrew it `setItem` threw into an empty
+`catch`: the session carried on and nothing drawn after that was on the device.
+
+So the book is also written to IndexedDB, a moment after every save, and:
+
+- **A full local storage loses nothing.** IndexedDB is asynchronous, so it
+  cannot be the floor alone. When the whole book no longer fits, the stale
+  whole copy is removed and a **journal** goes in its place, synchronously: the
+  plays changed since IndexedDB last confirmed a save, the folders and books,
+  and every play id so an emptied play stays gone. Journal plus IndexedDB is the
+  book. The journal shrinks each time IndexedDB catches up.
+- **A dropped local storage loses nothing.** The key *missing* with a book still
+  in IndexedDB is the browser evicting it, and the book is put back. The key
+  *present and empty* is a book emptied on purpose, and is left alone.
+- **The first render past an overflow is stale, and must not be saved.**
+  `hydrated` in the hook holds the autosave until `recover()` has brought the
+  real book back, or the stale copy would overwrite the journal holding the
+  newer one. Past an overflow `reconcile` reads the screen and not storage, for
+  the same reason.
+
+Anything that writes the book locally goes through `persist()`, not `writeLocal`.
 
 ## Backup, and what a backup has to carry
 

@@ -157,6 +157,15 @@ describe('a play card', () => {
     expect(await page.getByRole('button', { name: 'More for the folder Run game' }).count()).toBe(0);
   });
 
+  it('shows a play\'s earlier versions, and says so when there are none yet', async () => {
+    await menu('Cover 3').click();
+    await page.getByRole('menuitem', { name: 'Earlier versions' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Earlier versions of Cover 3' });
+    await expect.poll(() => dialog.innerText()).toContain('None kept yet');
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await expect.poll(() => page.getByRole('dialog').count()).toBe(0);
+  });
+
   it('files a play in a folder from the menu', async () => {
     await menu('Cover 3').click();
     await page.getByLabel('Folder for Cover 3').selectOption({ label: 'Run game' });

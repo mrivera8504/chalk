@@ -21,6 +21,7 @@ import {
 import { getSettings } from './settings';
 import { makeBackup, readBackup } from './backup';
 import * as cloud2 from './cloud2';
+import { localBook, overflowing, persist, recover } from './deep';
 import {
   EMPTY,
   mergeBooks,
@@ -28,7 +29,6 @@ import {
   pullFromCloud,
   pushToCloud,
   readLocal,
-  writeLocal,
   type SyncState,
 } from './sync';
 
@@ -57,6 +57,15 @@ const FOREGROUND_PULL_MS = 5000;
 const BACKUP_AT_KEY = 'chalk.backup.at.v1';
 
 const CURRENT_BOOK_KEY = 'chalk.book.current.v1';
+
+/** Whether local storage holds a book at all, empty or not. */
+function bookInStorage(): boolean {
+  try {
+    return localStorage.getItem('chalk.playbook.v1') !== null;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * What this device knows about one account's per-play cloud.
@@ -306,6 +315,40 @@ export function usePlaybook() {
   /** When one last succeeded, for the throttle below. */
   const pulledAt = useRef(0);
   const mounted = useRef(true);
+  /**
+   * The book on screen is the one this device actually holds.
+   *
+   * True from the first render in the ordinary case, where local storage has
+   * the whole book and the state was read from it. False only when it does
+   * not — the book outgrew local storage, or the browser dropped it — until
+   * `recover` has brought the real one back from IndexedDB.
+   */
+  const hydrated = useRef(!overflowing() && bookInStorage());
+
+  useEffect(() => {
+    if (hydrated.current) {
+      // Nothing to bring back, but let deep.ts learn what IndexedDB holds.
+      void recover();
+      return;
+    }
+    let alive = true;
+    void recover().then((book) => {
+      if (!alive) return;
+      hydrated.current = true;
+      if (book) {
+        claim.current = book.uid;
+        setPlays(book.plays);
+        setSections(book.sections);
+        setBooks(book.books ?? []);
+      } else {
+        // Whatever was drawn while that was in the air gets written now.
+        setPlays((prev) => prev.slice());
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
@@ -349,7 +392,7 @@ export function usePlaybook() {
         return;
       }
 
-      const local = readLocal();
+      const local = localBook(onScreen.current, claim.current);
       /*
        * Whatever is on this device merges into the account, play by play —
        * including a book drawn under another uid.
@@ -422,7 +465,7 @@ export function usePlaybook() {
       // Unconditional, because this is also where storage is stamped with whose
       // book it is: an unclaimed one has to be claimed even when its contents
       // did not move an inch.
-      writeLocal(next, forUid);
+      persist(next, forUid);
       /*
        * Only when the merge actually changed something. Every setPlays runs the
        * autosave effect, so a pull that found nothing new would push the whole
@@ -528,9 +571,13 @@ export function usePlaybook() {
   useEffect(() => {
     const book = { plays: allPlays, sections: allSections, books: storedBooks };
     onScreen.current = book;
+    // Not until the book that was really on this device is on screen: past an
+    // overflow the first render is a stale copy, and saving that would be the
+    // stale copy overwriting the journal that holds the newer one.
+    if (!hydrated.current) return;
     // Always, and before anything can fail — local storage is the floor, and
     // work drawn while auth is still resolving has to survive on its own.
-    writeLocal(book, uid ?? claim.current);
+    persist(book, uid ?? claim.current);
     if (!uid || loadedFor.current !== uid) return;
 
     if (timer.current) window.clearTimeout(timer.current);
@@ -822,7 +869,7 @@ export function usePlaybook() {
       setPlays(book.plays);
       setSections(book.sections);
       setBooks(book.books ?? []);
-      writeLocal(book, uid ?? claim.current);
+      persist(book, uid ?? claim.current);
       /*
        * Pushed now rather than on the debounce, because the restore screen
        * reloads 600ms later and the debounce is 800. Left to the timer, the

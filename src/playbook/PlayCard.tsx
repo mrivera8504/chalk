@@ -37,6 +37,7 @@ interface Props {
   onSetSection: (id: string, sectionId: string) => void;
   onFileInNew: (id: string) => void;
   onSetStatus: (id: string, status: PlayStatus | undefined) => void;
+  onHistory: (play: Play) => void;
 }
 
 /** The same renderer the editor uses, so a card can never drift from the play. */
@@ -49,6 +50,7 @@ export function PlayCard({
   onSetSection,
   onFileInNew,
   onSetStatus,
+  onHistory,
 }: Props) {
   const settings = useSettings();
   const holes = computeHoles(play.players, settings);
@@ -230,6 +232,15 @@ export function PlayCard({
                 }}
               >
                 Duplicate
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  close();
+                  onHistory(play);
+                }}
+              >
+                Earlier versions
               </button>
               <button
                 role="menuitem"
