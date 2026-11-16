@@ -10,9 +10,11 @@ eight stages. Stages 0 to 2 (tests and the editor split up; the design system
 and the new shell; the data layer) are deployed, and the `/teams` rules are
 published. Stage 3 (the sport module, and flag, 6-, 8-, 9- and 11-man beside
 7-man) and stage 4 (basketball, steps, and running a play) are deployed.
-Stage 5 (soccer, equipment and drills) is done in code. See *Tests*, *The
-editor, in pieces*, *The shell*, *Kinds of football*, *Basketball, steps and
-playback* and *Soccer, equipment and drills* below.
+Stage 5 (soccer, equipment and drills) is deployed. Stage 6 (share links, the
+viewer, video, Google sign-in, branded sheets) is done in code except team
+members. See *Tests*, *The editor, in pieces*, *The shell*, *Kinds of
+football*, *Basketball, steps and playback*, *Soccer, equipment and drills* and
+*Sharing, video, Google and branded sheets* below.
 
 Stages 1-7 done: field and players, blocking tool, route and run presets with
 formations and auto play-naming, freehand ink, a playbook that saves, and
@@ -1194,6 +1196,67 @@ checked as such before being accepted.
 
 **Not done:** a timed practice plan built from drills, more sports, and
 equipment that resizes or rotates.
+
+## Sharing, video, Google and branded sheets
+
+The overhaul's stage 6, all of it but team members.
+
+**A share link is a frozen copy** at `/shares/{token}` (`store/share.ts`): one
+play, or the live plays of the playbook on screen. Frozen, so Tuesday night's
+rework does not change what a kid read on the bus until the coach shares again —
+and sharing again **updates the same link**, because the token is kept on the
+play (`Play.shareToken`) or the book (`Book.shareToken`). Stop sharing deletes
+the document. `forSharing` strips the coach's filing: book, status, trash stamp,
+the token itself. Ink is wrapped by `toCloud` on the way up, steps included.
+The 1 MiB cap is checked before sending, in words.
+
+**The token is the whole of the protection**: 22 characters of URL-safe base64,
+132 bits. The rules allow `get` by anybody, `list` by nobody, and writes only by
+`ownerUid`. A shared link has to work for a player with no account, so it cannot
+be anything stronger than unlisted.
+
+**A link opens the viewer and nothing else.** `main.tsx` checks `/s/{token}`
+before anything mounts and renders `shell/SharedView.tsx` instead of `App`, and
+skips `ensureSignedIn` — a player tapping a link in a group chat must not mint
+an anonymous account, nor have a `/teams` document migrated for it. Save a copy
+hands the plays through session storage (`handOver`/`takeHandOver`) and loads
+`/`; the app files them, with new ids and no token, in the open playbook.
+
+**`render/PlayPicture.tsx` is the card's picture, lifted out**, so the viewer
+draws exactly what a card does. The board and the exporter remain their own
+things, for the reasons in *Export*.
+
+**Save video** (`export/video.ts`) poses every frame with `poseAt` and draws it
+with `playToSvg`, so a video cannot move a play differently from the board or
+draw it differently from paper. Recorded off a canvas by MediaRecorder — MP4
+where the browser writes it, WebM otherwise — with every frame decoded before
+recording starts, paced against the clock. `playToSvg` grew `ball` and
+`fadeLines`; the faint group is only emitted when asked for, so the golden
+boards did not move. Shared through the share sheet when it takes files.
+
+**Continue with Google** links Google to an anonymous uid, exactly as the email
+path links — the uid never changes and the plays stay. A Google account that
+already exists is signed into from the error's credential, and the account
+change merges its book as an email sign-in does. A popup, not a redirect: a
+redirect is a full reload of an installed app. Needs Google switched on in the
+console and the site's domain under Authorized domains.
+
+**Branded sheets**: `teamName`, `teamColor`, `teamLogo` in settings, all blank
+by default — a plain sheet. `embedBrand` reads them once per document; the head
+gets the logo, `Team — title`, and a heavier rule in the team colour; a 1-up
+sheet, which has no head, gets them small at its foot. The logo is cut to 256px
+PNG on the way in, because PNG is what pdf-lib embeds unaided, and a logo that
+will not embed is dropped rather than failing the sheet. Checked by rendering a
+real two-up PDF through `pdftoppm`.
+
+**Not done: team members and roles.** It is not a screen, it is a change to
+which book the sync writes. Every cloud call in `usePlaybook` passes the uid as
+the team id, local storage holds one book stamped with one uid, and a book from
+a different owner *merges* by decision. Opening another coach's team on this
+device without per-team local storage would merge his book into this one.
+Doing it safely means a team id beside the uid through `persist`, the journal,
+`loadedFor` and `cloud2`, and the rules for `/invites` — and it should be done
+against the emulator, not reasoned about.
 
 ## Backup, and what a backup has to carry
 
