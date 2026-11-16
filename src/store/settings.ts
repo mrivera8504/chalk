@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { noteWhole } from './kitMeta';
 import { DEFAULT_SETTINGS, type FieldSurface, type Settings } from '../domain/types';
 import { DEFAULT_ROUTE_DEPTHS, setRouteDepths, type RouteDepths } from '../domain/presets/routes';
 import { paperPalette } from '../ui/surface';
@@ -222,7 +223,11 @@ export function getSettings(): AppSettings {
   return current;
 }
 
+/** The settings that are the league's rules: the team's, not the device's. */
+export const RULE_KEYS = ['playersPerSide', 'minOnLine', 'evenHolesSide', 'onLineToleranceYards'] as const;
+
 export function setSettings(patch: Partial<AppSettings>): void {
+  if (RULE_KEYS.some((k) => k in patch && patch[k] !== current[k])) noteWhole('rules');
   current = { ...current, ...patch };
   try {
     localStorage.setItem(KEY, JSON.stringify(current));

@@ -1,4 +1,5 @@
 import type { PlayerSlot } from './types';
+import { noteList } from '../store/kitMeta';
 
 /**
  * A kid on the team.
@@ -47,6 +48,7 @@ export function readRoster(): RosterEntry[] {
 }
 
 export function writeRoster(all: RosterEntry[]): void {
+  noteList('roster', readRoster(), all);
   try {
     localStorage.setItem(KEY, JSON.stringify(all));
   } catch {

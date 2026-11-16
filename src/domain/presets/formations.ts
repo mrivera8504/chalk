@@ -1,4 +1,5 @@
 import type { Formation, PlayerSlot, Side } from '../types';
+import { noteList } from '../../store/kitMeta';
 import { basketball } from '../../sports/basketball';
 import { soccer } from '../../sports/soccer';
 import { OTHER_VARIANTS as FOOTBALL_VARIANTS } from '../../sports/football/variants';
@@ -123,6 +124,11 @@ export function readFormations(): Formation[] {
 }
 
 export function writeFormations(all: Formation[]): void {
+  noteList(
+    'formations',
+    readFormations().filter((f) => !f.builtIn),
+    all.filter((f) => !f.builtIn),
+  );
   try {
     localStorage.setItem(FORMATION_KEY, JSON.stringify(all.filter((f) => !f.builtIn)));
   } catch {

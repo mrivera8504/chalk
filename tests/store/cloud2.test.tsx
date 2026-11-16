@@ -116,7 +116,9 @@ describe('migrating an account', () => {
   it('writes the team document last, so a migration cut short is simply run again', async () => {
     legacy('u1', [p('a'), p('b')]);
     await device();
-    const order = cloud.writes.map((w) => w.path);
+    // The kit syncs once the migration is done; what matters is the plays and
+    // the marker, in that order.
+    const order = cloud.writes.map((w) => w.path).filter((x) => !x.includes('/kit/'));
     expect(order[order.length - 1]).toBe(teamPath('u1'));
     expect(order.slice(0, -1).every((x) => x.includes('/plays/'))).toBe(true);
   });

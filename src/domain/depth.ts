@@ -1,4 +1,5 @@
 import type { PlayerSlot } from './types';
+import { noteWhole } from '../store/kitMeta';
 
 /**
  * Who plays where: for each position, the shirts in order — starter first.
@@ -23,6 +24,7 @@ export function readDepth(): DepthChart {
 }
 
 export function writeDepth(chart: DepthChart): void {
+  noteWhole('depth');
   try {
     localStorage.setItem(KEY, JSON.stringify(chart));
   } catch {
@@ -53,6 +55,7 @@ export function readSetCharts(): SetCharts {
 }
 
 export function writeSetCharts(sets: SetCharts): void {
+  noteWhole('depth');
   try {
     localStorage.setItem(SETS_KEY, JSON.stringify(sets));
   } catch {

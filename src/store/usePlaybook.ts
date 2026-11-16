@@ -22,6 +22,8 @@ import { getSettings } from './settings';
 import { makeBackup, readBackup } from './backup';
 import * as cloud2 from './cloud2';
 import { newId, sameBook, useBookEdits } from './bookEdits';
+import { syncKit } from './kit';
+import { onKitChange } from './kitMeta';
 import { localBook, overflowing, persist, recover } from './deep';
 import {
   EMPTY,
@@ -467,10 +469,32 @@ export function usePlaybook() {
       }
       pulledAt.current = Date.now();
       setSync('synced');
+      // The team's kit rides along with the plays, once the account is on the
+      // per-play cloud that holds it.
+      if (mode.current === 'v2') void syncKit(forUid);
     } finally {
       pulling.current = false;
     }
   }, []);
+
+  /*
+   * And goes up a moment after the coach changes it here — a roster typed in
+   * is a dozen writes in a minute, and one sync covers them.
+   */
+  useEffect(() => {
+    if (!uid) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const off = onKitChange(() => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => {
+        if (loadedFor.current === uid && mode.current === 'v2') void syncKit(uid);
+      }, 1500);
+    });
+    return () => {
+      off();
+      if (t) clearTimeout(t);
+    };
+  }, [uid]);
 
   /*
    * Reconcile whenever the account changes, not once on mount.

@@ -1,4 +1,5 @@
 import type { AssignmentKind, Hand, PathPoint, PlayerSlot } from '../types';
+import { noteList } from '../../store/kitMeta';
 
 /** Which way the concept runs. Every preset is written right and mirrored. */
 export type { Hand };
@@ -329,6 +330,7 @@ export function readCustomRoutes(): CustomRoute[] {
 }
 
 export function writeCustomRoutes(all: CustomRoute[]): void {
+  noteList('routes', readCustomRoutes(), all);
   try {
     localStorage.setItem(CUSTOM_KEY, JSON.stringify(all));
   } catch {
