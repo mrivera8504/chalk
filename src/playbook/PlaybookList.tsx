@@ -548,8 +548,31 @@ export function PlaybookList({
           <p>{query.trim() ? `No play matches “${query.trim()}”.` : 'No plays match that filter.'}</p>
         </div>
       ) : (
-        grouped.map(({ section, plays: inSection }) => (
-          <section key={section.id}>
+        <div className={`book-body${grouped.length > 1 ? ' has-rail' : ''}`}>
+          {/*
+            * The folders down the side, once the screen is wide enough to
+            * spare it: a tablet turned over, a laptop. A tap goes to the
+            * folder. Hidden on a phone, where the list is the whole width.
+            */}
+          {grouped.length > 1 && (
+            <nav className="folder-rail" aria-label="Folders">
+              {grouped.map(({ section, plays: inSection }) => (
+                <button
+                  key={section.id}
+                  className="quiet"
+                  onClick={() =>
+                    document.getElementById(`folder-${section.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                >
+                  <span>{section.name}</span>
+                  <span className="folder-rail-count">{inSection.length}</span>
+                </button>
+              ))}
+            </nav>
+          )}
+          <div className="book-folders">
+        {grouped.map(({ section, plays: inSection }) => (
+          <section key={section.id} id={`folder-${section.id}`}>
             <div className="folder-head">
               <h2>
                 {section.name} <span>{inSection.length}</span>
@@ -637,7 +660,9 @@ export function PlaybookList({
               </div>
             )}
           </section>
-        ))
+        ))}
+          </div>
+        </div>
       )}
 
       {/*

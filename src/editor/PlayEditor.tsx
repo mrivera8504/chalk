@@ -673,25 +673,70 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     return () => kinds.forEach((k) => el.removeEventListener(k, log));
   }, []);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        dropCarried('escape');
-        setErasing(false);
-        setPending(null);
-        setSel(null);
-        return;
-      }
-      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-      // Leave the label field alone.
-      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+  /**
+   * The keyboard, for a tablet with a cover or a laptop.
+   *
+   * Through a ref holding this render's functions, the way `pointerRef` does:
+   * the listener is bound once, and a handler captured from an older render
+   * would step back over an older board.
+   *
+   * - Ctrl/⌘ Z and Ctrl/⌘ Shift Z (or Y): step back and forward.
+   * - Delete or Backspace: the selected line.
+   * - Escape: put down whatever is in hand, and let go of the selection.
+   * - M, R, P, E: Move, Routes, the pencil, the eraser.
+   * - [ and ]: the step before and after. Space: run the play, or stop it.
+   *
+   * Nothing while a field, a select or a dialog has the keys.
+   */
+  const keys = useRef<(e: KeyboardEvent) => void>(() => {});
+  keys.current = (e: KeyboardEvent) => {
+    const el = e.target as HTMLElement | null;
+    const typing =
+      !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+    if (typing || document.querySelector('[role="dialog"]')) return;
+    const mod = e.ctrlKey || e.metaKey;
+    const k = e.key.toLowerCase();
+    if (mod && k === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) stepForward();
+      else stepBack();
+      return;
+    }
+    if (mod && k === 'y') {
+      e.preventDefault();
+      stepForward();
+      return;
+    }
+    if (mod || e.altKey) return;
+    if (e.key === 'Escape') {
+      dropCarried('escape');
+      setErasing(false);
+      setPending(null);
+      setSel(null);
+      return;
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
       if (sel?.kind !== 'assignment') return;
       e.preventDefault();
       deleteAssignment(sel.id);
+      return;
     }
+    if (k === 'm') handleTool('select');
+    else if (k === 'r') handleTool('routes');
+    else if (k === 'p') handleTool(tool === 'draw' ? 'routes' : 'draw');
+    else if (k === 'e') handleTool(tool === 'erase' ? 'routes' : 'erase');
+    else if (e.key === '[' && step > 0) showStep(allSteps, step - 1);
+    else if (e.key === ']' && step < allSteps.length - 1) showStep(allSteps, step + 1);
+    else if (e.key === ' ') {
+      e.preventDefault();
+      togglePlay();
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => keys.current(e);
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [sel]);
+  }, []);
 
   function handleTool(next: Tool) {
     dropCarried('tool changed');

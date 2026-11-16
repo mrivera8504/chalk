@@ -302,3 +302,39 @@ describe('undo across steps', () => {
     expect(await chips()).toBe(2);
   });
 });
+
+describe('the keyboard', () => {
+  it('steps back and forward, switches tools and steps, and leaves a typed name alone', async () => {
+    await football();
+    const before = await saved();
+    await penTap(page, man(before, 'WB'));
+    await settle();
+    await pick('Slant');
+    await page.keyboard.press('Escape');
+    await settle();
+
+    await page.keyboard.press('Control+z');
+    await settle();
+    expect((await saved()).assignments).toEqual([]);
+    await page.keyboard.press('Control+Shift+z');
+    await settle();
+    expect((await saved()).assignments.length).toBe(1);
+
+    await press('Add a step');
+    await page.keyboard.press('[');
+    await settle();
+    expect(await page.getByRole('button', { name: 'Step 1' }).getAttribute('aria-pressed')).toBe('true');
+    await page.keyboard.press(']');
+    await settle();
+    expect(await page.getByRole('button', { name: 'Step 2' }).getAttribute('aria-pressed')).toBe('true');
+
+    // Typing a name with an "m" and a "[" in it changes nothing on the board.
+    const field = page.getByPlaceholder('Name this play');
+    await field.click();
+    await field.fill('');
+    await page.keyboard.type('m[z');
+    await settle();
+    expect(await page.getByRole('button', { name: 'Step 2' }).getAttribute('aria-pressed')).toBe('true');
+    expect((await saved()).assignments.length).toBe(1);
+  });
+});

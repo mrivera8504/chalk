@@ -466,3 +466,33 @@
   background: var(--panel);
   box-shadow: var(--shadow);
 }
+
+/* Folders beside the grid, on a screen wide enough to spare the column. */
+.folder-rail {
+  display: none;
+}
+@media (min-width: 1000px) {
+  .book-body.has-rail {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: var(--s-4);
+    align-items: start;
+  }
+  .folder-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: sticky;
+    top: var(--s-4);
+    margin-left: var(--s-4);
+  }
+  .folder-rail button {
+    display: flex;
+    justify-content: space-between;
+    min-height: 40px;
+    text-align: left;
+  }
+  .folder-rail-count {
+    color: var(--dim);
+  }
+}
