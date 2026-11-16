@@ -1,0 +1,44 @@
+name: Firebase Hosting
+
+# The site on Firebase Hosting, built here because Firebase has no build
+# service of its own. Netlify stays live until this has been checked on the
+# tablet; the two can serve the same build side by side.
+#
+# Does nothing until the repository has a secret named
+# FIREBASE_SERVICE_ACCOUNT_CHALK. The one-time setup, signed in as the
+# project's owner, is `npx firebase-tools init hosting:github`, which creates
+# the service account and stores the secret. Hosting only: the Firestore rules
+# are never deployed from here.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CHALK != '' }}
+    steps:
+      - name: Skip until the deploy key is set
+        if: env.HAS_KEY != 'true'
+        run: echo "No FIREBASE_SERVICE_ACCOUNT_CHALK secret yet; nothing deployed."
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: env.HAS_KEY == 'true'
+        run: npm ci
+      - if: env.HAS_KEY == 'true'
+        run: npm run build
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        if: env.HAS_KEY == 'true'
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CHALK }}
+          channelId: live
+          projectId: chalk-66943

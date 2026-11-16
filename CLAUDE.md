@@ -976,9 +976,8 @@ card's menu. Restoring is a save, so what was on screen becomes the newest
 revision and the toast's Undo takes it back. The list is empty on the single
 document, which never kept revisions per play.
 
-**Not done:** the roster, saved formations, hand-drawn routes and league rules
-are still device-only. Moving them to the team needs a merge rule per item, or
-an empty roster on a new tablet overwrites a full one.
+The roster, saved formations, hand-drawn routes, league rules and depth chart
+sync too, as the team's *kit* — see *Finishing the plan*.
 
 ## The second local copy
 
@@ -1117,8 +1116,9 @@ as it drew the play. Zones, the cone and the focus squares stay on the play.
 `annotations` and `ballCarrierId` are the live step, so no tool had to learn
 about steps. `steps` holds all of them and its entry for the live one is stale
 on purpose; `allSteps` is the list with the live one put back, and it is what is
-saved, stepped from and played. **Undo starts over when the step changes**: a
-stack reaching across steps would put one step's men on another's.
+saved, stepped from and played. **Undo reaches across steps**: a snapshot keeps
+which step it was taken on and every step, and `restore` puts that step on the
+board before its men, so one step's men never land on another's.
 
 **The next step starts where the lines end.** `nextFrame`: everybody at
 `endOf()` their movement line (`domain/moves.ts`), no lines, and the ball with
@@ -1140,11 +1140,12 @@ step is showing, and that it finished. A tap on the board stops it and arms
 `tapGuard`, so the tap picks nothing up.
 
 **The print sheet draws the step on screen**, because `livePlay()` is the board.
-A sheet of every step is not built.
+*Every step* on the print screen prints them all, one to a cell (`expandSteps`);
+the editor hands Print the whole play as `whole` for that.
 
-**Not done:** full court, a floor color of its own (the court is drawn in the
-field's two tokens), sets saved per team in the cloud, and play names for
-basketball.
+Full court, the print sheet of every step, and undo across steps came later —
+see *Finishing the plan*. **Not done:** a floor color of its own (the court is
+drawn in the field's two tokens) and play names for basketball.
 
 ## Soccer, equipment and drills
 
@@ -1199,8 +1200,8 @@ beside New play; the playbook's filter offers Drills once there is one.
 ids shift with the component tree's shape; that is the whole diff, and it was
 checked as such before being accepted.
 
-**Not done:** more sports, and equipment that resizes or rotates. (A timed
-practice plan built from drills came in stage 7 — see *Coach tools*.)
+**Not done:** equipment that resizes or rotates. (A timed practice plan built
+from drills came in stage 7, and four more sports in *Finishing the plan*.)
 
 ## Sharing, video, Google and branded sheets
 
@@ -1286,8 +1287,8 @@ that outgrows local storage lives in memory and the cloud until it is opened
 again with signal. A restore is refused on a team: replacing a whole book is the
 owner's call.
 
-**One role, `coach`.** Players already have share links, which need no account,
-so the only thing worth inviting somebody to is editing. An invite is
+**Roles: `coach` edits, `viewer` reads.** A viewer — a player, a parent — came
+later; see *Finishing the plan*. An invite is
 `/invites/{code}` — 22 characters, like a share token, read by its exact id and
 never listed — naming the team, the role and a date it runs out (14 days). The
 joiner writes themselves onto the team document's `members` and `names`, and
@@ -1316,10 +1317,9 @@ no harm only because nobody but the owner had ever been a member.
 **Publish `firestore.rules` before trusting any of this.** Until it is, creating
 an invite is refused and says so in words; nothing else changes.
 
-**Not done:** sharing the roster, formations and saved routes with the team —
-still device-only, for the merge-rule reason in *One cloud document per play*;
-more roles than coach; and an invite list for the owner to take one back before
-it runs out (the document can be deleted, there is just no screen for it).
+**Not done:** a joined team's kit on an assistant's device (see *Finishing the
+plan*), and an invite list for the owner to take one back before it runs out
+(the document can be deleted, there is just no screen for it).
 
 ## The small items the plan review found
 
@@ -1372,6 +1372,66 @@ Bringing back only ever adds a play the book does not have, stamped now so the
 purge record does not take it straight back out. Replacing the whole book is
 still what a backup file is for.
 
+## Finishing the plan
+
+The open items of the implementation plan, built on 2026-11-16 after the small
+ones above. The plan doc's *Review against this plan* table is the list.
+
+**A viewer: a player or a parent, on a team, read-only.** A third role. The owner
+invites one from People on the Team page. Under the rules (`canEdit()`) a
+viewer reads the playbook and the kit and writes nothing; in the app,
+`useTeamBook(…, readOnly)` never pushes, and `App` shows a viewer `GameDay` —
+with the team's name, a playbook picker and the way back to their own — instead
+of the shell and the editor. A refused write would read as being taken off the
+team, which is the other reason the app must not try one.
+
+**The kit syncs: roster, saved formations, hand-drawn routes, league rules,
+depth chart.** `/teams/{uid}/kit/{item}`, one document each, the names fixed by
+the rules. `store/kitMeta.ts` watches every store's write: a **list** gets a
+stamp per item and a dated marker per deletion and merges by union
+(`mergeList`), so an empty roster on a new tablet adds nothing and removes
+nothing; a **whole** item (rules, depth) is one object and the newer edit wins,
+and a device that never edited one counts as never (-1), one with a non-default
+value and no stamp as some time ago (1). Writes made by the sync go through
+`quietly()`, or every sync would stamp the kit as new. It runs after every
+reconcile on the per-play cloud and 1.5s after a local edit. **Only the coach's
+own team**: local storage keeps one roster per device, and merging a head coach's
+kit into an assistant's own is the cross-team merge the team book exists to
+avoid. A joined team's kit is readable under the rules for the day it gets a
+per-team copy of its own.
+
+**Every step on a sheet**, **the full court** (`Play.courtView`, absent is half
+court; `Court` draws the far end when the window reaches past half court, so
+nothing threads a prop) and **undo across steps** are under *Basketball, steps
+and playback*.
+
+**Four sport packs: volleyball, lacrosse, ice hockey, a blank board.**
+`sports/packs.ts`. A pack is a surface and positions and nothing else: no
+concepts, no rule module, no starter plays; lines by hand and with Pass, Shot
+where `SportModule.goal` says there is a goal, the ball with `ballAt`.
+`SportModule.surface` names a sport's surface now, so `surfaceOf` reads it
+instead of listing sports, and `render/PackSurface.tsx` draws the four in the
+field's two tokens. Each is drawn smaller than life, like the pitch.
+
+**Home** (`shell/Home.tsx`, `/home`, a fifth tab): the playbooks with their game
+and count, the teams, the six plays changed last, the sync and backup state.
+The app still opens on the playbook.
+
+**Keyboard and wide screens.** The editor's keys — Ctrl/⌘ Z, Shift Z or Y,
+Delete, Escape, M R P E, [ ], Space — are bound once and read through a ref
+holding this render's functions (`keys`), like `pointerRef`, and do nothing
+while a field or a dialog has the keys. At 1000px and wider the playbook puts
+its folders in a rail beside the grid.
+
+**Firebase Hosting** is wired but waits on the owner:
+`.github/workflows/firebase-hosting.yml` builds and deploys on every push to
+`main`, and skips itself until the repository has a
+`FIREBASE_SERVICE_ACCOUNT_CHALK` secret (`npx firebase-tools init
+hosting:github`, signed in as the owner, makes it). Hosting only, never rules.
+
+**Not done:** pinning the inspector open on a wide screen, and a joined team's
+kit.
+
 ## Coach tools: game day, study, practices, depth chart
 
 The overhaul's stage 7.
@@ -1403,8 +1463,8 @@ starters claiming their shirts first, and never puts one kid in two slots: a
 kid charted at two positions makes the next name down take the second. The
 editor's drawer offers it as *Depth chart* once there is a roster.
 
-**The Team page is three views** — Roster, Depth chart, Practices — rather than
-three tabs. Each is a list typed once and corrected now and then.
+**The Team page is four views** — Roster, Depth chart, Practices, People —
+rather than four tabs. Each is a list typed once and corrected now and then.
 
 ## Starter plays
 
