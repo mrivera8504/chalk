@@ -29,5 +29,22 @@ service cloud.firestore {
         allow read, write: if isMember();
       }
     }
+
+    // A frozen copy of a play or a playbook, behind a link.
+    //
+    // Anybody may read one by its exact token — that is what a link is — and
+    // nobody may list them, so the 22-character token is the whole of the
+    // protection. Only the account that made one may change or remove it.
+    match /shares/{token} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null
+        && token.size() >= 20
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+    }
   }
 }

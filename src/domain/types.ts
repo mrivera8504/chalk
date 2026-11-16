@@ -338,6 +338,8 @@ export interface Book {
   order: number;
   updatedAt: number;
   deletedAt?: number;
+  /** The link this whole playbook is shared at, if it is. */
+  shareToken?: string;
   /**
    * The kind of football its new plays are: `flag5`, `eleven`. Absent means
    * seven-man. A play carries its own, so changing this never changes a play
@@ -434,6 +436,11 @@ export interface Play {
    * no rules and is given no name by the namer. Absent means a play.
    */
   drill?: boolean;
+  /**
+   * The link this play is shared at, if it is. Kept so sharing it again
+   * updates the same link rather than handing out a second one.
+   */
+  shareToken?: string;
   unit?: Side;
   /**
    * The kind of football this play is: how many are on the field and what the

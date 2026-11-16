@@ -1,6 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { SharedView } from './shell/SharedView';
+import { asToken } from './store/share';
 import './ui/styles/index.css';
 import { installPenTaps } from './ui/penTaps';
 import { installBackGesture } from './ui/backstack';
@@ -25,15 +27,22 @@ installRoute();
 // — which a device that is never closed would otherwise never find out.
 watchForUpdates();
 
+/*
+ * A shared link opens the viewer and nothing else: no playbook, no sync, and
+ * no account — a player tapping a link in a group chat should not mint one.
+ */
+const shared = /^\/s\/([^/]+)\/?$/.exec(location.pathname);
+const token = shared ? asToken(shared[1]) : null;
+
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+  <StrictMode>{token ? <SharedView token={token} /> : <App />}</StrictMode>,
 );
 
 // Firebase stays out of the first chunk. The playbook reads from local storage
 // synchronously, so the app is usable before auth resolves or fails; the store
 // pushes to the cloud once it has both a connection and an account.
-void import('./firebase')
-  .then((m) => m.ensureSignedIn())
-  .catch((err) => console.warn('anon sign-in deferred:', err));
+if (!token) {
+  void import('./firebase')
+    .then((m) => m.ensureSignedIn())
+    .catch((err) => console.warn('anon sign-in deferred:', err));
+}

@@ -12,6 +12,9 @@ import { go, useRoute } from './ui/route';
 import { AppShell } from './shell/AppShell';
 import { PrintPage, SettingsPage, TeamPage } from './shell/pages';
 import { Welcome, markWelcomed, wasWelcomed } from './shell/Welcome';
+import { publishShare, revokeShare, shareUrl, takeHandOver } from './store/share';
+import { newId } from './store/usePlaybook';
+import type { Book, Play } from './domain/types';
 
 export function App() {
   const book = usePlaybook();
@@ -65,6 +68,105 @@ export function App() {
     markWelcomed();
     setWelcomed(true);
   };
+
+  /*
+   * Plays handed over by the shared viewer's "Save a copy". New ids, filed
+   * as unfiled in whichever playbook is open, and never carrying the link
+   * they came from: this copy is the coach's own now.
+   */
+  const { savePlay } = book;
+  useEffect(() => {
+    const taken = takeHandOver();
+    if (!taken.length) return;
+    const now = Date.now();
+    for (const p of taken) {
+      const { shareToken: _t, ...rest } = p;
+      savePlay({
+        ...rest,
+        id: newId('p'),
+        sectionId: UNFILED_SECTION,
+        ...(book.bookId === 'main' ? {} : { bookId: book.bookId }),
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    toast(taken.length === 1 ? 'Saved a copy to your playbook' : `Saved ${taken.length} plays to your playbook`);
+    // Once, on the first render that has the book.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Hand a link to whatever the device shares with, or copy it. */
+  const sendLink = useCallback(async (url: string, title: string) => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, url });
+        return;
+      }
+    } catch (err) {
+      // The coach closed the share sheet: the link exists, and that is fine.
+      if ((err as { name?: string })?.name === 'AbortError') return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Link copied');
+    } catch {
+      toast(url);
+    }
+  }, []);
+
+  const sharePlay = useCallback(
+    async (play: Play) => {
+      const title = play.name || play.suggestedName || 'A play';
+      const done = await publishShare('play', title, [play], play.shareToken);
+      if (!done.ok) {
+        toast(done.reason);
+        return;
+      }
+      if (done.token !== play.shareToken) book.savePlay({ ...play, shareToken: done.token });
+      await sendLink(shareUrl(done.token), title);
+    },
+    [book, sendLink],
+  );
+
+  const unsharePlay = useCallback(
+    async (play: Play) => {
+      if (!play.shareToken) return;
+      if (!(await revokeShare(play.shareToken))) {
+        toast('Could not reach the cloud to take the link down.');
+        return;
+      }
+      const { shareToken: _t, ...rest } = play;
+      book.savePlay(rest);
+      toast('That link no longer works');
+    },
+    [book],
+  );
+
+  const shareBook = useCallback(
+    async (b: Book, plays: Play[]) => {
+      const done = await publishShare('book', b.name, plays, b.shareToken);
+      if (!done.ok) {
+        toast(done.reason);
+        return;
+      }
+      if (done.token !== b.shareToken) book.setBookShare(b.id, done.token);
+      await sendLink(shareUrl(done.token), b.name);
+    },
+    [book, sendLink],
+  );
+
+  const unshareBook = useCallback(
+    async (b: Book) => {
+      if (!b.shareToken) return;
+      if (!(await revokeShare(b.shareToken))) {
+        toast('Could not reach the cloud to take the link down.');
+        return;
+      }
+      book.setBookShare(b.id, undefined);
+      toast('That link no longer works');
+    },
+    [book],
+  );
 
   // The back gesture goes where the `‹` button goes: to the playbook, not out
   // of the app. Every screen that is not the playbook is one step in from it.
@@ -208,6 +310,10 @@ export function App() {
             bookId={book.bookId}
             onSelectBook={book.selectBook}
             onSetBookVariant={book.setBookVariant}
+            onSharePlay={(p) => void sharePlay(p)}
+            onUnsharePlay={(p) => void unsharePlay(p)}
+            onShareBook={(b, ps) => void shareBook(b, ps)}
+            onUnshareBook={(b) => void unshareBook(b)}
             onAddBook={(name, variant) => {
               book.addBook(name, variant);
               toast(`Added ${name}`);

@@ -1,28 +1,15 @@
-import { autoRouteColor } from '../domain/colors';
-import { computeHoles } from '../domain/holes';
-import { refreshPaths } from '../domain/regenerate';
 import {
   UNFILED_SECTION,
-  drawnSides,
   playSurface,
-  quarterback,
   STATUS_LABEL,
   type Play,
   type PlayStatus,
   type Section,
 } from '../domain/types';
 import { useSettings, boardVars } from '../store/settings';
-import { AssignmentPath } from '../render/AssignmentPath';
-import { Field } from '../render/Field';
-import { isFootball, surfaceOf } from '../sports';
-import { PlayerShape } from '../render/PlayerShape';
-import { FocusSquare } from '../render/FocusSquare';
-import { ZoneArea } from '../render/Zone';
-import { BoardMarks } from '../render/BoardMarks';
-import { VisionCone } from '../render/VisionCone';
-import { toPathD } from '../render/geometry';
-import { viewBox, viewForPlays } from '../export/view';
+import { viewForPlays } from '../export/view';
 import { Menu } from '../ui/Menu';
+import { PlayPicture } from '../render/PlayPicture';
 
 /** Not a section id, just the sentinel the folder menu uses for its last row. */
 export const NEW_SECTION = ' new';
@@ -40,6 +27,10 @@ interface Props {
   onFileInNew: (id: string) => void;
   onSetStatus: (id: string, status: PlayStatus | undefined) => void;
   onHistory: (play: Play) => void;
+  /** Make (or refresh) a link a player can open with no account. */
+  onShare: (play: Play) => void;
+  /** Take the link down. Offered only while there is one. */
+  onUnshare: (play: Play) => void;
 }
 
 /** The same renderer the editor uses, so a card can never drift from the play. */
@@ -53,27 +44,11 @@ export function PlayCard({
   onFileInNew,
   onSetStatus,
   onHistory,
+  onShare,
+  onUnshare,
 }: Props) {
   const settings = useSettings();
-  const holes = computeHoles(play.players, settings);
-  const qb = quarterback(play.players);
   const title = play.name || play.suggestedName || 'Untitled';
-
-  /*
-   * The same rule the board and the sheet use, so a card cannot say one thing
-   * about a play and opening it say another.
-   */
-  const sides = drawnSides(play, settings.showDefense);
-  const shownPlayers = play.players.filter((p) =>
-    p.side === 'defense' ? sides.defense : sides.offense,
-  );
-
-  /* Regenerated from everyone, then cut to the men on the board — a block and a
-     cover rope are functions of both ends, so they are rebuilt before filtering
-     and never from a half-empty roster. */
-  const shownLines = refreshPaths(play.assignments, play.players).filter((a) =>
-    shownPlayers.some((p) => p.id === a.playerId),
-  );
 
   // A play filed in a section that has since been deleted reads as unfiled,
   // which is where deleteSection already put it.
@@ -105,57 +80,7 @@ export function PlayCard({
         aria-label={`Open ${title}`}
         style={boardVars(playSurface(play, settings.fieldSurface))}
       >
-        <svg viewBox={viewBox(view)} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-          <Field holes={holes} showHoles={false} view={view} surface={surfaceOf(play.variant)} />
-          {/* Under the play, exactly as on the board. */}
-          {(play.zones ?? []).map((z) => (
-            <ZoneArea
-              key={`zone${z.playerId}`}
-              zone={z}
-              player={play.players.find((p) => p.id === z.playerId) ?? null}
-            />
-          ))}
-          {/* Both washes hang off a man, so neither outlives the one it
-              comes off — as on the board and on the sheet. */}
-          {(play.focuses ?? []).map((f) => {
-            const man = shownPlayers.find((p) => p.id === f.playerId);
-            return man ? (
-              <FocusSquare key={`focus${f.playerId}`} player={man} focus={f} />
-            ) : null;
-          })}
-          {play.vision && qb && sides.offense && (
-            <VisionCone qb={qb} vision={play.vision} />
-          )}
-          <BoardMarks marks={play.marks ?? []} />
-          {play.annotations.map((path, i) => (
-            <path
-              key={`ann${i}`}
-              d={toPathD(path)}
-              fill="none"
-              stroke="var(--board-chalk)"
-              strokeWidth={0.16}
-              strokeLinecap="round"
-              opacity={0.7}
-            />
-          ))}
-          {/*
-            * Regenerated, not as stored. A block, a cover rope and a stunt are
-            * all stored as who-does-what-to-whom, so a thumbnail that drew the
-            * saved path would be showing where those men used to stand.
-            */}
-          {shownLines.map((a) => (
-            <AssignmentPath key={a.id} assignment={a} autoColor={autoRouteColor(a, play.players)} />
-          ))}
-          {shownPlayers.map((p) => (
-            <PlayerShape
-              key={p.id}
-              player={p}
-              selected={false}
-              ball={p.id === play.ballCarrierId}
-              ballMark={isFootball(play.variant) ? 'star' : 'ball'}
-            />
-          ))}
-        </svg>
+        <PlayPicture play={play} view={view} showDefense={settings.showDefense} />
       </button>
 
       {/*
@@ -246,6 +171,27 @@ export function PlayCard({
               >
                 Earlier versions
               </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  close();
+                  onShare(play);
+                }}
+              >
+                {/* The same link again, with the newest version behind it. */}
+                {play.shareToken ? 'Share link (update)' : 'Share link'}
+              </button>
+              {play.shareToken && (
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    close();
+                    onUnshare(play);
+                  }}
+                >
+                  Stop sharing
+                </button>
+              )}
               <button
                 role="menuitem"
                 className="danger"

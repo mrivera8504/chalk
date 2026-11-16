@@ -328,3 +328,24 @@ describe('the first screen', () => {
     expect(await page.locator('.play-card').count()).toBe(2);
   });
 });
+
+describe('a shared link', () => {
+  it('opens the viewer and nothing else, and says plainly when it cannot load', async () => {
+    await close();
+    const opened = await openApp(browser, { width: 412, height: 915, welcome: true });
+    page = opened.page;
+    close = () => opened.context.close();
+    await page.goto(page.url().replace(/\/[^/]*$/, '/s/abcdefghijklmnopqrstuv'));
+    await page.locator('.shared').waitFor();
+    // No tabs, no welcome, no playbook: a player came to look, not to coach.
+    expect(await page.locator('.welcome').count()).toBe(0);
+    expect(await page.getByRole('navigation').count()).toBe(0);
+    // The browser tests reach no cloud, so this is the no-signal answer.
+    await expect.poll(() => page.locator('.shared-empty').innerText()).toMatch(/connection|no longer/);
+  });
+
+  it('offers a share link from a play’s menu', async () => {
+    await page.locator('.play-card').first().getByRole('button', { name: /more|menu/i }).first().click();
+    expect(await page.getByRole('menuitem', { name: 'Share link' }).count()).toBe(1);
+  });
+});

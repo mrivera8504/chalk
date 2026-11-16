@@ -41,6 +41,11 @@ interface Props {
   onSetStatus: (id: string, status: PlayStatus | undefined) => void;
   /** The copies a play's saves have replaced, newest first. */
   onRevisions: (playId: string) => Promise<Revision[]>;
+  onSharePlay: (play: Play) => void;
+  onUnsharePlay: (play: Play) => void;
+  /** The whole playbook on screen, as one link. */
+  onShareBook: (book: Book, plays: Play[]) => void;
+  onUnshareBook: (book: Book) => void;
   onRestoreRevision: (play: Play) => void;
   /** Every playbook, and which one this screen is showing. */
   books: Book[];
@@ -118,6 +123,10 @@ export function PlaybookList({
   onMovePlay,
   onSetStatus,
   onRevisions,
+  onSharePlay,
+  onUnsharePlay,
+  onShareBook,
+  onUnshareBook,
   onRestoreRevision,
   books,
   bookId,
@@ -332,6 +341,27 @@ export function PlaybookList({
                 </button>
                 <button
                   role="menuitem"
+                  disabled={!plays.length}
+                  onClick={() => {
+                    close();
+                    onShareBook(book, plays);
+                  }}
+                >
+                  {book.shareToken ? 'Share link (update)' : 'Share as a link'}
+                </button>
+                {book.shareToken && (
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      close();
+                      onUnshareBook(book);
+                    }}
+                  >
+                    Stop sharing it
+                  </button>
+                )}
+                <button
+                  role="menuitem"
                   onClick={() => {
                     close();
                     void changeKind();
@@ -509,6 +539,8 @@ export function PlaybookList({
                       onFileInNew={fileInNew}
                       onSetStatus={onSetStatus}
                       onHistory={setHistoryOf}
+                      onShare={onSharePlay}
+                      onUnshare={onUnsharePlay}
                     />
                   </div>
                 ))}

@@ -834,6 +834,23 @@ export function usePlaybook() {
     });
   }, []);
 
+  /** Remember (or forget) the link a playbook is shared at. */
+  const setBookShare = useCallback((id: string, token?: string) => {
+    setBooks((prev) => {
+      const now = Date.now();
+      const set = (b: Book): Book => {
+        const { shareToken: _was, ...rest } = b;
+        return { ...rest, ...(token ? { shareToken: token } : {}), updatedAt: now };
+      };
+      if (!prev.some((b) => b.id === id)) {
+        return id === MAIN_BOOK && token
+          ? [...prev, set({ id, name: MAIN_BOOK_NAME, order: 0, updatedAt: now })]
+          : prev;
+      }
+      return prev.map((b) => (b.id === id ? set(b) : b));
+    });
+  }, []);
+
   /**
    * Take a playbook away, and lose nothing that was in it.
    *
@@ -962,6 +979,7 @@ export function usePlaybook() {
     addBook,
     renameBook,
     setBookVariant,
+    setBookShare,
     deleteBook,
     setPlayStatus,
     /** Past copies of one play. Empty until the account is on per-play documents. */
