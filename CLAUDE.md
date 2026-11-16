@@ -5,16 +5,17 @@ Full spec and stage list: `docs/build-spec.md`.
 
 ## Where it stands
 
-**An overhaul is under way** — multi-sport, a new look, teams and sharing — in
-eight stages. Stages 0 to 2 (tests and the editor split up; the design system
+**The overhaul is done** — multi-sport, a new look, teams and sharing — in
+eight stages, all deployed (2026-11-16). Stages 0 to 2 (tests and the editor split up; the design system
 and the new shell; the data layer) are deployed, and the `/teams` rules are
 published. Stage 3 (the sport module, and flag, 6-, 8-, 9- and 11-man beside
 7-man) and stage 4 (basketball, steps, and running a play) are deployed.
 Stage 5 (soccer, equipment and drills) is deployed. Stage 6 (share links, the
-viewer, video, Google sign-in, branded sheets) is deployed, and its last piece —
-team members, invited by link — is done in code; it needs the new
-`firestore.rules` published before an invite can be made. Stage 7 (game day,
-study and quiz, practices, depth chart) is on `main`. See *Tests*, *The editor, in pieces*, *The shell*, *Kinds of
+viewer, video, Google sign-in, branded sheets, and team members invited by
+link) is deployed; invites need the current `firestore.rules` published in the
+console. Stage 7 (game day, study and quiz, practices, depth chart) is deployed.
+What is left is the *Not done* line at the foot of each section — none of it was
+in the plan for a stage. See *Tests*, *The editor, in pieces*, *The shell*, *Kinds of
 football*, *Basketball, steps and playback*, *Soccer, equipment and drills* and
 *Sharing, video, Google and branded sheets*, *Coaching on somebody else's team*
 and *Coach tools* below.
@@ -1198,8 +1199,8 @@ beside New play; the playbook's filter offers Drills once there is one.
 ids shift with the component tree's shape; that is the whole diff, and it was
 checked as such before being accepted.
 
-**Not done:** a timed practice plan built from drills, more sports, and
-equipment that resizes or rotates.
+**Not done:** more sports, and equipment that resizes or rotates. (A timed
+practice plan built from drills came in stage 7 — see *Coach tools*.)
 
 ## Sharing, video, Google and branded sheets
 
