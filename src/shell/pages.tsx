@@ -46,7 +46,7 @@ export function TeamPage({ plays, coaches }: { plays: Play[]; coaches: Component
           Practices
         </button>
         <button aria-pressed={view === 'coaches'} onClick={() => setView('coaches')}>
-          Coaches
+          People
         </button>
       </div>
       {view === 'roster' && <RosterPanel roster={roster} onChange={setRoster} />}

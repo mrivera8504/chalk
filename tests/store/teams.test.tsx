@@ -310,3 +310,29 @@ describe('invites', () => {
     expect(cloud.docs.has('users/pal/teams/u1')).toBe(false);
   });
 });
+
+describe('a viewer', () => {
+  it('gets an invite that says so, and joins as one', async () => {
+    ownTeam();
+    const inv = ((await createInvite('u1', 'Hawks', 'viewer')) as { value: Invite }).value;
+    expect(inv.role).toBe('viewer');
+    const joined = await joinTeam('kid', inv, 'Jo');
+    expect(joined.ok && joined.value.role).toBe('viewer');
+    expect(cloud.docs.get(teamPath('u1'))).toMatchObject({ members: { kid: 'viewer' } });
+    expect(cloud.docs.get('users/kid/teams/u1')).toMatchObject({ role: 'viewer' });
+  });
+
+  it('reads the team’s book and sends nothing back up', async () => {
+    headCoach();
+    const r = renderHook(() => useTeamBook('boss', 'u1', undefined, true)).result;
+    await settle();
+    expect(ids(r.current.plays)).toEqual(['h1', 'h2']);
+    const writes = cloud.writes.length;
+    act(() => r.current.savePlay(p('x', 5000)));
+    await autosave();
+    await act(async () => {
+      await r.current.saveNow();
+    });
+    expect(cloud.writes.length).toBe(writes);
+  });
+});

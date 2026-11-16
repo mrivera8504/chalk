@@ -21,6 +21,8 @@ const joinedKey = (uid: string) => `chalk.teams.joined.${uid}`;
 export interface OpenTeam {
   teamId: string;
   name: string;
+  /** What this coach may do there. Absent is a coach, as every team joined before viewers was. */
+  role?: 'coach' | 'viewer';
 }
 
 function read<T>(key: string, fallback: T): T {
@@ -67,11 +69,21 @@ export function useTeams(uid: string | null) {
     write(CURRENT_KEY, team);
   }, []);
 
+  // The list is the truth about what this account may do on a team: an open
+  // team remembered on the device takes its role, and its name, from it.
+  useEffect(() => {
+    if (!open) return;
+    const t = joined.find((j) => j.teamId === open.teamId);
+    if (t && (t.role !== open.role || t.name !== open.name)) {
+      openTeam({ teamId: t.teamId, name: t.name, role: t.role });
+    }
+  }, [joined, open, openTeam]);
+
   /** After a join: on the list, and open. */
   const joinedOne = useCallback(
     (team: JoinedTeam) => {
       setJoined((prev) => [...prev.filter((t) => t.teamId !== team.teamId), team]);
-      openTeam({ teamId: team.teamId, name: team.name });
+      openTeam({ teamId: team.teamId, name: team.name, role: team.role });
       void refresh();
     },
     [openTeam, refresh],

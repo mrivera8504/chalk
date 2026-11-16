@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { UNFILED_SECTION, type Play, type Section } from '../domain/types';
+import { UNFILED_SECTION, type Book, type Play, type Section } from '../domain/types';
 import { viewForPlays } from '../export/view';
 import { PlayPicture } from '../render/PlayPicture';
 import { boardVars } from '../store/settings';
@@ -11,6 +11,13 @@ interface Props {
   plays: Play[];
   sections: Section[];
   onExit: () => void;
+  /** What the sheet is called, and what leaving it says. A viewer's whole app is this screen. */
+  title?: string;
+  exitLabel?: string;
+  /** The team's playbooks, for a viewer, who has no playbook screen to pick one on. */
+  books?: Book[];
+  bookId?: string;
+  onSelectBook?: (id: string) => void;
 }
 
 /**
@@ -23,7 +30,16 @@ interface Props {
  * sheet; until any are, it is every play, because a sheet that opens empty on
  * a Friday night is a sheet nobody trusts twice.
  */
-export function GameDay({ plays, sections, onExit }: Props) {
+export function GameDay({
+  plays,
+  sections,
+  onExit,
+  title: sheetTitle = 'Game day',
+  exitLabel = 'Done',
+  books,
+  bookId,
+  onSelectBook,
+}: Props) {
   const [open, setOpen] = useState<number | null>(null);
   const [all, setAll] = useState(false);
   const marked = plays.some((p) => p.status === 'ready');
@@ -57,7 +73,7 @@ export function GameDay({ plays, sections, onExit }: Props) {
           </button>
         ) : null}
         <div className="shared-title">
-          <strong>{play ? title(play) : 'Game day'}</strong>
+          <strong>{play ? title(play) : sheetTitle}</strong>
           <span>{play ? `${(open ?? 0) + 1} of ${list.length}` : `${list.length} plays`}</span>
         </div>
         {!play && marked && (
@@ -65,7 +81,16 @@ export function GameDay({ plays, sections, onExit }: Props) {
             {all ? 'Game-ready only' : 'Every play'}
           </button>
         )}
-        <button onClick={onExit}>Done</button>
+        {!play && books && books.length > 1 && onSelectBook && (
+          <select aria-label="Playbook" value={bookId} onChange={(e) => onSelectBook(e.target.value)}>
+            {books.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <button onClick={onExit}>{exitLabel}</button>
       </header>
 
       {play ? (

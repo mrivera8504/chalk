@@ -18,6 +18,10 @@ service cloud.firestore {
     // `members` map. Nobody can put themselves there except with an invite the
     // owner made, and nobody but the owner can put anyone else there or take
     // them off — a member can only take themselves off.
+    //
+    // Three roles. `owner` is the team's own uid. A `coach` edits everything a
+    // coach can see. A `viewer` — a player, a parent — reads the playbook and
+    // the team's kit and writes nothing at all.
     match /teams/{teamId} {
       function signedIn() {
         return request.auth != null;
@@ -28,6 +32,12 @@ service cloud.firestore {
       function isMember() {
         return isOwner() || (signedIn() &&
           request.auth.uid in get(/databases/$(database)/documents/teams/$(teamId)).data.members);
+      }
+      // A member who may change the playbook: the owner, or a coach.
+      function canEdit() {
+        return isOwner() || (signedIn() &&
+          get(/databases/$(database)/documents/teams/$(teamId)).data.members
+            .get(request.auth.uid, '') in ['owner', 'coach']);
       }
       function changed() {
         return request.resource.data.diff(resource.data).affectedKeys();
@@ -66,7 +76,7 @@ service cloud.firestore {
       allow create: if isOwner()
         && request.resource.data.get('members', {}).keys().hasOnly([teamId]);
       allow update: if isOwner()
-        || (isMember() && !changed().hasAny(['members', 'names', 'ownerUid']))
+        || (canEdit() && !changed().hasAny(['members', 'names', 'ownerUid']))
         || joining()
         || leaving();
       allow delete: if isOwner();
@@ -92,19 +102,32 @@ service cloud.firestore {
       // matches zero segments — which once let any member rewrite `members`.
       // The emulator found that; reading the rules had not.
       match /plays/{playId} {
-        allow read, delete: if isMember();
-        allow create, update: if isMember() && playOk();
+        allow read: if isMember();
+        allow delete: if canEdit();
+        allow create, update: if canEdit() && playOk();
 
         match /revisions/{stamp} {
-          allow read, write: if isMember();
+          allow read: if isMember();
+          allow write: if canEdit();
         }
       }
       match /purged/{playId} {
-        allow read, write: if isMember();
+        allow read: if isMember();
+        allow write: if canEdit();
+      }
+      // The team's kit: the roster, the saved formations, the hand-drawn
+      // routes, the league rules, the depth chart. One document each, by name,
+      // so nothing else can be parked under a team. Capped like a play.
+      match /kit/{item} {
+        allow read: if isMember();
+        allow write: if canEdit()
+          && item in ['roster', 'formations', 'routes', 'rules', 'depth']
+          && request.resource.data.get('items', []).size() <= 2000;
       }
     }
 
-    // An invite to coach on a team: the link an owner sends an assistant.
+    // An invite to a team: the link an owner sends an assistant (`coach`), or a
+    // player or parent (`viewer`).
     //
     // Like a share link, the code is the protection — read by its exact id,
     // never listed — and it only lets somebody add themselves, as the role it
@@ -117,7 +140,7 @@ service cloud.firestore {
         && code.size() >= 20
         && request.resource.data.teamId == request.auth.uid
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.role == 'coach';
+        && request.resource.data.role in ['coach', 'viewer'];
       allow update: if false;
       allow delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
     }

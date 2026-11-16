@@ -266,6 +266,79 @@ describe('a coach on somebody else’s team', () => {
   });
 });
 
+describe('a viewer — a player or a parent', () => {
+  beforeEach(async () => {
+    await ownTeam({ owner: 'owner', kid: 'viewer', pal: 'coach' });
+    await seed((db) => setDoc(doc(db, 'teams/owner/plays/p1'), { name: 'Sweep', updatedAt: 1 }));
+    await seed((db) => setDoc(doc(db, 'teams/owner/kit/roster'), { items: [{ jersey: 7 }], updatedAt: 1 }));
+  });
+
+  it('reads the playbook and the kit', async () => {
+    const db = as('kid');
+    await assertSucceeds(getDoc(doc(db, 'teams/owner')));
+    await assertSucceeds(getDoc(doc(db, 'teams/owner/plays/p1')));
+    await assertSucceeds(getDocs(collection(db, 'teams/owner/plays')));
+    await assertSucceeds(getDoc(doc(db, 'teams/owner/kit/roster')));
+  });
+
+  it('writes nothing: no play, no folder, no kit, no trash, no revision', async () => {
+    const db = as('kid');
+    await assertFails(setDoc(doc(db, 'teams/owner/plays/p1'), { name: 'Mine', updatedAt: 2 }));
+    await assertFails(setDoc(doc(db, 'teams/owner/plays/p2'), { name: 'New', updatedAt: 2 }));
+    await assertFails(deleteDoc(doc(db, 'teams/owner/plays/p1')));
+    await assertFails(setDoc(doc(db, 'teams/owner'), { sections: [{ id: 's' }] }, { merge: true }));
+    await assertFails(setDoc(doc(db, 'teams/owner/kit/roster'), { items: [] }));
+    await assertFails(setDoc(doc(db, 'teams/owner/purged/p1'), { play: {} }));
+    await assertFails(setDoc(doc(db, 'teams/owner/plays/p1/revisions/1'), { play: {} }));
+  });
+
+  it('cannot promote themselves to coach', async () => {
+    await assertFails(updateDoc(doc(as('kid'), 'teams/owner'), { 'members.kid': 'coach' }));
+  });
+
+  it('can still leave', async () => {
+    await assertSucceeds(
+      updateDoc(doc(as('kid'), 'teams/owner'), { 'members.kid': deleteField(), 'names.kid': deleteField() }),
+    );
+  });
+
+  it('joins only as what the invite offers', async () => {
+    await ownTeam();
+    await invite({ role: 'viewer' });
+    await assertFails(join('fan'));
+    await assertSucceeds(join('fan', { 'members.fan': 'viewer' }));
+  });
+
+  it('is an invite only the owner can make', async () => {
+    const good = { teamId: 'owner', teamName: 'Eagles', role: 'viewer', createdBy: 'owner', expiresAt: Date.now() + DAY };
+    await assertSucceeds(setDoc(doc(as('owner'), `invites/${CODE}`), good));
+  });
+});
+
+describe('the team’s kit', () => {
+  beforeEach(() => ownTeam({ owner: 'owner', pal: 'coach' }));
+
+  it('is written by the owner and a coach', async () => {
+    await assertSucceeds(setDoc(doc(as('owner'), 'teams/owner/kit/roster'), { items: [{ jersey: 7 }], updatedAt: 1 }));
+    await assertSucceeds(setDoc(doc(as('pal'), 'teams/owner/kit/formations'), { items: [], updatedAt: 1 }));
+    for (const item of ['routes', 'rules', 'depth']) {
+      await assertSucceeds(setDoc(doc(as('owner'), `teams/owner/kit/${item}`), { items: [], updatedAt: 1 }));
+    }
+  });
+
+  it('holds only the items the app keeps, and only so many', async () => {
+    await assertFails(setDoc(doc(as('owner'), 'teams/owner/kit/anything'), { items: [] }));
+    await assertFails(
+      setDoc(doc(as('owner'), 'teams/owner/kit/roster'), { items: Array.from({ length: 2001 }, () => ({})) }),
+    );
+  });
+
+  it('is nobody else’s to read', async () => {
+    await seed((db) => setDoc(doc(db, 'teams/owner/kit/roster'), { items: [] }));
+    await assertFails(getDoc(doc(as('stranger'), 'teams/owner/kit/roster')));
+  });
+});
+
 describe('share links', () => {
   it('still open for anybody, and change only for whoever made them', async () => {
     await assertSucceeds(setDoc(doc(as('owner'), `shares/${CODE}`), { ownerUid: 'owner', plays: [] }));

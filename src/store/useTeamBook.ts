@@ -112,6 +112,11 @@ export function useTeamBook(
   uid: string | null,
   /** The cloud refused: the owner took this coach off, or the team is gone. */
   onRemoved?: (teamId: string) => void,
+  /**
+   * A viewer's copy: it comes down and is never sent up. The rules would
+   * refuse every write anyway, and a refusal reads as being taken off the team.
+   */
+  readOnly = false,
 ) {
   const [st, setSt] = useState<State>(() => load(teamId));
   const [wanted, setWanted] = useState(() => readCurrent(teamId));
@@ -273,7 +278,7 @@ export function useTeamBook(
     if (!st.teamId || st.teamId !== teamId) return;
     const book: Playbook = { plays: st.plays, sections: st.sections, books: st.books };
     if (!save(st.teamId, book) && !uid) setSync('failed');
-    if (!scope || loadedFor.current !== scope || !uid) return;
+    if (readOnly || !scope || loadedFor.current !== scope || !uid) return;
     const forTeam = st.teamId;
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
@@ -286,25 +291,26 @@ export function useTeamBook(
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
     };
-  }, [st, teamId, uid, scope, sendUp]);
+  }, [st, teamId, uid, scope, sendUp, readOnly]);
 
   const saveNow = useCallback(async () => {
     if (timer.current) window.clearTimeout(timer.current);
+    if (readOnly) return;
     if (!teamId || !uid || loadedFor.current !== scope) return;
     setSync('syncing');
     setSync(await sendUp(onScreen.current, teamId, uid));
-  }, [teamId, uid, scope, sendUp]);
+  }, [teamId, uid, scope, sendUp, readOnly]);
 
   const emptyTrash = useCallback(() => {
     const going = st.plays.filter((p) => p.deletedAt && bookOf(p, books) === bookId);
     const ids = new Set(going.map((p) => p.id));
     setPlays((prev) => prev.filter((p) => !ids.has(p.id)));
-    if (teamId && uid && loadedFor.current === scope) {
+    if (!readOnly && teamId && uid && loadedFor.current === scope) {
       for (const id of ids) delete known.current[id];
       writeKnown(uid, teamId, known.current);
       void cloud2.purge(teamId, going).then((state) => state !== 'synced' && setSync(state));
     }
-  }, [st.plays, books, bookId, setPlays, teamId, uid, scope]);
+  }, [st.plays, books, bookId, setPlays, teamId, uid, scope, readOnly]);
 
   const bookHistory = useCallback(
     async () => ({

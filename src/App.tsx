@@ -34,7 +34,8 @@ export function App() {
     },
     [teamRemoved, teams.joined, teams.open],
   );
-  const teamBook = useTeamBook(teams.open?.teamId ?? null, own.uid, onTeamRemoved);
+  const viewing = teams.open?.role === 'viewer';
+  const teamBook = useTeamBook(teams.open?.teamId ?? null, own.uid, onTeamRemoved, viewing);
   /*
    * Whose playbook every screen shows. The coach's own unless a team they
    * coach on is open — and the two are kept apart all the way down, so
@@ -141,15 +142,17 @@ export function App() {
         return;
       }
       if (joined.some((t) => t.teamId === team.teamId)) {
-        openTeam({ teamId: team.teamId, name: team.teamName });
+        openTeam({ teamId: team.teamId, name: team.teamName, role: team.role });
         toast(`Showing ${team.teamName}`);
         return;
       }
       const { auth } = await import('./firebase');
-      const ok = await askConfirm(`Coach on ${team.teamName}?`, {
+      const ok = await askConfirm(team.role === 'viewer' ? `Follow ${team.teamName}?` : `Coach on ${team.teamName}?`, {
         body:
-          'You will see and edit their playbook. Your own playbook stays exactly as it is, and the Coaches ' +
-          'view on the Team page switches between them.' +
+          (team.role === 'viewer'
+            ? 'You will see their playbook, always the newest, and can study every play. You cannot change it.'
+            : 'You will see and edit their playbook.') +
+          ' Your own playbook stays exactly as it is, and the Coaches view on the Team page switches between them.' +
           (auth.currentUser?.isAnonymous
             ? ' This device has no email on its account yet — add one under Settings to reach the team from another device.'
             : ''),
@@ -157,7 +160,7 @@ export function App() {
       });
       if (!ok) return;
       const name = await askText('Your name', {
-        body: 'So the head coach can see who joined.',
+        body: 'So the coach can see who joined.',
         placeholder: 'Coach Smith',
         confirmLabel: 'Join',
       });
@@ -168,7 +171,7 @@ export function App() {
         return;
       }
       joinedOne(done.value);
-      toast(`You are coaching on ${done.value.name}`);
+      toast(team.role === 'viewer' ? `Following ${done.value.name}` : `You are coaching on ${done.value.name}`);
       go({ screen: 'book' });
     })();
     // When the account is known, and not again for the same one.
@@ -280,6 +283,31 @@ export function App() {
     a.click();
     URL.revokeObjectURL(url);
   }, [book]);
+
+  /*
+   * A player or a parent on a team: the team's playbook to read and study,
+   * and nothing that edits. Game day is exactly that screen already, so it is
+   * the whole app for a viewer — with the way back to their own playbook.
+   */
+  if (viewing && teams.open) {
+    return (
+      <>
+        <DialogHost />
+        <ToastHost />
+        <UpdateBar />
+        <GameDay
+          plays={book.plays}
+          sections={book.sections}
+          title={teams.open.name}
+          exitLabel="My playbook"
+          books={book.books}
+          bookId={book.bookId}
+          onSelectBook={book.selectBook}
+          onExit={() => teams.openTeam(null)}
+        />
+      </>
+    );
+  }
 
   if (open) {
     return (

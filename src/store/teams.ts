@@ -15,8 +15,10 @@ import { newToken } from './share';
  * into the coach's own, which is the reason team members were left out of
  * stage 6.
  *
- * There is one role to give, `coach`: a member edits the playbook as the owner
- * does. Players already have share links, which need no account at all.
+ * Two roles to give. A `coach` edits the playbook as the owner does. A
+ * `viewer` — a player, a parent — reads the team's playbook, always the
+ * newest, and changes nothing; a share link is still the way to show one play
+ * to somebody with no account.
  * Nobody but the owner can add or remove anybody, and the rules — tested
  * against the emulator in `tests/rules/` — are what hold that, not this file.
  */
@@ -32,11 +34,13 @@ async function open(): Promise<{ fs: Fs; db: import('firebase/firestore').Firest
 /** How long an invite link works for. */
 export const INVITE_DAYS = 14;
 
+export type Role = 'owner' | 'coach' | 'viewer';
+
 export interface Invite {
   code: string;
   teamId: string;
   teamName: string;
-  role: 'coach';
+  role: 'coach' | 'viewer';
   createdBy: string;
   expiresAt: number;
 }
@@ -44,7 +48,7 @@ export interface Invite {
 export interface Member {
   uid: string;
   name: string;
-  role: 'owner' | 'coach';
+  role: Role;
 }
 
 /** A team this coach has joined, as remembered under their own uid. */
@@ -52,6 +56,8 @@ export interface JoinedTeam {
   teamId: string;
   name: string;
   joinedAt: number;
+  /** Absent on a team joined before there were viewers: a coach. */
+  role?: 'coach' | 'viewer';
 }
 
 export function inviteUrl(code: string): string {
@@ -80,7 +86,11 @@ export type Result<T> = { ok: true; value: T } | { ok: false; reason: string };
  * reads and writes — so a book still on the single document says so rather
  * than handing out a link to nothing.
  */
-export async function createInvite(uid: string, teamName: string): Promise<Result<Invite>> {
+export async function createInvite(
+  uid: string,
+  teamName: string,
+  role: Invite['role'] = 'coach',
+): Promise<Result<Invite>> {
   try {
     const { fs, db } = await open();
     const team = fs.doc(db, 'teams', uid);
@@ -93,7 +103,7 @@ export async function createInvite(uid: string, teamName: string): Promise<Resul
       code: newToken(),
       teamId: uid,
       teamName: name,
-      role: 'coach',
+      role,
       createdBy: uid,
       expiresAt: Date.now() + INVITE_DAYS * 24 * 60 * 60 * 1000,
     };
@@ -132,8 +142,12 @@ export async function joinTeam(uid: string, invite: Invite, myName: string): Pro
       joinedWith: invite.code,
       updatedAt: now,
     });
-    const joined: JoinedTeam = { teamId: invite.teamId, name: invite.teamName, joinedAt: now };
-    await fs.setDoc(fs.doc(db, 'users', uid, 'teams', invite.teamId), { name: joined.name, joinedAt: now });
+    const joined: JoinedTeam = { teamId: invite.teamId, name: invite.teamName, joinedAt: now, role: invite.role };
+    await fs.setDoc(fs.doc(db, 'users', uid, 'teams', invite.teamId), {
+      name: joined.name,
+      joinedAt: now,
+      role: invite.role,
+    });
     return { ok: true, value: joined };
   } catch (err) {
     return { ok: false, reason: why(err, 'The cloud would not let you join. The invite may have been taken down.') };
@@ -149,8 +163,13 @@ export async function listJoined(uid: string): Promise<Result<JoinedTeam[]>> {
       ok: true,
       value: snap.docs
         .map((d) => {
-          const data = d.data() as { name?: string; joinedAt?: number };
-          return { teamId: d.id, name: data.name ?? 'A team', joinedAt: data.joinedAt ?? 0 };
+          const data = d.data() as { name?: string; joinedAt?: number; role?: string };
+          return {
+            teamId: d.id,
+            name: data.name ?? 'A team',
+            joinedAt: data.joinedAt ?? 0,
+            role: data.role === 'viewer' ? ('viewer' as const) : ('coach' as const),
+          };
         })
         .sort((a, b) => a.joinedAt - b.joinedAt),
     };
@@ -168,10 +187,11 @@ export async function listMembers(teamId: string): Promise<Result<Member[]>> {
     const data = snap.data() as { members?: Record<string, string>; names?: Record<string, string> };
     const members = Object.entries(data.members ?? {}).map(([uid, role]) => ({
       uid,
-      role: role === 'owner' ? ('owner' as const) : ('coach' as const),
+      role: (role === 'owner' || role === 'viewer' ? role : 'coach') as Role,
       name: data.names?.[uid] ?? (role === 'owner' ? 'You' : 'A coach'),
     }));
-    return { ok: true, value: members.sort((a, b) => (a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : a.name.localeCompare(b.name))) };
+    const rank = { owner: 0, coach: 1, viewer: 2 };
+    return { ok: true, value: members.sort((a, b) => rank[a.role] - rank[b.role] || a.name.localeCompare(b.name)) };
   } catch (err) {
     return { ok: false, reason: why(err, 'You are not on that team any more.') };
   }

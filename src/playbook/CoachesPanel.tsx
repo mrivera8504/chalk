@@ -24,7 +24,7 @@ interface Props {
 }
 
 /**
- * Who coaches on this playbook, and which playbook this device is showing.
+ * Who is on this team, and which playbook this device is showing.
  *
  * The owner invites with a link, the same way a play is shared, and takes a
  * coach off from here. A coach on somebody else's team sees who else is on it
@@ -55,16 +55,19 @@ export function CoachesPanel({ uid, open, joined, onOpen, onLeave, sendLink }: P
     };
   }, [teamId]);
 
-  async function invite() {
+  async function invite(role: 'coach' | 'viewer') {
     if (!uid || busy) return;
     setBusy(true);
-    const made = await createInvite(uid, settings.teamName);
+    const made = await createInvite(uid, settings.teamName, role);
     setBusy(false);
     if (!made.ok) {
       setProblem(made.reason);
       return;
     }
-    await sendLink(inviteUrl(made.value.code), `Coach with ${made.value.teamName} on Chalk`);
+    await sendLink(
+      inviteUrl(made.value.code),
+      role === 'viewer' ? `${made.value.teamName}'s playbook on Chalk` : `Coach with ${made.value.teamName} on Chalk`,
+    );
   }
 
   async function remove(m: Member) {
@@ -118,7 +121,7 @@ export function CoachesPanel({ uid, open, joined, onOpen, onLeave, sendLink }: P
             <button
               key={t.teamId}
               aria-pressed={open?.teamId === t.teamId}
-              onClick={() => onOpen({ teamId: t.teamId, name: t.name })}
+              onClick={() => onOpen({ teamId: t.teamId, name: t.name, role: t.role })}
             >
               {t.name}
             </button>
@@ -127,7 +130,7 @@ export function CoachesPanel({ uid, open, joined, onOpen, onLeave, sendLink }: P
       </div>
 
       <div className="picker-group">
-        <h3>{mine ? 'Coaches on your team' : `Coaches on ${open?.name}`}</h3>
+        <h3>{mine ? 'On your team' : `On ${open?.name}`}</h3>
         {members === null && !problem && <p className="picker-note">Asking the cloud…</p>}
         {members !== null && (
           <ul className="coach-list">
@@ -136,6 +139,7 @@ export function CoachesPanel({ uid, open, joined, onOpen, onLeave, sendLink }: P
                 <span className="coach-name">
                   {m.uid === uid ? 'You' : m.name}
                   {m.role === 'owner' && <span className="coach-role">head coach</span>}
+                  {m.role === 'viewer' && <span className="coach-role">can view</span>}
                 </span>
                 {mine && m.role !== 'owner' && (
                   <button className="quiet danger" onClick={() => void remove(m)}>
@@ -149,12 +153,17 @@ export function CoachesPanel({ uid, open, joined, onOpen, onLeave, sendLink }: P
         )}
         {mine ? (
           <>
-            <button className="primary" disabled={busy} onClick={() => void invite()}>
-              Invite a coach
-            </button>
+            <div className="picker-row">
+              <button className="primary" disabled={busy} onClick={() => void invite('coach')}>
+                Invite a coach
+              </button>
+              <button disabled={busy} onClick={() => void invite('viewer')}>
+                Invite a player or parent
+              </button>
+            </div>
             <p className="picker-note">
-              The link lets whoever opens it edit this playbook, for {INVITE_DAYS} days. Players do not
-              need one — share a play with them instead.
+              A coach's link lets them edit this playbook; a player's or parent's lets them read it, always
+              the newest, and change nothing. Each link works for {INVITE_DAYS} days.
             </p>
           </>
         ) : (
