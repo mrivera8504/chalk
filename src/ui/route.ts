@@ -17,11 +17,12 @@ import { useSyncExternalStore } from 'react';
  * *replaces* the address of whichever entry is current, and the screens go on
  * registering themselves as layers.
  */
-export type Screen = 'book' | 'team' | 'print' | 'settings' | 'gameday';
+export type Screen = 'home' | 'book' | 'team' | 'print' | 'settings' | 'gameday';
 
 export type Route = { screen: Screen } | { screen: 'play'; id: string };
 
 const PATHS: Record<Screen, string> = {
+  home: '/home',
   book: '/',
   team: '/team',
   print: '/print',

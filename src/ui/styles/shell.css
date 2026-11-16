@@ -19,13 +19,13 @@
 }
 
 /*
- * Along the bottom on a phone, where a thumb already is. Each tab is a full
- * quarter of the width and 56px tall, well over the pen's 40.
+ * Along the bottom on a phone, where a thumb already is. Each tab is a fifth
+ * of the width — 78px on a narrow phone — and 60px tall, well over the pen's 40.
  */
 .shell-nav {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   background: var(--bar);
   border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
@@ -660,4 +660,59 @@ button.with-icon {
 
 .gameday .shared-card strong {
   font-size: 16px;
+}
+
+/* Home: the playbooks, the teams, the plays touched last. */
+.home-group {
+  margin: 0 16px 20px;
+}
+.home-group h2 {
+  font-size: var(--text-xs, 12px);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  margin: 0 0 8px;
+}
+.home-list {
+  display: grid;
+  gap: 8px;
+}
+.home-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 56px;
+  padding: 10px 14px;
+  text-align: left;
+}
+.home-row span {
+  font-size: 13px;
+  color: var(--dim);
+}
+.home-row[aria-pressed='true'] {
+  border-color: var(--accent);
+}
+.home-recent {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.home-play {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  text-align: left;
+}
+.home-thumb {
+  display: block;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.home-thumb svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }

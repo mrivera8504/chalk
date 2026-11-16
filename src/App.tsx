@@ -13,6 +13,7 @@ import { AppShell } from './shell/AppShell';
 import { PrintPage, SettingsPage, TeamPage } from './shell/pages';
 import { Welcome, markWelcomed, wasWelcomed } from './shell/Welcome';
 import { GameDay } from './shell/GameDay';
+import { Home } from './shell/Home';
 import { publishShare, revokeShare, shareUrl, takeHandOver } from './store/share';
 import { newId } from './store/usePlaybook';
 import { starterPlays } from './store/starters';
@@ -359,7 +360,22 @@ export function App() {
       <ToastHost />
       <UpdateBar />
       <AppShell screen={route.screen === 'play' ? 'book' : route.screen}>
-        {route.screen === 'team' ? (
+        {route.screen === 'home' ? (
+          <Home
+            books={book.books}
+            everyPlay={book.everyPlay}
+            bookOf={(p) => bookOf(p, book.books)}
+            onOpenBook={book.selectBook}
+            team={teams.open}
+            joined={teams.joined}
+            onOpenTeam={(t) => {
+              teams.openTeam(t);
+              toast(t ? `Showing ${t.name}` : 'Showing your own playbook');
+            }}
+            sync={book.sync}
+            lastBackupAt={book.lastBackupAt}
+          />
+        ) : route.screen === 'team' ? (
           <TeamPage
             plays={book.plays}
             coaches={{

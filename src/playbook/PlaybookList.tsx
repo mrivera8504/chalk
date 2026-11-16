@@ -74,7 +74,7 @@ interface Props {
  * Silent degradation is worse than no sync at all: everything looks fine right
  * up until the device is lost.
  */
-const SYNC_LABEL: Record<SyncState, string> = {
+export const SYNC_LABEL: Record<SyncState, string> = {
   local: 'on this device',
   syncing: 'saving',
   synced: 'saved',

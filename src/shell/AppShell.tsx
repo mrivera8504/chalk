@@ -3,6 +3,7 @@ import { Icon, type IconName } from '../ui/Icon';
 import { go, toPath, type Screen } from '../ui/route';
 
 const TABS: { screen: Screen; label: string; icon: IconName }[] = [
+  { screen: 'home', label: 'Home', icon: 'home' },
   { screen: 'book', label: 'Playbook', icon: 'book' },
   { screen: 'team', label: 'Team', icon: 'team' },
   { screen: 'print', label: 'Print', icon: 'print' },
