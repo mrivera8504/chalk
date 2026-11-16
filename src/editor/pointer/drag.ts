@@ -125,6 +125,10 @@ export function createDrag(ed: EditorCtx) {
      */
     const { x, y } = dragTarget(d, at, { step, magnet }, ed.view);
 
+    if (d.kind === 'mark') {
+      ed.setMarks((prev) => prev.map((m) => (m.id === d.id ? { ...m, x, y } : m)));
+      return true;
+    }
     if (d.kind === 'vision') {
       setVision({ x, y });
       return true;

@@ -118,6 +118,8 @@ interface Props {
    * the first thing the panel shows.
    */
   onRename: (label: string) => void;
+  /** Take this man off the board, with everything drawn for him. */
+  onRemove: () => void;
   /** The team sheet, for the Who row. Empty means no dropdown at all. */
   roster: RosterEntry[];
   onAssignJersey: (jersey: number | undefined) => void;
@@ -256,6 +258,7 @@ export function RoutePicker({
   color,
   onColor,
   onRename,
+  onRemove,
   roster,
   onAssignJersey,
   onToggleOnLine,
@@ -389,6 +392,10 @@ export function RoutePicker({
                 spellCheck={false}
               />
             </label>
+            {/* In Details, not on the panel's face: a mis-tap on it costs a man. */}
+            <button className="danger" onClick={onRemove}>
+              Remove
+            </button>
           </div>
 
           {/*

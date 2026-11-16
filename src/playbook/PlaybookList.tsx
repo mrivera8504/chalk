@@ -29,7 +29,7 @@ interface Props {
   onRestorePlay: (id: string) => void;
   onEmptyTrash: () => void;
   onOpen: (id: string) => void;
-  onNew: (unit?: Side) => void;
+  onNew: (unit?: Side | 'drill') => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onAddSection: (name: string) => Section;
@@ -149,7 +149,7 @@ export function PlaybookList({
    * The unit is a fact about the play, so it filters across the folders rather
    * than sorting the plays into two of them.
    */
-  const [unit, setUnit] = useState<Side | 'all'>('all');
+  const [unit, setUnit] = useState<Side | 'all' | 'drill'>('all');
   const [dragging, setDragging] = useState<string | null>(null);
   const [historyOf, setHistoryOf] = useState<Play | null>(null);
   /** Where the team is with a play, as a filter. Offered once any play says. */
@@ -201,7 +201,11 @@ export function PlaybookList({
     const q = query.trim().toLowerCase();
     const ofStatus = status === 'all' ? plays : plays.filter((p) => p.status === status);
     const ofUnit =
-      unit === 'all' ? ofStatus : ofStatus.filter((p) => (p.unit ?? 'offense') === unit);
+      unit === 'all'
+        ? ofStatus
+        : unit === 'drill'
+          ? ofStatus.filter((p) => p.drill)
+          : ofStatus.filter((p) => !p.drill && (p.unit ?? 'offense') === unit);
     if (!q) return ofUnit;
     return ofUnit.filter((p) =>
       [p.name, p.suggestedName ?? '', p.notes, p.coachingPoint, ...p.tags]
@@ -390,11 +394,18 @@ export function PlaybookList({
           * Only there once there is something to filter. One unit's playbook
           * showing an Offense/Defense switch is two buttons that do nothing.
           */}
-        {plays.some((p) => p.unit === 'defense') && (
+        {(plays.some((p) => p.unit === 'defense') || plays.some((p) => p.drill)) && (
           <div className="unit-filter">
-            {(['all', 'offense', 'defense'] as const).map((u) => (
+            {(
+              [
+                'all',
+                'offense',
+                ...(plays.some((p) => p.unit === 'defense') ? (['defense'] as const) : []),
+                ...(plays.some((p) => p.drill) ? (['drill'] as const) : []),
+              ] as const
+            ).map((u) => (
               <button key={u} aria-pressed={unit === u} onClick={() => setUnit(u)}>
-                {u === 'all' ? 'All' : u === 'offense' ? 'Offense' : 'Defense'}
+                {u === 'all' ? 'All' : u === 'offense' ? 'Plays' : u === 'defense' ? 'Defense' : 'Drills'}
               </button>
             ))}
           </div>
@@ -575,6 +586,8 @@ export function PlaybookList({
           * with the defense standing in it, not one side's half of a snap.
           */}
         {isFootball(book.variant) && <button onClick={() => onNew('defense')}>New defense</button>}
+        {/* Any sport, any playbook: an empty board with the equipment row. */}
+        <button onClick={() => onNew('drill')}>New drill</button>
         <button className="primary with-icon" onClick={() => onNew('offense')}>
           <Icon name="plus" size={20} />
           New play

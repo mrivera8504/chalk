@@ -6,6 +6,7 @@ import { refreshPaths } from '../domain/regenerate';
 import { drawnSides, playSurface, quarterback, type Play } from '../domain/types';
 import { getSettings } from '../store/settings';
 import { AssignmentPath } from '../render/AssignmentPath';
+import { BoardMarks } from '../render/BoardMarks';
 import { Field } from '../render/Field';
 import { FocusSquare } from '../render/FocusSquare';
 import { ZoneArea } from '../render/Zone';
@@ -168,6 +169,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
         <FocusSquare key={`focus${man.id}`} player={man} focus={focus} />
       ))}
       {play.vision && qb && sides.offense && <VisionCone qb={qb} vision={play.vision} />}
+      <BoardMarks marks={play.marks ?? []} />
       {play.annotations.map((path, i) => (
         <path
           key={`ann${i}`}

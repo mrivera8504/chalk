@@ -1,3 +1,4 @@
+import { markAt } from '../../domain/marks';
 import type { EditorCtx } from './context';
 import { insideFocus } from '../../render/FocusSquare';
 import { insideCone } from '../../render/VisionCone';
@@ -55,6 +56,14 @@ export function createGrab(ed: EditorCtx) {
    */
   function grabHighlight(at: Yards): DragState | null {
     const base = { ox: at.x, oy: at.y, moved: false };
+
+    /*
+     * Equipment before every wash. A cone is a small thing a coach put down on
+     * purpose, often inside a zone or under the cone of vision, and anything
+     * asked first would swallow it.
+     */
+    const mark = markAt(ed.marks, at);
+    if (mark) return { kind: 'mark', id: mark.id, dx: mark.x - at.x, dy: mark.y - at.y, ...base };
 
     /*
      * Corners before bodies, and zones before either highlight.

@@ -1,6 +1,6 @@
 import type { Browser, Page } from 'playwright';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { launch, man, openApp, penTap, savedPlay } from './pen';
+import { launch, man, openApp, penHover, penTap, savedPlay } from './pen';
 
 /**
  * The steps of a play, running it, and the court — the three things stage 4
@@ -213,5 +213,57 @@ describe('the court', () => {
     const shot = lines.find((a) => a.kind === 'shot')!;
     const end = drive.path[drive.path.length - 1];
     expect(Math.hypot(shot.path[0].x - end.x, shot.path[0].y - end.y)).toBeLessThan(1);
+  });
+});
+
+describe('drills and equipment', () => {
+  it('opens a drill on an empty board, puts a cone down, moves it with the pen, and steps back over an added player', async () => {
+    const opened = await openApp(browser);
+    page = opened.page;
+    close = () => opened.context.close();
+    await page.getByRole('button', { name: 'New drill', exact: true }).click();
+    await page.locator('.stage > svg').first().waitFor();
+    await settle();
+    let play = (await saved()) as Saved & { drill?: boolean; marks?: { id: string; x: number; y: number }[] };
+    expect(play.drill).toBe(true);
+    expect(play.players).toEqual([]);
+    expect(await page.locator('.legality').count()).toBe(0);
+
+    await press('Cone');
+    play = (await saved()) as typeof play;
+    const cone = play.marks![0];
+    expect(cone).toMatchObject({ kind: 'cone' });
+
+    // Move is what Add leaves the board in. Tap, move, tap.
+    await penTap(page, cone);
+    const to = { x: cone.x + 4, y: cone.y - 3 };
+    await penHover(page, cone, to);
+    await penTap(page, to);
+    await settle();
+    play = (await saved()) as typeof play;
+    expect(play.marks![0].x).toBeCloseTo(to.x, 0);
+    expect(play.marks![0].y).toBeCloseTo(to.y, 0);
+
+    await press('Player');
+    expect((await saved()).players.length).toBe(1);
+
+    await press('Step back');
+    expect((await saved()).players.length).toBe(0);
+  });
+
+  it('labels the board in words the coach typed', async () => {
+    const opened = await openApp(browser);
+    page = opened.page;
+    close = () => opened.context.close();
+    await page.getByRole('button', { name: 'New drill', exact: true }).click();
+    await page.locator('.stage > svg').first().waitFor();
+    await settle();
+    await press('Label');
+    await page.getByRole('dialog').getByRole('textbox').fill('Start here');
+    await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+    await settle();
+    const play = (await saved()) as Saved & { marks?: { kind: string; text?: string }[] };
+    expect(play.marks).toEqual([expect.objectContaining({ kind: 'label', text: 'Start here' })]);
+    expect(await page.locator('.stage > svg .marks text').innerHTML()).toBe('Start here');
   });
 });

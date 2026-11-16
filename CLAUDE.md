@@ -9,9 +9,10 @@ Full spec and stage list: `docs/build-spec.md`.
 eight stages. Stages 0 to 2 (tests and the editor split up; the design system
 and the new shell; the data layer) are deployed, and the `/teams` rules are
 published. Stage 3 (the sport module, and flag, 6-, 8-, 9- and 11-man beside
-7-man) and stage 4 (basketball, steps, and running a play) are done in code.
-See *Tests*, *The editor, in pieces*, *The shell*, *Kinds of football* and
-*Basketball, steps and playback* below.
+7-man) and stage 4 (basketball, steps, and running a play) are deployed.
+Stage 5 (soccer, equipment and drills) is done in code. See *Tests*, *The
+editor, in pieces*, *The shell*, *Kinds of football*, *Basketball, steps and
+playback* and *Soccer, equipment and drills* below.
 
 Stages 1-7 done: field and players, blocking tool, route and run presets with
 formations and auto play-naming, freehand ink, a playbook that saves, and
@@ -1137,6 +1138,62 @@ A sheet of every step is not built.
 **Not done:** full court, a floor color of its own (the court is drawn in the
 field's two tokens), sets saved per team in the cloud, and play names for
 basketball.
+
+## Soccer, equipment and drills
+
+The overhaul's stage 5.
+
+**Soccer is the third sport, and the app branches on "not football" now.**
+`surfaceOf(variant)` says `field`, `court` or `pitch`; `isFootball()` is the seam.
+`Field` takes `surface`. In `PlayEditor` the flag is still called `hoops` — it
+began as basketball, and what it switches off (holes, gaps, legality, blocks,
+the defensive call) is the same list for soccer. `ground` is the surface; the
+editor already had a `surface` for grass or white board, and the two are
+different things.
+
+**The pitch is drawn smaller than life.** `sports/soccer/pitch.ts`: 70 yards
+across becomes 22 board yards, one to about 3.2, every line in proportion. At
+true size a mark would be a speck, and bigger marks would need every board
+constant twice. `SportModule.yardsPerUnit` records the scale for anything that
+ever needs real distance. Whole pitch, not half: a team's shape runs keeper to
+striker. Origin at the center spot, attacking up the board.
+
+**Shapes are written as their rows**, keeper implied, and the other team is the
+same shape turned round (`side: 'defense'`, every depth negated). Runs and
+dribbles in `presets/soccer.ts` go forward for whichever goal a man attacks,
+read off his side, and are clamped onto the pitch. Pass is a two-tap tool;
+Screen is court-only.
+
+**A shot keeps its target as its own last point.** `shotPath(shooter, all,
+target)`, and `refreshLinks` rebuilds it toward that point — so rebuilding a
+shot needs to know nothing about the sport, and playback flies the ball to it.
+
+**Equipment and labels are `Play.marks`** (`domain/marks.ts`): cone, goal,
+ladder, dummy, hoop, label. On the play, not in a step — a cone does not move
+between steps. Position only; no size or rotation, because every handle is one
+more thing a pen picks up by accident. Drawn by `render/BoardMarks.tsx` in
+existing tokens, under the men and over the washes, and **it renders nothing at
+all when there are none**, so an old play's export is byte-for-byte what it
+was. `grabHighlight` asks marks first: a cone is small and placed on purpose,
+often inside a zone. The eraser takes one whole. They mirror, undo and bound a
+printed window like everything else.
+
+**The drawer has an Add row**: Player, Opponent, and each mark. Each lands in
+the middle of the view (`placeFor` steps along so nothing lands on anything),
+switches to Move and slides the drawer away. A label asks for its words first.
+A player can be removed from his Details, which takes every line drawn for him
+or at him.
+
+**A drill is `Play.drill`**: an empty board in any sport, no legality badge, no
+name from the namer (nor is anything off a football field). New drill sits
+beside New play; the playbook's filter offers Drills once there is one.
+
+**The golden boards moved by a generated id only.** React's `useId` gradient
+ids shift with the component tree's shape; that is the whole diff, and it was
+checked as such before being accepted.
+
+**Not done:** a timed practice plan built from drills, more sports, and
+equipment that resizes or rotates.
 
 ## Backup, and what a backup has to carry
 

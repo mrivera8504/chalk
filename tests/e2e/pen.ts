@@ -197,7 +197,10 @@ export async function fingerDrag(page: Page, from: Yd, to: Yd, steps = 12) {
  * click at all — which is what "the pen needs a hard press" turned out to be.
  */
 export async function penTapButton(page: Page, name: string | RegExp, pairs = 4) {
-  const box = await page.getByRole('button', { name }).first().boundingBox();
+  const button = page.getByRole('button', { name }).first();
+  // A capped panel scrolls; a pen cannot tap what is below its fold.
+  await button.scrollIntoViewIfNeeded();
+  const box = await button.boundingBox();
   if (!box) throw new Error(`no button ${String(name)}`);
   await play(page, burst({ x: box.x + box.width / 2, y: box.y + box.height / 2 }, pairs));
   // penTaps waits 150ms for the browser's own click before making one.

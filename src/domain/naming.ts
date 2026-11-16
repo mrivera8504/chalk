@@ -1,3 +1,4 @@
+import { isFootball } from '../sports';
 import { computeGaps, nearestGap } from './gaps';
 import { computeHoles, nearestHole } from './holes';
 import { readFormations } from './presets/formations';
@@ -186,6 +187,11 @@ function frontName(play: Play): string | undefined {
 }
 
 export function withSuggestion(play: Play, settings: Settings): Play {
+  // A drill is not a play call: there is no hole to run at and no front to name.
+  // Nor is anything off a football field, which the namer knows nothing about.
+  if (play.drill || (play.variant && !isFootball(play.variant))) {
+    return { ...play, suggestedName: undefined, backNumber: undefined, hole: undefined };
+  }
   if (play.unit === 'defense') {
     const d = suggestDefenseName(
       play.players,

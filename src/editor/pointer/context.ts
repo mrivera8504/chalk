@@ -1,3 +1,4 @@
+import type { BoardMark } from '../../domain/marks';
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
 import type { Assignment, Focus, PathPoint, PlayerSlot, Vision, Zone } from '../../domain/types';
 import type { InkHandle, InkPoint } from '../../render/LiveInkCanvas';
@@ -37,6 +38,9 @@ export interface EditorCtx {
   pending: Pending | null;
   pan: { x: number; y: number };
   settings: AppSettings;
+  /** Equipment and labels, and the one way to change them. */
+  marks: BoardMark[];
+  setMarks: Dispatch<SetStateAction<BoardMark[]>>;
   /** The board's window: a field's, or a court's. */
   view: { halfWidth: number; downfield: number; behind: number };
   /** The men actually drawn, after the play's own answer on which sides show. */

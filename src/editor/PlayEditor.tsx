@@ -11,6 +11,7 @@ import { refreshPaths } from '../domain/regenerate';
 import { computeGaps } from '../domain/gaps';
 import { HOOPS_ACTIONS, makeShot } from '../domain/presets/hoops';
 import { framesOf, nextFrame, type Frame } from '../domain/frames';
+import { MARK_NAMES, mirrorMarks, placeFor, type BoardMark, type MarkKind } from '../domain/marks';
 import { SOCCER_ACTIONS } from '../domain/presets/soccer';
 import { GOAL } from '../sports/soccer/pitch';
 import { anyVariant, surfaceOf, viewOf } from '../sports';
@@ -193,6 +194,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   const [focuses, setFocuses] = useState<Focus[]>(play.focuses ?? []);
   /** The coverage zones. One per defender at most, like the squares. */
   const [zones, setZones] = useState<Zone[]>(play.zones ?? []);
+  /* Equipment and labels: on the play, like the zones, and the same in every step. */
+  const [marks, setMarks] = useState<BoardMark[]>(play.marks ?? []);
   /**
    * Which unit this play belongs to, decided when it was created and not
    * changeable here: every line already drawn on the board was drawn for one of
@@ -570,6 +573,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       vision: vision ?? undefined,
       focuses: focuses.length ? focuses : undefined,
       zones: zones.length ? zones : undefined,
+      marks: marks.length ? marks : undefined,
       unit: play.unit,
       defenseFormationId,
       scoutPlayId,
@@ -602,6 +606,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     vision,
     focuses,
     zones,
+    marks,
     defenseFormationId,
     scoutPlayId,
     hideOffense,
@@ -719,6 +724,79 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     syncUndo();
   }
 
+  /** The middle of what is on screen, where a new thing is put down. */
+  function viewCenter() {
+    return { x: pan.x, y: (-view.downfield + view.behind) / 2 + pan.y };
+  }
+
+  /**
+   * Put a piece of equipment or a label on the board.
+   *
+   * It lands in the middle of the view and the drawer slides away, so the next
+   * thing the coach sees is the cone, ready to be picked up and put where it
+   * goes. A label asks for its words first: one with nothing on it is a mark
+   * nobody can see to move.
+   */
+  async function addMark(kind: MarkKind) {
+    let text: string | undefined;
+    if (kind === 'label') {
+      const said = await askText('Label', { placeholder: 'Start here', label: 'What it says' });
+      if (!said) return;
+      text = said.slice(0, 32);
+    }
+    remember();
+    setMarks((prev) => [
+      ...prev,
+      { id: newId('m'), kind, ...placeFor(prev, viewCenter()), ...(text ? { text } : {}) },
+    ]);
+    setTool('select');
+    closeDrawerAfter();
+  }
+
+  /**
+   * One more man, on either side. For a drill, which starts with nobody, and
+   * for the play that needs a twelfth to show what the scout team does.
+   */
+  function addPlayer(side: Side) {
+    remember();
+    const mine = players.filter((p) => p.side === side);
+    const spot = placeFor(
+      players.map((p) => ({ id: p.id, kind: 'cone' as const, x: p.x, y: p.y })),
+      viewCenter(),
+    );
+    const man: PlayerSlot = {
+      id: newId(side === 'offense' ? 'o' : 'd'),
+      label: side === 'offense' ? String(mine.length + 1) : 'X',
+      side,
+      ...spot,
+      onLine: false,
+      onLineLocked: false,
+      shape: side === 'offense' ? 'circle' : 'triangle',
+    };
+    setPlayers((prev) => applyOnLine([...prev, man], settings));
+    if (side === 'defense') setShowDefense(true);
+    setTool('select');
+    closeDrawerAfter();
+  }
+
+  /** Take a man off the board, and everything that was drawn for him or at him. */
+  function removePlayer(id: string) {
+    remember();
+    const next = players.filter((p) => p.id !== id);
+    setPlayers(next);
+    setAssignments((prev) =>
+      refreshPaths(
+        prev.filter((a) => a.playerId !== id && a.targetPlayerId !== id && a.climbToPlayerId !== id),
+        next,
+      ),
+    );
+    setZones((prev) => prev.filter((z) => z.playerId !== id));
+    setFocuses((prev) => prev.filter((f) => f.playerId !== id));
+    if (ballCarrierId === id) setBallCarrierId(null);
+    setSel(null);
+    setPending(null);
+  }
+
   /** A new step after this one: everybody where their line left them. */
   function addStep() {
     const all = [...allSteps.slice(0, step + 1), nextFrame(allSteps[step]), ...allSteps.slice(step + 1)];
@@ -765,6 +843,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       vision,
       focuses,
       zones,
+      marks,
     });
     syncUndo();
   }
@@ -777,6 +856,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     setVision(snap.vision);
     setFocuses(snap.focuses);
     setZones(snap.zones);
+    setMarks(snap.marks ?? []);
     setSel(null);
     setPending(null);
     syncUndo();
@@ -792,6 +872,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       vision,
       focuses,
       zones,
+      marks,
     });
     if (prev) restore(prev);
     else syncUndo();
@@ -807,6 +888,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       vision,
       focuses,
       zones,
+      marks,
     });
     if (next) restore(next);
     else syncUndo();
@@ -1242,6 +1324,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
      * the man it belongs to has gone with it.
      */
     setZones((prev) => mirrorZones(prev));
+    setMarks((prev) => mirrorMarks(prev));
     // Only the cone's focus is a field position, so only it flips. Its apex
     // moves with the quarterback, and a focus square is an id: its man is
     // already on the other side, and the square is wherever he is.
@@ -1575,6 +1658,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
   const pointer = createPointer({
     view,
+    marks,
+    setMarks,
     tool,
     panning,
     erasing,
@@ -1645,7 +1730,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           aria-label="Play name"
         />
         {/* Nothing to count on a court: no line to fill and no rule about it. */}
-        {!hoops && (
+        {!hoops && !play.drill && (
           <LegalityBadge
             onLine={onLine}
             minOnLine={rules.minOnLine}
@@ -1687,6 +1772,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       >
         <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
           <BoardLayers
+            marks={marks}
             surface={ground}
             fieldView={{
               x: -view.halfWidth,
@@ -1849,6 +1935,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                 : null
             }
             onRename={rename}
+            onRemove={() => removePlayer(selectedPlayer.id)}
             roster={roster}
             onAssignJersey={(jersey) => assignJersey(selectedPlayer.id, jersey)}
             /* Only the offense has a line to be on. */
@@ -1877,7 +1964,10 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           carrying
             ? carrying === PAN_ID
               ? 'Set the board'
-              : `Place ${byId(carrying)?.label ?? ''}`
+              : `Place ${
+                  byId(carrying)?.label ??
+                  MARK_NAMES[marks.find((m) => m.id === carrying)?.kind ?? 'cone'].toLowerCase()
+                }`
             : null
         }
         onPlace={() => dropCarried('quick bar')}
@@ -1975,6 +2065,24 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               * formation, but a man gets renamed and handed to a different kid
               * all season, and doing either meant leaving him to do it.
               */}
+            {/*
+              * Things to put on the board. A drill is built out of this row;
+              * a play reaches for it now and then. Each lands in the middle of
+              * the view, in Move, with the drawer out of the way.
+              */}
+            <section className="tool-group">
+              <h4>Add</h4>
+              <div className="tools">
+                <button onClick={() => addPlayer('offense')}>Player</button>
+                <button onClick={() => addPlayer('defense')}>Opponent</button>
+                {(['cone', 'goal', 'ladder', 'dummy', 'hoop', 'label'] as const).map((k) => (
+                  <button key={k} onClick={() => void addMark(k)}>
+                    {MARK_NAMES[k]}
+                  </button>
+                ))}
+              </div>
+            </section>
+
             <section className="tool-group">
               <h4>Assign</h4>
               <div className="tools">

@@ -71,10 +71,13 @@ export function App() {
   useBackLayer(route.screen !== 'book', home);
 
   const startNew = useCallback(
-    (unit: Side = 'offense') => {
+    (unit: Side | 'drill' = 'offense') => {
       // A new play is the kind of football its playbook is.
       const kind = book.books.find((b) => b.id === book.bookId)?.variant;
-      const play = blankPlay(UNFILED_SECTION, unit, book.bookId, kind);
+      const play =
+        unit === 'drill'
+          ? blankPlay(UNFILED_SECTION, 'offense', book.bookId, kind, true)
+          : blankPlay(UNFILED_SECTION, unit, book.bookId, kind);
       book.savePlay(play);
       go({ screen: 'play', id: play.id });
     },

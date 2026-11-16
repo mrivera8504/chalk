@@ -120,6 +120,9 @@ function boundsOf(play: Play): Bounds {
     grow(b, z.x + z.w / 2, z.y + z.h / 2);
   }
 
+  // Equipment is part of what the sheet has to show: a drill is mostly cones.
+  for (const m of play.marks ?? []) grow(b, m.x, m.y);
+
   return b;
 }
 

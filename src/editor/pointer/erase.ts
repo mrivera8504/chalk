@@ -1,3 +1,4 @@
+import { markAt } from '../../domain/marks';
 import type { EditorCtx } from './context';
 import { eraseAt } from '../../domain/erase';
 import { stuntPartner } from '../../domain/presets/links';
@@ -37,6 +38,12 @@ export function createEraser(ed: EditorCtx, aim: Aim, ink: Ink) {
     const left = eraseAt(annotations, at, radius);
     if (left) {
       setAnnotations(left);
+      return;
+    }
+    // Equipment goes whole, like a line: half a cone means nothing either.
+    const mark = markAt(ed.marks, at, radius);
+    if (mark) {
+      ed.setMarks((prev) => prev.filter((m) => m.id !== mark.id));
       return;
     }
     const line = nearestAssignment(shown, at, radius);

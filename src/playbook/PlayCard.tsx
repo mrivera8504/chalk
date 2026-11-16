@@ -18,6 +18,7 @@ import { isFootball, surfaceOf } from '../sports';
 import { PlayerShape } from '../render/PlayerShape';
 import { FocusSquare } from '../render/FocusSquare';
 import { ZoneArea } from '../render/Zone';
+import { BoardMarks } from '../render/BoardMarks';
 import { VisionCone } from '../render/VisionCone';
 import { toPathD } from '../render/geometry';
 import { viewBox, viewForPlays } from '../export/view';
@@ -125,6 +126,7 @@ export function PlayCard({
           {play.vision && qb && sides.offense && (
             <VisionCone qb={qb} vision={play.vision} />
           )}
+          <BoardMarks marks={play.marks ?? []} />
           {play.annotations.map((path, i) => (
             <path
               key={`ann${i}`}

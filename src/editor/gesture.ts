@@ -1,3 +1,4 @@
+import type { BoardMark } from '../domain/marks';
 import { PLAYER_R, type Assignment, type Focus, type PathPoint, type PlayerSlot, type Vision, type Zone } from '../domain/types';
 import { VIEW, clamp, snap, snapDepth, type Yards } from '../render/geometry';
 
@@ -86,7 +87,7 @@ export interface DragState {
    * aiming and sizing are the same gesture. A coverage has to be aimed and
    * sized separately: a flat is shallow and wide wherever it is.
    */
-  kind: 'player' | 'vision' | 'focus' | 'zone' | 'zone-size' | 'pan' | 'route-point';
+  kind: 'player' | 'vision' | 'focus' | 'zone' | 'zone-size' | 'pan' | 'route-point' | 'mark';
   /** The assignment, for a route point. */
   id: string;
   /** Which point of the route is in hand. Only a route point has one. */
@@ -110,6 +111,7 @@ export interface Snapshot {
   vision: Vision | null;
   focuses: Focus[];
   zones: Zone[];
+  marks: BoardMark[];
 }
 
 /** A drag that just ended, kept for a moment in case the pen only bounced. */

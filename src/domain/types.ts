@@ -423,6 +423,17 @@ export interface Play {
    * before there were steps. See `domain/frames.ts`.
    */
   frames?: import('./frames').Frame[];
+  /**
+   * Equipment and labels on the board: cones, a goal, a few words. On the play
+   * rather than in a step, like the zones. Absent means none. See
+   * `domain/marks.ts`.
+   */
+  marks?: import('./marks').BoardMark[];
+  /**
+   * A drill rather than a play: it opens on an empty board, is counted against
+   * no rules and is given no name by the namer. Absent means a play.
+   */
+  drill?: boolean;
   unit?: Side;
   /**
    * The kind of football this play is: how many are on the field and what the

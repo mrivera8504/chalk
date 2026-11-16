@@ -182,10 +182,14 @@ export function blankPlay(
   unit: Side = 'offense',
   bookId: string = MAIN_BOOK,
   variant?: string,
+  /** An empty board, for a drill: nobody on it until the coach adds them. */
+  drill = false,
 ): Play {
   const kind = variantKey(variant);
   const surface = surfaceOf(kind);
-  const players = applyOnLine(
+  const players = drill
+    ? []
+    : applyOnLine(
     unit === 'defense'
       ? [...foundationOffense(kind), ...foundationDefense(kind)]
       : foundationOffense(kind),
@@ -207,6 +211,7 @@ export function blankPlay(
       : {}),
     // Only said when it is not seven-man, for the same reason as the book.
     ...(kind ? { variant: kind } : {}),
+    ...(drill ? { drill: true } : {}),
     sectionId,
     // Only said when it is not the main one, so a play in the main playbook is
     // stored exactly as a play has always been stored.

@@ -3,6 +3,8 @@ import { autoRouteColor } from '../domain/colors';
 import type { Gap } from '../domain/gaps';
 import type { Assignment, Focus, Hole, PathPoint, PlayerSlot, Vision, Zone } from '../domain/types';
 import { AssignmentPath } from '../render/AssignmentPath';
+import type { BoardMark } from '../domain/marks';
+import { BoardMarks } from '../render/BoardMarks';
 import { Field } from '../render/Field';
 import type { Surface } from '../sports';
 import { FocusSquare } from '../render/FocusSquare';
@@ -14,6 +16,8 @@ import type { Pending } from './BlockTool';
 import type { Selection } from './gesture';
 
 interface Props {
+  /** Equipment and labels, under the men and over the washes. */
+  marks?: BoardMark[];
   /** A court instead of a field, and the window either is laid down in. */
   surface?: Surface;
   fieldView?: { x: number; y: number; w: number; h: number };
@@ -80,6 +84,7 @@ export function BoardLayers({
   aimRef,
   ringRef,
   surface = 'field',
+  marks = [],
   fieldView,
 }: Props) {
   return (
@@ -123,6 +128,8 @@ export function BoardLayers({
         return man ? <FocusSquare key={`focus${f.playerId}`} player={man} focus={f} /> : null;
       })}
       {vision && qb && !hideOffense && <VisionCone qb={qb} vision={vision} />}
+
+      <BoardMarks marks={marks} held={carrying} />
 
       {annotations.map((path, i) => (
         <path
