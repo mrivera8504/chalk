@@ -1,3 +1,4 @@
+import { passPath, screenPath, shotPath } from './hoops';
 import {
   PLAYER_R,
   isLinkKind,
@@ -146,6 +147,12 @@ export function refreshLinks(assignments: Assignment[], players: PlayerSlot[]): 
   const byId = new Map(players.map((p) => [p.id, p]));
 
   return assignments.flatMap((a) => {
+    // A shot names nobody else, but it starts wherever its shooter ends up,
+    // so it is rebuilt with the lines that do.
+    if (a.kind === 'shot') {
+      const shooter = byId.get(a.playerId);
+      return shooter ? [{ ...a, path: shotPath(shooter, assignments) }] : [];
+    }
     if (!isLinkKind(a.kind) || !a.targetPlayerId) return [a];
 
     const who = byId.get(a.playerId);
@@ -153,6 +160,8 @@ export function refreshLinks(assignments: Assignment[], players: PlayerSlot[]): 
     if (!who || !other) return [];
 
     if (a.kind === 'cover') return [{ ...a, path: coverPath(who, other) }];
+    if (a.kind === 'pass') return [{ ...a, path: passPath(who, other, assignments) }];
+    if (a.kind === 'screen') return [{ ...a, path: screenPath(who, other) }];
     return [{ ...a, path: a.preset === LOOP ? loopPath(who, other) : crashPath(who, other) }];
   });
 }

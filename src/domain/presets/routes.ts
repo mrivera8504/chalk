@@ -1,4 +1,4 @@
-import type { Hand, PathPoint, PlayerSlot } from '../types';
+import type { AssignmentKind, Hand, PathPoint, PlayerSlot } from '../types';
 
 /** Which way the concept runs. Every preset is written right and mirrored. */
 export type { Hand };
@@ -6,7 +6,9 @@ export type { Hand };
 export interface RoutePreset {
   id: string;
   name: string;
-  group: 'run' | 'pass';
+  group: 'run' | 'pass' | 'cut' | 'dribble';
+  /** The kind of line it draws, when that is not a route or a carry. */
+  line?: AssignmentKind;
   /** Ball carrier, so the play namer can find the hole it runs through. */
   carry?: boolean;
   /**

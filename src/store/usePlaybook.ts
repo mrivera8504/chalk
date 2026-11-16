@@ -7,6 +7,7 @@ import {
   foundationOffense,
   readFoundationId,
 } from '../domain/presets/formations';
+import { isHoops } from '../sports';
 import { rulesFor, variantKey } from '../sports/football';
 import {
   MAIN_BOOK,
@@ -183,6 +184,13 @@ export function blankPlay(
   variant?: string,
 ): Play {
   const kind = variantKey(variant);
+  const hoops = isHoops(kind);
+  const players = applyOnLine(
+    unit === 'defense'
+      ? [...foundationOffense(kind), ...foundationDefense(kind)]
+      : foundationOffense(kind),
+    getSettings(),
+  );
   const now = Date.now();
   return {
     id: newId('p'),
@@ -203,12 +211,9 @@ export function blankPlay(
     // Only said when it is not the main one, so a play in the main playbook is
     // stored exactly as a play has always been stored.
     ...(bookId === MAIN_BOOK ? {} : { bookId }),
-    players: applyOnLine(
-      unit === 'defense'
-        ? [...foundationOffense(kind), ...foundationDefense(kind)]
-        : foundationOffense(kind),
-      getSettings(),
-    ),
+    players,
+    // Somebody has the ball when a set starts, and it is the point guard.
+    ...(hoops ? { ballCarrierId: players.find((p) => p.label === '1')?.id } : {}),
     assignments: [],
     annotations: [],
     notes: '',

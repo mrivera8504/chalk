@@ -13,8 +13,9 @@ import { PlayerShape } from '../render/PlayerShape';
 import { VisionCone } from '../render/VisionCone';
 import { toPathD } from '../render/geometry';
 import { BOARD_ASPECT } from './paper';
+import { isHoops } from '../sports';
 import { rulesFor } from '../sports/football';
-import { DEFAULT_VIEW, viewBox, type View } from './view';
+import { boardView, viewBox, type View } from './view';
 import { paperCss } from '../ui/surface';
 
 /**
@@ -143,7 +144,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
     return man ? [{ man, focus: f }] : [];
   });
 
-  const view = opts.view ?? DEFAULT_VIEW;
+  const view = opts.view ?? boardView(play);
 
   const body = renderToStaticMarkup(
     <>
@@ -153,6 +154,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
         gaps={gaps}
         showGaps={opts.showGaps ?? false}
         view={view}
+        court={isHoops(play.variant)}
       />
       {/* Under everything, exactly as on the board. */}
       {(play.zones ?? []).map((z) => (
@@ -189,6 +191,7 @@ export function playToSvg(play: Play, opts: SheetOptions = {}): string {
           player={p}
           selected={false}
           ball={p.id === play.ballCarrierId}
+          ballMark={isHoops(play.variant) ? 'ball' : 'star'}
         />
       ))}
     </>,
@@ -252,7 +255,7 @@ export async function svgToPng(
 export function playToPng(play: Play, widthPx: number, opts: SheetOptions = {}) {
   // The canvas has to match the window, not the board's old fixed shape, or a
   // landscape sheet is squeezed back into a portrait raster on its way out.
-  const view = opts.view ?? DEFAULT_VIEW;
+  const view = opts.view ?? boardView(play);
   return svgToPng(playToSvg(play, opts), widthPx, view.w / view.h);
 }
 

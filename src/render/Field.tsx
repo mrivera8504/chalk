@@ -1,5 +1,6 @@
 import type { Gap } from '../domain/gaps';
 import type { Hole } from '../domain/types';
+import { Court } from './Court';
 import { VIEW } from './geometry';
 
 /** NFHS hash spacing is 53 feet 4 inches, so 8.89 yards either side of center. */
@@ -20,6 +21,11 @@ interface Props {
    * a landscape sheet shows a field that stops halfway across the paper.
    */
   view?: { x: number; y: number; w: number; h: number };
+  /**
+   * A court instead of a field. One component, switched here, so the board,
+   * the card and the exporter cannot draw three different surfaces.
+   */
+  court?: boolean;
 }
 
 const BOARD_VIEW = {
@@ -36,7 +42,10 @@ export function Field({
   gaps = [],
   showGaps = false,
   view = BOARD_VIEW,
+  court = false,
 }: Props) {
+  if (court) return <Court view={view} />;
+
   const left = view.x;
   const right = view.x + view.w;
   const top = view.y;

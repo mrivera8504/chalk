@@ -84,7 +84,13 @@ export type AssignmentKind =
   | 'contain' // arrow that turns out at the edge and squeezes back
   | 'drop' // arrow to the spot he covers from, dashed
   | 'cover' // defender to the man he has, regenerated from both
-  | 'stunt'; // two of them exchanging gaps, regenerated from both
+  | 'stunt' // two of them exchanging gaps, regenerated from both
+  // The court's. A cut is a route and needs no kind of its own; these four
+  // are what a court draws that a field never did.
+  | 'dribble' // wavy, the man with the ball going somewhere with it
+  | 'screen' // to a teammate, T-cap, regenerated from both
+  | 'pass' // passer to receiver, dashed, regenerated from both
+  | 'shot'; // from wherever he ends up to the rim, regenerated
 
 /** A quadratic control point turns the segment leading into this point into a curve. */
 export interface PathPoint {
@@ -282,11 +288,19 @@ export interface Zone {
  * block family is: the path is thrown away and rebuilt from both men on every
  * render, so dragging either end redraws the line.
  */
-export const LINK_KINDS = ['cover', 'stunt'] as const;
+export const LINK_KINDS = ['cover', 'stunt', 'screen', 'pass'] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
 
 export function isLinkKind(kind: AssignmentKind): kind is LinkKind {
   return (LINK_KINDS as readonly string[]).includes(kind);
+}
+
+/**
+ * Lines a man has beside the one he runs: the ball leaving his hands. Giving
+ * him a new cut does not take his pass away, and neither is his route.
+ */
+export function isBesideRoute(kind: AssignmentKind): boolean {
+  return kind === 'pass' || kind === 'shot';
 }
 
 /** Every kind the defense draws, for the tool row and the picker groups. */

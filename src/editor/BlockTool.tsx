@@ -3,7 +3,7 @@ import type { BlockKind, LinkKind, PlayerSlot, Side } from '../domain/types';
 export type Tool = 'select' | 'routes' | 'draw' | 'erase' | BlockKind | LinkKind;
 
 /** The tap-tap tools: two men and a line between them, whichever unit it is. */
-export const PAIR_TOOLS: Tool[] = ['block', 'pull', 'combo', 'cover', 'stunt'];
+export const PAIR_TOOLS: Tool[] = ['block', 'pull', 'combo', 'cover', 'stunt', 'pass', 'screen'];
 
 /** A type guard, so the tap handler narrows to the tools that take two men. */
 export function isPairTool(tool: Tool): tool is BlockKind | LinkKind {
@@ -20,7 +20,26 @@ export function isPairTool(tool: Tool): tool is BlockKind | LinkKind {
  * eight to both would be six buttons that do nothing wherever you happen to be,
  * which is what made the old sixteen-pill drawer unreadable.
  */
-export function toolsFor(unit: Side, blocking = true): { id: Tool; label: string }[] {
+export function toolsFor(
+  unit: Side,
+  blocking = true,
+  hoops = false,
+): { id: Tool; label: string }[] {
+  /*
+   * A court's row. Pass and Screen are the two things drawn between two
+   * players, so they are the two-tap tools here, as Block and Man are on a
+   * field; everything one man does alone is in his own list.
+   */
+  if (hoops) {
+    return [
+      { id: 'select', label: 'Move' },
+      { id: 'routes', label: 'Actions' },
+      { id: 'erase', label: 'Erase' },
+      { id: 'pass', label: 'Pass' },
+      { id: 'screen', label: 'Screen' },
+    ];
+  }
+
   const common: { id: Tool; label: string }[] = [
     { id: 'select', label: 'Move' },
     { id: 'routes', label: unit === 'defense' ? 'Jobs' : 'Routes' },
@@ -54,6 +73,8 @@ const ALL_LABELS: Record<string, string> = {
   combo: 'Combo',
   cover: 'Man',
   stunt: 'Stunt',
+  pass: 'Pass',
+  screen: 'Screen',
 };
 
 /**
@@ -129,6 +150,17 @@ export function tapStunt(pending: Pending | null, tapped: PlayerSlot): BlockTap 
   return { type: 'commit', blockerId: pending.blockerId, targetId: tapped.id };
 }
 
+/**
+ * Tap one man, then another: who passes and who catches, who screens and who
+ * it is for. Either side of the ball, because a screen is set for a teammate
+ * and a defense passes nothing. A second tap on the first man lets go of him.
+ */
+export function tapTeammate(pending: Pending | null, tapped: PlayerSlot): BlockTap {
+  if (!pending) return { type: 'pending', pending: { blockerId: tapped.id } };
+  if (pending.blockerId === tapped.id) return { type: 'none' };
+  return { type: 'commit', blockerId: pending.blockerId, targetId: tapped.id };
+}
+
 /** For the dock handle, which names the current mode when nothing is pending. */
 export function toolLabel(tool: Tool): string {
   if (tool === 'draw') return 'Freehand';
@@ -140,6 +172,8 @@ interface Props {
   unit: Side;
   /** False for a kind of football with no blocking: flag. */
   blocking?: boolean;
+  /** A court's row instead of a field's. */
+  hoops?: boolean;
   onTool: (t: Tool) => void;
 }
 
@@ -149,10 +183,10 @@ interface Props {
  * block you are halfway through assigning, and it is worth more than the
  * buttons when the board is what you want to see.
  */
-export function BlockTool({ tool, unit, blocking = true, onTool }: Props) {
+export function BlockTool({ tool, unit, blocking = true, hoops = false, onTool }: Props) {
   return (
     <div className="tools">
-      {toolsFor(unit, blocking).map((t) => (
+      {toolsFor(unit, blocking, hoops).map((t) => (
         <button key={t.id} aria-pressed={tool === t.id} onClick={() => onTool(t.id)}>
           {t.label}
         </button>

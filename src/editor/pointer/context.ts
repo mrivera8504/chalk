@@ -37,6 +37,8 @@ export interface EditorCtx {
   pending: Pending | null;
   pan: { x: number; y: number };
   settings: AppSettings;
+  /** The board's window: a field's, or a court's. */
+  view: { halfWidth: number; downfield: number; behind: number };
   /** The men actually drawn, after the play's own answer on which sides show. */
   visible: PlayerSlot[];
   /** Every line, regenerated from the players. */

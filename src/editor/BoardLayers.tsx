@@ -13,6 +13,9 @@ import type { Pending } from './BlockTool';
 import type { Selection } from './gesture';
 
 interface Props {
+  /** A court instead of a field, and the window either is laid down in. */
+  court?: boolean;
+  fieldView?: { x: number; y: number; w: number; h: number };
   holes: Hole[];
   showHoles: boolean;
   occupied: number[];
@@ -75,6 +78,8 @@ export function BoardLayers({
   routeHandles,
   aimRef,
   ringRef,
+  court = false,
+  fieldView,
 }: Props) {
   return (
     <>
@@ -84,6 +89,8 @@ export function BoardLayers({
         occupied={occupied}
         gaps={gaps}
         showGaps={showGaps}
+        view={fieldView}
+        court={court}
       />
 
       {/*
@@ -145,6 +152,7 @@ export function BoardLayers({
           selected={sel?.kind === 'player' && sel.id === p.id}
           hovered={p.id === hoverId}
           ball={p.id === ballCarrierId}
+          ballMark={court ? 'ball' : 'star'}
           pending={
             p.id === pending?.blockerId || p.id === pending?.targetId || p.id === carrying
           }

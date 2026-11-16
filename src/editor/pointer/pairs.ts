@@ -1,8 +1,9 @@
 import type { EditorCtx } from './context';
 import { makeBlock } from '../../domain/presets/blocks';
 import { makeCover, makeStunt } from '../../domain/presets/links';
-import { isBlockKind, type PlayerSlot } from '../../domain/types';
-import { isPairTool, tapBlock, tapCover, tapStunt } from '../BlockTool';
+import { makePass, makeScreen } from '../../domain/presets/hoops';
+import { isBesideRoute, isBlockKind, type PlayerSlot } from '../../domain/types';
+import { isPairTool, tapBlock, tapCover, tapStunt, tapTeammate } from '../BlockTool';
 
 /** The two-tap tools: a block, man coverage, a stunt. */
 
@@ -33,7 +34,9 @@ export function createPairs(ed: EditorCtx) {
         ? tapCover(pending, player)
         : tool === 'stunt'
           ? tapStunt(pending, player)
-          : tapBlock(tool, pending, player);
+          : tool === 'pass' || tool === 'screen'
+            ? tapTeammate(pending, player)
+            : tapBlock(tool, pending, player);
 
     if (step.type === 'none') return;
     if (step.type === 'pending') {
@@ -56,6 +59,26 @@ export function createPairs(ed: EditorCtx) {
         // drawing a second rope off the same player.
         ...prev.filter((a) => !(a.playerId === first.id && a.kind === 'cover')),
         makeCover(first, target),
+      ]);
+      return;
+    }
+
+    if (tool === 'pass') {
+      setAssignments((prev) => {
+        // One pass a man: the ball only leaves his hands once in a step.
+        const rest = prev.filter((a) => !(a.playerId === first.id && a.kind === 'pass'));
+        return [...rest, makePass(first, target, rest)];
+      });
+      return;
+    }
+
+    if (tool === 'screen') {
+      setAssignments((prev) => [
+        // Setting a screen is where he goes, so it takes the place of his cut.
+        ...prev.filter(
+          (a) => !(a.playerId === first.id && !isBlockKind(a.kind) && !isBesideRoute(a.kind)),
+        ),
+        makeScreen(first, target),
       ]);
       return;
     }

@@ -1,6 +1,6 @@
 import { PULL_FLAG } from '../domain/presets/defense';
 import type { Assignment, AssignmentKind, PathPoint } from '../domain/types';
-import { headingInto, toPathD } from './geometry';
+import { headingInto, toPathD, wavyD } from './geometry';
 
 /** Half the width of a T-cap, and the length of an arrowhead. In yards. */
 const CAP = 0.46;
@@ -40,6 +40,15 @@ const STYLE: Record<AssignmentKind, Style> = {
   stunt: { cap: 'arrow', color: 'var(--ink-blitz)' },
   drop: { cap: 'arrow', dash: '0.5 0.32', color: 'var(--ink-cover)' },
   cover: { cap: 'none', dash: '0.3 0.28', color: 'var(--ink-cover)' },
+  /*
+   * The court's four, in the colors the field already has: nothing new for
+   * Settings to offer or the print palette to derive. A screen is a block, a
+   * dribble is the ball moving, a pass is the dashed line a motion always was.
+   */
+  dribble: { cap: 'arrow', color: 'var(--ink-carry)' },
+  screen: { cap: 'tee', color: 'var(--ink-block)' },
+  pass: { cap: 'arrow', dash: '0.42 0.3', color: 'var(--ink-motion)' },
+  shot: { cap: 'arrow', dash: '0.1 0.3', color: 'var(--ink-carry)' },
 };
 
 function Cap({
@@ -138,7 +147,7 @@ export function AssignmentPath({ assignment, selected = false, autoColor }: Prop
   // takes the standard one. Selection thickens whichever it turns out to be.
   const base = path[0]?.w ?? 0.17;
   const width = selected ? base + 0.04 : base;
-  const d = toPathD(path);
+  const d = kind === 'dribble' ? wavyD(path) : toPathD(path);
 
   return (
     <g>

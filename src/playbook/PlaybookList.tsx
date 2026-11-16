@@ -10,7 +10,7 @@ import {
 } from '../domain/types';
 import { PageHead } from '../shell/AppShell';
 import type { SyncState } from '../store/sync';
-import { football, variantOf } from '../sports/football';
+import { SPORTS, anyVariant, football, isHoops, sportOf } from '../sports';
 import { askChoice, askConfirm, askText } from '../ui/dialog';
 import { Icon } from '../ui/Icon';
 import { Menu } from '../ui/Menu';
@@ -79,15 +79,24 @@ const SYNC_LABEL: Record<SyncState, string> = {
  */
 const NEEDS_ACTION = new Set<SyncState>(['denied', 'blocked', 'toobig', 'failed']);
 
+/** What a playbook is for, in two words: `11-man football`, `Basketball`. */
+function kindLabel(variant?: string) {
+  const sport = sportOf(variant);
+  return sport === football ? `${anyVariant(variant).name} football` : sport.name;
+}
+
 /** The kinds of football, as a question, with the current one marked. */
 function kinds(current?: string) {
-  const now = variantOf(current).id;
-  return football.variants.map((v) => ({
-    id: v.id,
-    label: v.name,
-    sub: v.blurb,
-    current: v.id === now,
-  }));
+  const now = anyVariant(current).id;
+  return SPORTS.flatMap((sport) =>
+    sport.variants.map((v) => ({
+      id: v.id,
+      // Football's kinds are named by their number; anything else by its sport.
+      label: sport === football ? v.name : `${sport.name} · ${v.name.toLowerCase()}`,
+      sub: v.blurb,
+      current: v.id === now,
+    })),
+  );
 }
 
 export function PlaybookList({
@@ -156,14 +165,14 @@ export function PlaybookList({
     if (!name) return;
     // Asked second, and defaulting to what this playbook already is: a coach
     // adding "JV offense" is nearly always adding more of the same game.
-    const kind = await askChoice('What kind of football?', kinds(book.variant), {
+    const kind = await askChoice('What is this playbook for?', kinds(book.variant), {
       body: `Every new play in ${name} opens with this many on the field.`,
     });
     if (kind) onAddBook(name, kind);
   }
 
   async function changeKind() {
-    const kind = await askChoice('What kind of football?', kinds(book.variant), {
+    const kind = await askChoice('What is this playbook for?', kinds(book.variant), {
       body: 'For the plays you make from here on. The ones already drawn stay as they are.',
     });
     if (kind) onSetBookVariant(book.id, kind);
@@ -324,7 +333,7 @@ export function PlaybookList({
                     void changeKind();
                   }}
                 >
-                  {variantOf(book.variant).name} football…
+                  {kindLabel(book.variant)}…
                 </button>
                 {/* The last one cannot go: a play has to be somewhere. */}
                 {books.length > 1 && (
@@ -561,7 +570,11 @@ export function PlaybookList({
       )}
 
       <div className="book-new">
-        <button onClick={() => onNew('defense')}>New defense</button>
+        {/*
+          * A court has no second unit to draw for: a basketball play is a set
+          * with the defense standing in it, not one side's half of a snap.
+          */}
+        {!isHoops(book.variant) && <button onClick={() => onNew('defense')}>New defense</button>}
         <button className="primary with-icon" onClick={() => onNew('offense')}>
           <Icon name="plus" size={20} />
           New play

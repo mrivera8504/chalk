@@ -91,7 +91,7 @@ export function createDrag(ed: EditorCtx) {
       const from = panFrom.current;
       const ctm = svg.getScreenCTM();
       if (!from || !ctm || !client) return true;
-      setPan(panOffset(from, client, ctm));
+      setPan(panOffset(from, client, ctm, ed.view));
       return true;
     }
 
@@ -123,7 +123,7 @@ export function createDrag(ed: EditorCtx) {
      * given. The corner may go to the edge; the middle of a box still may not,
      * or the box would slide off the board entirely.
      */
-    const { x, y } = dragTarget(d, at, { step, magnet });
+    const { x, y } = dragTarget(d, at, { step, magnet }, ed.view);
 
     if (d.kind === 'vision') {
       setVision({ x, y });

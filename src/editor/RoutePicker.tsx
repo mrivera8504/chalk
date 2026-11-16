@@ -3,6 +3,7 @@ import { useScrollFade } from '../ui/useScrollFade';
 import { ZONE_SWATCHES } from '../domain/colors';
 import { byJersey, whoIs, type RosterEntry } from '../domain/roster';
 import { DEFENSE_PRESETS, rushPresets, type DefensePreset } from '../domain/presets/defense';
+import { HOOPS_ACTIONS } from '../domain/presets/hoops';
 import { ROUTES, type RoutePreset } from '../domain/presets/routes';
 import { ZONE_PRESETS, type ZonePreset } from '../domain/presets/zones';
 import type { PlayerSlot, ShapeKind } from '../domain/types';
@@ -66,6 +67,8 @@ export interface DefenseTools {
 
 interface Props {
   player: PlayerSlot;
+  /** On a court: the list is cuts and dribbles, and there is a shot to take. */
+  hoops?: { hasShot: boolean; onShot: () => void };
   /** Set for a defender, and that is what switches the panel to his side. */
   defense?: DefenseTools;
   /** The user's own, already wearing the preset face. */
@@ -228,6 +231,7 @@ function Swatches({
  */
 export function RoutePicker({
   player,
+  hoops,
   defense,
   custom,
   activeRoute,
@@ -281,7 +285,7 @@ export function RoutePicker({
             }
             onClick={onGiveBall}
           >
-            ★ Ball
+            {hoops ? 'Ball' : '★ Ball'}
           </button>
         )}
         {/*
@@ -523,15 +527,39 @@ export function RoutePicker({
         </>
       ) : (
         <>
+          {hoops && (
+            <>
+              <Group
+                title="Cut"
+                routes={HOOPS_ACTIONS.filter((r) => r.group === 'cut')}
+                activeId={activeRoute}
+                onPick={onPick}
+              />
+              <Group
+                title="Dribble"
+                routes={HOOPS_ACTIONS.filter((r) => r.group === 'dribble')}
+                activeId={activeRoute}
+                onPick={onPick}
+              />
+              <div className="picker-group">
+                <h3>Shoot</h3>
+                <div className="picker-row">
+                  <button aria-pressed={hoops.hasShot} onClick={hoops.onShot}>
+                    Shot
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
           <Group
             title="Pass"
-            routes={ROUTES.filter((r) => r.group === 'pass')}
+            routes={hoops ? [] : ROUTES.filter((r) => r.group === 'pass')}
             activeId={activeRoute}
             onPick={onPick}
           />
           <Group
             title="Run"
-            routes={ROUTES.filter((r) => r.group === 'run')}
+            routes={hoops ? [] : ROUTES.filter((r) => r.group === 'run')}
             activeId={activeRoute}
             onPick={onPick}
           />

@@ -9,7 +9,9 @@ import {
 import { describeAssignment } from '../domain/presets/blocks';
 import { refreshPaths } from '../domain/regenerate';
 import { computeGaps } from '../domain/gaps';
-import { rulesFor, variantKey, variantOf } from '../sports/football';
+import { HOOPS_ACTIONS, makeShot } from '../domain/presets/hoops';
+import { anyVariant, isHoops, viewOf } from '../sports';
+import { rulesFor, variantKey } from '../sports/football';
 import {
   defensePresetById,
   type DefenseContext,
@@ -20,6 +22,7 @@ import { applyCoverage, type CoveragePreset } from '../domain/presets/coverages'
 import { makeCover, stuntPartner } from '../domain/presets/links';
 import {
   drawnSides,
+  isBesideRoute,
   isBlockKind,
   isLinkKind,
   playSurface,
@@ -227,7 +230,10 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     () => formationsFor(allFormations, play.variant),
     [allFormations, play.variant],
   );
-  const kind = useMemo(() => variantOf(play.variant), [play.variant]);
+  const kind = useMemo(() => anyVariant(play.variant), [play.variant]);
+  /* A court or a field: the seam the football-only parts of the editor hang on. */
+  const hoops = isHoops(play.variant);
+  const view = viewOf(play.variant);
   /* The starred set for this unit. The two sides star independently. */
   const [foundationId, setFoundationId] = useState<string | null>(() =>
     readFoundationId(play.unit ?? 'offense', play.variant),
@@ -332,15 +338,15 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
   /** The box, scaled and slid. Yards throughout, as ever. */
   const viewBox = useMemo(() => {
-    const w = VIEW.halfWidth * 2;
-    const h = VIEW.downfield + VIEW.behind;
+    const w = view.halfWidth * 2;
+    const h = view.downfield + view.behind;
     // Center of the default box: the middle of the field, a little downfield.
     const cx = pan.x;
-    const cy = (-VIEW.downfield + VIEW.behind) / 2 + pan.y;
+    const cy = (-view.downfield + view.behind) / 2 + pan.y;
     const zw = w / zoom;
     const zh = h / zoom;
     return `${cx - zw / 2} ${cy - zh / 2} ${zw} ${zh}`;
-  }, [zoom, pan]);
+  }, [zoom, pan, view]);
 
   /** True when the window is anywhere but where it starts. */
   const viewMoved = zoom !== 1 || pan.x !== 0 || pan.y !== 0;
@@ -635,7 +641,8 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
      * anything that was not Select, so picking up the pen to draw a route
      * dropped a whole defense onto the field uninvited.
      */
-    const needsFront = isPairTool(next);
+    // A pass and a screen are between teammates: nobody across is needed.
+    const needsFront = isPairTool(next) && next !== 'pass' && next !== 'screen';
     if (needsFront && !defenseExists) {
       setPlayers((prev) => applyOnLine([...prev, ...foundationDefense(play.variant)], settings));
     }
@@ -749,16 +756,27 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
     remember();
     const hand = preset.hand ?? naturalHand(p);
     setAssignments((prev) => [
-      ...prev.filter((a) => !(a.playerId === p.id && !isBlockKind(a.kind))),
+      ...prev.filter(
+        (a) => !(a.playerId === p.id && !isBlockKind(a.kind) && !isBesideRoute(a.kind)),
+      ),
       {
         id: newId('a'),
         playerId: p.id,
-        kind: preset.carry ? 'carry' : 'route',
+        kind: preset.line ?? (preset.carry ? 'carry' : 'route'),
         path: preset.shape(p, hand),
         preset: preset.id,
         hand,
       },
     ]);
+  }
+
+  /** A shot is on or off: it starts wherever he ends up, so there is nothing to aim. */
+  function toggleShot(p: PlayerSlot) {
+    remember();
+    setAssignments((prev) => {
+      const rest = prev.filter((a) => !(a.playerId === p.id && a.kind === 'shot'));
+      return rest.length < prev.length ? rest : [...rest, makeShot(p, rest)];
+    });
   }
 
   /**
@@ -977,6 +995,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   const presetsById = useMemo(() => {
     const all = new Map<string, RoutePreset>();
     for (const r of ROUTES) all.set(r.id, r);
+    for (const r of HOOPS_ACTIONS) all.set(r.id, r);
     for (const r of customRoutes) all.set(r.id, toPreset(r));
     return all;
   }, [customRoutes]);
@@ -1060,7 +1079,11 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
   /** The route this player is actually running, if he has one drawn. */
   function routeOf(playerId: string) {
-    return assignments.find((a) => a.playerId === playerId && !isBlockKind(a.kind)) ?? null;
+    return (
+      assignments.find(
+        (a) => a.playerId === playerId && !isBlockKind(a.kind) && !isBesideRoute(a.kind),
+      ) ?? null
+    );
   }
 
   /**
@@ -1114,7 +1137,11 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
 
   function clearRoute(playerId: string) {
     remember();
-    setAssignments((prev) => prev.filter((a) => !(a.playerId === playerId && !isBlockKind(a.kind))));
+    setAssignments((prev) =>
+      prev.filter(
+        (a) => !(a.playerId === playerId && !isBlockKind(a.kind) && !isBesideRoute(a.kind)),
+      ),
+    );
   }
 
   /** Flip the whole play. Hole numbers follow because they are recomputed. */
@@ -1461,6 +1488,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
   }
 
   const pointer = createPointer({
+    view,
     tool,
     panning,
     erasing,
@@ -1530,14 +1558,17 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
           spellCheck={false}
           aria-label="Play name"
         />
-        <LegalityBadge
-          onLine={onLine}
-          minOnLine={rules.minOnLine}
-          issues={issues}
-          unit={unit}
-          defenders={defense.length}
-          onBall={defense.filter((p) => p.y > -2.6).length}
-        />
+        {/* Nothing to count on a court: no line to fill and no rule about it. */}
+        {!hoops && (
+          <LegalityBadge
+            onLine={onLine}
+            minOnLine={rules.minOnLine}
+            issues={issues}
+            unit={unit}
+            defenders={defense.length}
+            onBall={defense.filter((p) => p.y > -2.6).length}
+          />
+        )}
       </header>
 
       {/*
@@ -1561,11 +1592,18 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
       >
         <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
           <BoardLayers
+            court={hoops}
+            fieldView={{
+              x: -view.halfWidth,
+              y: -view.downfield,
+              w: view.halfWidth * 2,
+              h: view.downfield + view.behind,
+            }}
             holes={holes}
-            showHoles={showHoles}
+            showHoles={!hoops && showHoles}
             occupied={occupied}
             gaps={gaps}
-            showGaps={showGaps}
+            showGaps={!hoops && showGaps}
             players={players}
             visible={visible}
             shown={shown}
@@ -1622,6 +1660,16 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
         <div className={`inspector ${inspectorSide} ${inspectorEnd(selectedPlayer.side)}`}>
           <RoutePicker
             player={selectedPlayer}
+            hoops={
+              hoops
+                ? {
+                    hasShot: assignments.some(
+                      (a) => a.playerId === selectedPlayer.id && a.kind === 'shot',
+                    ),
+                    onShot: () => toggleShot(selectedPlayer),
+                  }
+                : undefined
+            }
             /*
              * The panel turns into the defensive one for a man on that side,
              * whichever unit the play belongs to: a front dropped onto an
@@ -1630,7 +1678,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
              * do about the route you just drew.
              */
             defense={
-              selectedPlayer.side === 'defense'
+              selectedPlayer.side === 'defense' && !hoops
                 ? {
                     onPick: applyDefensePreset,
                     blocking: kind.blocking,
@@ -1689,7 +1737,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
             roster={roster}
             onAssignJersey={(jersey) => assignJersey(selectedPlayer.id, jersey)}
             /* Only the offense has a line to be on. */
-            onToggleOnLine={selectedPlayer.side === 'offense' ? toggleOnLine : null}
+            onToggleOnLine={selectedPlayer.side === 'offense' && !hoops ? toggleOnLine : null}
             onReleaseLock={selectedPlayer.onLineLocked ? releaseLock : null}
           />
         </div>
@@ -1791,7 +1839,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
               */}
             <section className="tool-group">
               <h4>Mode</h4>
-              <BlockTool tool={tool} unit={unit} blocking={kind.blocking} onTool={handleTool} />
+              <BlockTool tool={tool} unit={unit} blocking={kind.blocking} hoops={hoops} onTool={handleTool} />
             </section>
 
             {/*
@@ -1810,7 +1858,7 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
                   onClick={() => setPicker((v) => (v === 'formation' ? null : 'formation'))}
                   aria-pressed={picker === 'formation'}
                 >
-                  {unit === 'defense' ? 'Front' : 'Formation'}
+                  {hoops ? 'Set' : unit === 'defense' ? 'Front' : 'Formation'}
                 </button>
                 {/*
                   * The two decisions that are about the whole board rather than
@@ -1879,17 +1927,21 @@ export function PlayEditor({ play, library, onChange, onClose, onSave }: EditorP
             <section className="tool-group">
               <h4>Show</h4>
               <div className="tools">
-                <button aria-pressed={showHoles} onClick={() => setShowHoles((v) => !v)}>
-                  Hole numbers
-                </button>
+                {!hoops && (
+                  <button aria-pressed={showHoles} onClick={() => setShowHoles((v) => !v)}>
+                    Hole numbers
+                  </button>
+                )}
                 {/*
                   * The gap letters: the same spaces as the holes, read from the
                   * other side of the ball. Above the line, where the numbers are
                   * below it, so both can be up at once.
                   */}
-                <button aria-pressed={showGaps} onClick={() => setShowGaps((v) => !v)}>
-                  Gap letters
-                </button>
+                {!hoops && (
+                  <button aria-pressed={showGaps} onClick={() => setShowGaps((v) => !v)}>
+                    Gap letters
+                  </button>
+                )}
                 {unit === 'offense' && (
                   <button aria-pressed={showDefense} onClick={handleDefense}>
                     {defenseExists ? 'Defense' : '+ Defense'}

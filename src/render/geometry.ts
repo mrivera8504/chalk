@@ -76,6 +76,87 @@ export function toPathD(points: PathPoint[]): string {
   return d;
 }
 
+/** A path as straight pieces, every curve walked. For measuring along it. */
+export function flatten(points: PathPoint[], steps = 14): Yards[] {
+  if (!points.length) return [];
+  const out: Yards[] = [{ x: points[0].x, y: points[0].y }];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    if (b.cx === undefined || b.cy === undefined) {
+      out.push({ x: b.x, y: b.y });
+      continue;
+    }
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      const u = 1 - t;
+      out.push({
+        x: u * u * a.x + 2 * u * t * b.cx + t * t * b.x,
+        y: u * u * a.y + 2 * u * t * b.cy + t * t * b.y,
+      });
+    }
+  }
+  return out;
+}
+
+/** How long a path is, in yards, curves included. */
+export function pathLength(points: PathPoint[]): number {
+  const flat = flatten(points);
+  let total = 0;
+  for (let i = 1; i < flat.length; i++) total += Math.hypot(flat[i].x - flat[i - 1].x, flat[i].y - flat[i - 1].y);
+  return total;
+}
+
+/** The point a fraction of the way along a path, by distance travelled. */
+export function pointAlong(points: PathPoint[], fraction: number): Yards {
+  const flat = flatten(points);
+  if (!flat.length) return { x: 0, y: 0 };
+  let left = pathLength(points) * clamp(fraction, 0, 1);
+  for (let i = 1; i < flat.length; i++) {
+    const step = Math.hypot(flat[i].x - flat[i - 1].x, flat[i].y - flat[i - 1].y);
+    if (step >= left && step > 0) {
+      const t = left / step;
+      return {
+        x: flat[i - 1].x + (flat[i].x - flat[i - 1].x) * t,
+        y: flat[i - 1].y + (flat[i].y - flat[i - 1].y) * t,
+      };
+    }
+    left -= step;
+  }
+  return flat[flat.length - 1];
+}
+
+/**
+ * A dribble: the same path, drawn as a wave either side of it.
+ *
+ * The wave is laid over the path's own length rather than over its points, so
+ * a drive drawn as two points and one drawn freehand as forty wobble at the
+ * same pitch. It straightens out over the last stretch, because an arrowhead on
+ * the end of a wave points wherever the last half-cycle happened to leave it.
+ */
+export function wavyD(points: PathPoint[], amp = 0.2, pitch = 0.75): string {
+  const total = pathLength(points);
+  if (total < pitch * 1.5) return toPathD(points);
+  const n = (v: number) => Number(v.toFixed(3));
+  const tail = Math.min(0.7, total * 0.25);
+  const count = Math.max(8, Math.round(total / 0.12));
+  let d = '';
+  for (let i = 0; i <= count; i++) {
+    const at = (total * i) / count;
+    const here = pointAlong(points, at / total);
+    const ahead = pointAlong(points, Math.min(1, (at + 0.05) / total));
+    const behind = pointAlong(points, Math.max(0, (at - 0.05) / total));
+    const len = Math.hypot(ahead.x - behind.x, ahead.y - behind.y) || 1;
+    const nx = -(ahead.y - behind.y) / len;
+    const ny = (ahead.x - behind.x) / len;
+    // Fades in off the man and out into the arrowhead.
+    const fade = Math.min(1, at / 0.4, Math.max(0, (total - tail - at) / 0.4));
+    const off = Math.sin((at / pitch) * Math.PI * 2) * amp * Math.max(0, fade);
+    d += `${i ? ' L' : 'M'} ${n(here.x + nx * off)} ${n(here.y + ny * off)}`;
+  }
+  return d;
+}
+
 /**
  * Direction of travel arriving at points[i], for placing a cap or an arrowhead.
  * A curved segment is headed at by its control point, which is where the

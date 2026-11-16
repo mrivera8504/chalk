@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { football } from '../sports';
+import { SPORTS, football } from '../sports';
 
 const KEY = 'chalk.welcomed.v1';
 
@@ -38,6 +38,7 @@ interface Props {
  * plays are on the screen behind it.
  */
 export function Welcome({ onStart, onSignIn }: Props) {
+  const [sport, setSport] = useState(football);
   const [picked, setPicked] = useState(football.defaultVariant);
 
   return (
@@ -47,14 +48,24 @@ export function Welcome({ onStart, onSignIn }: Props) {
         <p className="welcome-lede">Draw it, save it, print it. What are you coaching?</p>
 
         <div className="welcome-sports" role="group" aria-label="Sport">
-          <button aria-pressed="true">Football</button>
+          {SPORTS.map((s) => (
+            <button
+              key={s.id}
+              aria-pressed={sport === s}
+              onClick={() => {
+                setSport(s);
+                setPicked(s.defaultVariant);
+              }}
+            >
+              {s.name}
+            </button>
+          ))}
           {/* Said out loud rather than left off, so nobody goes looking. */}
-          <button disabled>Basketball · soon</button>
           <button disabled>Soccer · soon</button>
         </div>
 
-        <div className="welcome-kinds" role="radiogroup" aria-label="Kind of football">
-          {football.variants.map((v) => (
+        <div className="welcome-kinds" role="radiogroup" aria-label={`Kind of ${sport.name.toLowerCase()}`}>
+          {sport.variants.map((v) => (
             <button
               key={v.id}
               role="radio"

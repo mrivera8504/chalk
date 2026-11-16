@@ -156,14 +156,20 @@ export interface SnapRules {
  * Only a player is magnetised. The line of scrimmage means nothing to where a
  * quarterback is looking, nor to the patch of grass a receiver is working into.
  */
-export function dragTarget(d: DragState, at: Yards, rules: SnapRules): Yards {
+export function dragTarget(
+  d: DragState,
+  at: Yards,
+  rules: SnapRules,
+  /** The board's window: a field's unless the play is on a court. */
+  view: typeof VIEW = VIEW,
+): Yards {
   const edge = d.kind === 'zone-size' ? 0 : 1;
   return {
-    x: clamp(snap(at.x + d.dx, rules.step), -VIEW.halfWidth + edge, VIEW.halfWidth - edge),
+    x: clamp(snap(at.x + d.dx, rules.step), -view.halfWidth + edge, view.halfWidth - edge),
     y: clamp(
       snapDepth(at.y + d.dy, d.kind === 'player' ? rules.magnet : 0, rules.step),
-      -VIEW.downfield + edge,
-      VIEW.behind - edge,
+      -view.downfield + edge,
+      view.behind - edge,
     ),
   };
 }
@@ -183,8 +189,9 @@ export function panOffset(
   client: { x: number; y: number },
   /** Pixels per yard, across and down, off the SVG's own matrix. */
   scale: { a: number; d: number },
+  view: typeof VIEW = VIEW,
 ): Yards {
-  const half = { x: VIEW.halfWidth, y: (VIEW.downfield + VIEW.behind) / 2 };
+  const half = { x: view.halfWidth, y: (view.downfield + view.behind) / 2 };
   return {
     // Drag right and the field goes right, which means the window goes left.
     x: clamp(from.ox - (client.x - from.x) / scale.a, -half.x, half.x),

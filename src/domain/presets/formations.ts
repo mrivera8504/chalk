@@ -1,6 +1,10 @@
 import type { Formation, PlayerSlot, Side } from '../types';
-import { OTHER_VARIANTS } from '../../sports/football/variants';
+import { basketball } from '../../sports/basketball';
+import { OTHER_VARIANTS as FOOTBALL_VARIANTS } from '../../sports/football/variants';
 import { back, front, lineman } from './slots';
+
+/** Every variant that is not seven-man football, of every sport. */
+const OTHER_VARIANTS = [...FOOTBALL_VARIANTS, ...basketball.variants];
 
 /**
  * One balanced 7-man set, sitting at the legal minimum of four on the line so

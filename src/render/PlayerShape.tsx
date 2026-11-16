@@ -9,6 +9,8 @@ interface Props {
   hovered?: boolean;
   /** Starred as the man getting the ball. */
   ball?: boolean;
+  /** How having the ball is drawn: the football star, or a ball in hand. */
+  ballMark?: 'star' | 'ball';
 }
 
 /**
@@ -37,8 +39,15 @@ export function PlayerShape({
   selected,
   pending = false,
   hovered = false,
-  ball = false,
+  ball: hasBall = false,
+  ballMark = 'star',
 }: Props) {
+  /*
+   * On a court the man with the ball keeps his own mark and is drawn holding
+   * one. Five numbered circles are told apart by their numbers, and turning the
+   * point guard into a star would take his away.
+   */
+  const ball = hasBall && ballMark === 'star';
   /*
    * The man with the ball is drawn as a star in the ball color, whatever mark
    * he would otherwise wear. It used to be a small star pinned to the corner of
@@ -155,6 +164,16 @@ export function PlayerShape({
         >
           {player.label}
         </text>
+      )}
+      {hasBall && ballMark === 'ball' && (
+        <g pointerEvents="none">
+          <circle cx={R * 0.92} cy={R * 0.92} r={0.36} fill="var(--ball)" stroke="var(--ball-line)" strokeWidth={0.07} />
+          <path
+            d={`M ${R * 0.92 - 0.36} ${R * 0.92} h 0.72 M ${R * 0.92} ${R * 0.92 - 0.36} v 0.72`}
+            stroke="var(--ball-line)"
+            strokeWidth={0.05}
+          />
+        </g>
       )}
       {player.onLineLocked && player.side === 'offense' && (
         <circle cx={R * 0.95} cy={-R * 0.95} r={0.2} fill="var(--locked)" pointerEvents="none" />

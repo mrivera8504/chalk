@@ -1,6 +1,7 @@
 import { refreshPaths } from '../domain/regenerate';
 import type { Play } from '../domain/types';
 import { VIEW } from '../render/geometry';
+import { isHoops, viewOf } from '../sports';
 
 
 /**
@@ -32,6 +33,13 @@ export const DEFAULT_VIEW: View = {
   w: VIEW.halfWidth * 2,
   h: VIEW.downfield + VIEW.behind,
 };
+
+/** The whole board a play is drawn on: the field's window, or the court's. */
+export function boardView(play: Play): View {
+  if (!isHoops(play.variant)) return DEFAULT_VIEW;
+  const c = viewOf(play.variant);
+  return { x: -c.halfWidth, y: -c.downfield, w: c.halfWidth * 2, h: c.downfield + c.behind };
+}
 
 export function viewBox(v: View): string {
   return `${v.x} ${v.y} ${v.w} ${v.h}`;
@@ -177,6 +185,13 @@ export function contentAspect(plays: Play[]): number {
 
 /** That window, leaned toward the shape of the cell it is going into. */
 export function viewForPlays(plays: Play[], aspect: number): View {
+  // A court is shown whole, always. Its lines are the context a play is read
+  // against — which side of the arc, how far off the lane — and a window
+  // cropped to the players would cut the basket off a play run at half court.
+  if (plays.length && plays.every((p) => isHoops(p.variant))) {
+    const c = viewOf(plays[0].variant);
+    return { x: -c.halfWidth, y: -c.downfield, w: c.halfWidth * 2, h: c.downfield + c.behind };
+  }
   const v = contentView(plays);
   let { w, h } = v;
 
