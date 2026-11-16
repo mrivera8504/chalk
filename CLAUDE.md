@@ -1293,6 +1293,21 @@ editor's drawer offers it as *Depth chart* once there is a roster.
 **The Team page is three views** — Roster, Depth chart, Practices — rather than
 three tabs. Each is a list typed once and corrected now and then.
 
+## Starter plays
+
+`store/starters.ts`: a handful of plays for whatever game a playbook is for,
+offered on an empty playbook and in the playbook's menu, filed in a *Starters*
+folder and tagged `starter`. **Built, not shipped** — each is the variant's own
+first set with presets laid on through the same functions a tap runs, so every
+line flips, deepens and erases like one the coach drew, and a 9-man starter is
+laid on the 9-man set. `tests/store/starters.test.ts` holds every sport and
+size to: named, every line naming a man on the board, rebuildable, and legal.
+
+**The Slant preset breaks toward the wide side**, like a corner, where Post
+breaks inside. That predates the overhaul and is flagged to the owner rather
+than changed, because changing it changes what every saved slant regenerates to
+on a flip. The starters ask for the inside hand by name.
+
 ## Backup, and what a backup has to carry
 
 `store/backup.ts`. The old JSON export wrote plays and sections only, and there

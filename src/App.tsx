@@ -15,6 +15,7 @@ import { Welcome, markWelcomed, wasWelcomed } from './shell/Welcome';
 import { GameDay } from './shell/GameDay';
 import { publishShare, revokeShare, shareUrl, takeHandOver } from './store/share';
 import { newId } from './store/usePlaybook';
+import { starterPlays } from './store/starters';
 import type { Book, Play } from './domain/types';
 
 export function App() {
@@ -321,6 +322,19 @@ export function App() {
             bookId={book.bookId}
             onSelectBook={book.selectBook}
             onSetBookVariant={book.setBookVariant}
+            onAddStarters={() => {
+              const kind = book.books.find((b) => b.id === book.bookId)?.variant;
+              const plays = starterPlays(kind);
+              const folder = book.addSection('Starters');
+              for (const p of plays) {
+                book.savePlay({
+                  ...p,
+                  sectionId: folder.id,
+                  ...(book.bookId === 'main' ? {} : { bookId: book.bookId }),
+                });
+              }
+              toast(`Added ${plays.length} starter plays`);
+            }}
             onSharePlay={(p) => void sharePlay(p)}
             onUnsharePlay={(p) => void unsharePlay(p)}
             onShareBook={(b, ps) => void shareBook(b, ps)}

@@ -54,6 +54,8 @@ interface Props {
   onSelectBook: (id: string) => void;
   onAddBook: (name: string, variant?: string) => void;
   onSetBookVariant: (id: string, variant?: string) => void;
+  /** A handful of everyday plays for this playbook's game, in a folder of their own. */
+  onAddStarters: () => void;
   onRenameBook: (id: string, name: string) => void;
   /** False when it is the last one, which cannot go. */
   onDeleteBook: (id: string) => boolean;
@@ -134,6 +136,7 @@ export function PlaybookList({
   onSelectBook,
   onAddBook,
   onSetBookVariant,
+  onAddStarters,
   onRenameBook,
   onDeleteBook,
 }: Props) {
@@ -365,6 +368,15 @@ export function PlaybookList({
                   role="menuitem"
                   onClick={() => {
                     close();
+                    onAddStarters();
+                  }}
+                >
+                  Add starter plays
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    close();
                     void changeKind();
                   }}
                 >
@@ -469,6 +481,8 @@ export function PlaybookList({
         <div className="empty">
           <strong>No plays yet</strong>
           <p>Start a play and it saves itself as you draw.</p>
+          {/* For the coach who would rather edit than start from nothing. */}
+          <button onClick={onAddStarters}>Add starter plays</button>
         </div>
       ) : grouped.length === 0 ? (
         <div className="empty">

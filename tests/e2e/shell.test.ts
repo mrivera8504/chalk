@@ -392,3 +392,19 @@ describe('the team page', () => {
     expect(sheet.suggestedFilename()).toMatch(/^tuesday-.*\.pdf$/);
   });
 });
+
+describe('starter plays', () => {
+  it('fills an empty playbook from its own game, in a folder of their own', async () => {
+    const switcher = page.getByRole('button', { name: 'Change playbook' });
+    await switcher.click();
+    await page.getByRole('menuitem', { name: 'New playbook' }).click();
+    await page.getByRole('dialog').getByRole('textbox').fill('Hoops');
+    await page.getByRole('dialog').getByRole('button', { name: 'Add playbook' }).click();
+    await page.getByRole('dialog', { name: 'What is this playbook for?' }).getByRole('button', { name: /Basketball/ }).click();
+    await page.getByRole('button', { name: 'Add starter plays' }).click();
+    await expect.poll(() => page.locator('.play-card').count()).toBe(3);
+    expect(await page.getByText('Starters', { exact: false }).first().count()).toBe(1);
+    await page.locator('.play-card').first().locator('.thumb').click();
+    await page.locator('.stage > svg .court').waitFor();
+  });
+});
