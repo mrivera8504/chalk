@@ -477,3 +477,27 @@
 button:disabled { opacity: 0.4; cursor: default; }
 
 /* ---- the one dialog ---- */
+
+/* The team's logo in Settings: the picked image stands in for the swatch. */
+.swatch-slot.team-logo {
+  position: relative;
+}
+
+.swatch-slot.team-logo img,
+.swatch-slot.team-logo .no-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dim);
+}
+
+.swatch-slot.team-logo input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}

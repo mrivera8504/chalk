@@ -8,6 +8,7 @@ import {
 } from 'pdf-lib';
 import { byJersey, describePersonnel, type RosterEntry } from '../domain/roster';
 import { type Play } from '../domain/types';
+import { getSettings } from '../store/settings';
 import { centerIn, DEFAULT_PRINT, layout, type PrintOptions, type Rect } from './paper';
 import { playToPng, playTitle, type SheetOptions } from './render';
 import type { View } from './view';
@@ -38,6 +39,59 @@ const RULE = rgb(0.78, 0.78, 0.78);
 interface Fonts {
   body: PDFFont;
   bold: PDFFont;
+  /** The team on the sheet, if the coach has said who they are. */
+  brand: Brand;
+}
+
+interface Brand {
+  name: string;
+  /** The rule under the head, in the team's colour; grey when there is none. */
+  rule: ReturnType<typeof rgb>;
+  logo: PDFImage | null;
+}
+
+export function hexToRgb(hex: string): ReturnType<typeof rgb> | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+}
+
+export async function embedBrand(doc: PDFDocument): Promise<Brand> {
+  const s = getSettings();
+  let logo: PDFImage | null = null;
+  const m = /^data:image\/png;base64,(.+)$/.exec(s.teamLogo ?? '');
+  if (m) {
+    try {
+      logo = await doc.embedPng(Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0)));
+    } catch {
+      // A logo that will not embed costs the sheet its logo, never the sheet.
+      logo = null;
+    }
+  }
+  return { name: (s.teamName ?? '').trim(), rule: hexToRgb(s.teamColor ?? '') ?? RULE, logo };
+}
+
+/** How tall the logo stands in a running head, in points. */
+const LOGO_PT = 22;
+
+/**
+ * The team, small, at the foot of a sheet that has no running head — one play
+ * to a page, where the play's own name is the head and a second line of
+ * chrome above it would only repeat it.
+ */
+function footer(page: PDFPage, fonts: Fonts, size: { w: number; h: number }, margin: number): void {
+  const { name, logo } = fonts.brand;
+  if (!name && !logo) return;
+  const y = Math.max(8, margin / 2 - 6);
+  let x = margin;
+  if (logo) {
+    const h = 16;
+    const w = (logo.width / logo.height) * h;
+    page.drawImage(logo, { x, y: y - 4, width: w, height: h });
+    x += w + 6;
+  }
+  if (name) page.drawText(fit(name, fonts.bold, 9, size.w / 2), { x, y, size: 9, font: fonts.bold, color: GRAY });
 }
 
 /** Trim to fit a width, with an ellipsis, so a long name cannot run off a cell. */
@@ -113,8 +167,22 @@ function header(
   size = { w: PAGE.w, h: PAGE.h },
   margin = MARGIN,
 ): void {
-  page.drawText(fit(title, fonts.bold, 13, size.w - margin * 2 - 140), {
-    x: margin,
+  /*
+   * The team goes first, logo then name, and the sheet's own title after it:
+   * a stack of call sheets on a clipboard is told apart by whose they are
+   * before what is on them.
+   */
+  const { name, logo } = fonts.brand;
+  let x = margin;
+  if (logo) {
+    const h = LOGO_PT;
+    const w = (logo.width / logo.height) * h;
+    page.drawImage(logo, { x, y: size.h - margin - 4, width: w, height: h });
+    x += w + 8;
+  }
+  const head = name && name !== title ? `${name} — ${title}` : title;
+  page.drawText(fit(head, fonts.bold, 13, size.w - margin - x - 140), {
+    x,
     y: size.h - margin,
     size: 13,
     font: fonts.bold,
@@ -133,8 +201,8 @@ function header(
   page.drawLine({
     start: { x: margin, y: size.h - margin - 8 },
     end: { x: size.w - margin, y: size.h - margin - 8 },
-    thickness: 0.7,
-    color: RULE,
+    thickness: fonts.brand.name || fonts.brand.logo ? 1.4 : 0.7,
+    color: fonts.brand.rule,
   });
 }
 
@@ -178,6 +246,7 @@ async function startDoc(): Promise<{ doc: PDFDocument; fonts: Fonts }> {
     fonts: {
       body: await doc.embedFont(StandardFonts.Helvetica),
       bold: await doc.embedFont(StandardFonts.HelveticaBold),
+      brand: await embedBrand(doc),
     },
   };
 }
@@ -232,6 +301,8 @@ export async function playSheetPdf(
         L.page,
         L.margin,
       );
+    } else {
+      footer(page, fonts, L.page, L.margin);
     }
 
     here.forEach((play, n) => {

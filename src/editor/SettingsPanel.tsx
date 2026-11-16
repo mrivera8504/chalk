@@ -16,6 +16,25 @@ interface Props {
   onClose?: () => void;
 }
 
+/**
+ * A logo, cut down to fit beside everything else in local storage: no wider
+ * or taller than 256 pixels, re-encoded as PNG, which is the one format the
+ * PDF writer embeds without a second library.
+ */
+async function shrinkLogo(file: File): Promise<string | null> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 256 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return null;
+  }
+}
+
 const MAGNETS = [
   { v: 0, label: 'Off' },
   { v: 0.25, label: 'Light' },
@@ -341,6 +360,54 @@ export function SettingsPanel({ settings, onClose }: Props) {
           ]}
           onPick={(v) => setSettings({ squareUpStrokes: v === 'on' })}
         />
+      </div>
+
+      {/*
+        * Who the sheets belong to. Blank is a plain sheet, as every sheet was
+        * before; any one of the three is enough to brand them.
+        */}
+      <div className="picker-group">
+        <h3>Your team, on paper</h3>
+        <div className="setting">
+          <input
+            className="notes-line"
+            value={s.teamName}
+            maxLength={40}
+            placeholder="Team name"
+            aria-label="Team name"
+            onChange={(e) => setSettings({ teamName: e.target.value })}
+          />
+        </div>
+        <div className="swatch-edit">
+          <label className="swatch-slot">
+            <input
+              type="color"
+              value={s.teamColor || '#1f4fd8'}
+              aria-label="Team color"
+              onChange={(e) => setSettings({ teamColor: e.target.value })}
+            />
+            <span>Color</span>
+          </label>
+          <label className="swatch-slot team-logo">
+            {s.teamLogo ? <img src={s.teamLogo} alt="" /> : <span className="no-logo">+</span>}
+            <input
+              type="file"
+              accept="image/*"
+              aria-label="Team logo"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) void shrinkLogo(file).then((teamLogo) => teamLogo && setSettings({ teamLogo }));
+              }}
+            />
+            <span>Logo</span>
+          </label>
+          {(s.teamLogo || s.teamColor) && (
+            <button className="quiet" onClick={() => setSettings({ teamLogo: '', teamColor: '' })}>
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="picker-group">

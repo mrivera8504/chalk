@@ -45,6 +45,15 @@ export interface AppSettings extends Settings {
    * can differ; see `Play.surface` and `playSurface`.
    */
   fieldSurface: FieldSurface;
+  /**
+   * The team on the printed sheets: a name, a colour for the rules, and a
+   * logo as a small PNG data URL, shrunk on the way in so it fits beside
+   * everything else in local storage. All three blank means plain sheets,
+   * which is how every sheet came out before.
+   */
+  teamName: string;
+  teamColor: string;
+  teamLogo: string;
   /** How near the line a mark clicks flush onto it. Zero turns the magnet off. */
   losMagnetYards: number;
   /** The grid everything else snaps to. */
@@ -100,6 +109,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   pressureWidth: false,
   squareUpStrokes: false,
   routeDepths: DEFAULT_ROUTE_DEPTHS,
+  teamName: '',
+  teamColor: '',
+  teamLogo: '',
 };
 
 const KEY = 'chalk.settings.v1';
